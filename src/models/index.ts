@@ -12,7 +12,7 @@ import { initBudgetModel, Budget } from './Budget';
 import { initBudgetAlertModel, BudgetAlert } from './BudgetAlert';
 import { initGoalModel, Goal } from './Goal';
 import { initGoalContributionModel, GoalContribution } from './GoalContribution';
-import { initNotificationModel, Notification } from './Notification';
+import { initNotificationModel, Notification, NotificationType } from './Notification';
 import { initFamilyGroupModel, FamilyGroup } from './FamilyGroup';
 import { initFamilyMemberModel, FamilyMember } from './FamilyMember';
 import { initAiConversationModel, AiConversation } from './AiConversation';
@@ -20,6 +20,8 @@ import { initAuditLogModel, AuditLog } from './AuditLog';
 import { initFinancialAccountModel, FinancialAccount } from './FinancialAccount';
 import { initInvestmentModel, Investment } from './Investment';
 import { initParsedTransactionModel, ParsedTransaction } from './ParsedTransaction';
+import { initSupportTicketModel, SupportTicket } from './SupportTicket';
+import { initVerificationTokenModel, VerificationToken, TokenType } from './VerificationToken';
 
 export function initModels(db: Sequelize = sequelize): void {
   initUserModel(db);
@@ -42,6 +44,8 @@ export function initModels(db: Sequelize = sequelize): void {
   initFinancialAccountModel(db);
   initInvestmentModel(db);
   initParsedTransactionModel(db);
+  initSupportTicketModel(db);
+  initVerificationTokenModel(db);
 
   User.hasMany(RefreshToken, { foreignKey: 'userId', as: 'refreshTokens' });
   RefreshToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
@@ -108,6 +112,12 @@ export function initModels(db: Sequelize = sequelize): void {
   User.hasMany(ParsedTransaction, { foreignKey: 'userId', as: 'parsedTransactions' });
   ParsedTransaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   ParsedTransaction.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+
+  User.hasMany(SupportTicket, { foreignKey: 'userId', as: 'supportTickets' });
+  SupportTicket.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  User.hasMany(VerificationToken, { foreignKey: 'userId', as: 'verificationTokens' });
+  VerificationToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 }
 
 export {
@@ -134,4 +144,7 @@ export {
   FinancialAccount,
   Investment,
   ParsedTransaction,
+  SupportTicket,
+  VerificationToken,
 };
+export type { TokenType, NotificationType };

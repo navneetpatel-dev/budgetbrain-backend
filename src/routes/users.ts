@@ -4,6 +4,7 @@ import { asyncHandler, successResponse, AppError } from '../utils/errors';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { sanitizeUser } from '../services/authService';
 import * as transactionService from '../services/transactionService';
+import { deleteUserAccount } from '../services/userService';
 import { User } from '../models';
 
 const router = Router();
@@ -62,7 +63,7 @@ router.delete(
   '/me',
   asyncHandler(async (req, res) => {
     const userId = (req as AuthRequest).userId!;
-    await User.destroy({ where: { id: userId } });
+    await deleteUserAccount(userId);
     successResponse(res, { message: 'Account deleted successfully' });
   })
 );

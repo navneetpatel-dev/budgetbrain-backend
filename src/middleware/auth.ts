@@ -25,6 +25,9 @@ export async function authenticate(
     if (!user) {
       throw new AppError(401, 'User not found', 'UNAUTHORIZED');
     }
+    if (user.isSuspended) {
+      throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
+    }
     req.user = user;
     req.userId = user.id;
     next();

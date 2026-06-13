@@ -28,6 +28,8 @@ const envSchema = z.object({
   S3_BUCKET: z.string().default('expenseflow-receipts'),
   OPENAI_API_KEY: z.string().optional(),
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  APPLE_CLIENT_ID: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   EXPO_ACCESS_TOKEN: z.string().optional(),
   POSTHOG_API_KEY: z.string().optional(),

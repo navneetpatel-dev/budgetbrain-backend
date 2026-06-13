@@ -26,6 +26,7 @@ export interface UserAttributes {
   monthlySavingsTarget: number | null;
   avatarUrl: string | null;
   lastLoginAt: Date | null;
+  isSuspended: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,6 +49,7 @@ export type UserCreationAttributes = Optional<
   | 'monthlySavingsTarget'
   | 'avatarUrl'
   | 'lastLoginAt'
+  | 'isSuspended'
 >;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -68,6 +70,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare monthlySavingsTarget: number | null;
   declare avatarUrl: string | null;
   declare lastLoginAt: Date | null;
+  declare isSuspended: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -151,6 +154,11 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         type: DataTypes.DATE,
         allowNull: true,
         field: 'last_login_at',
+      },
+      isSuspended: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'is_suspended',
       },
     },
     {

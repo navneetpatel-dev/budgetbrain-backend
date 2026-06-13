@@ -105,12 +105,21 @@ router.post(
 );
 
 router.post(
+  '/verify-email',
+  asyncHandler(async (req, res) => {
+    const { token } = z.object({ token: z.string() }).parse(req.body);
+    const result = await authService.verifyEmail(token);
+    successResponse(res, result);
+  })
+);
+
+router.post(
   '/google',
   asyncHandler(async (req, res) => {
     const data = z
-      .object({ googleId: z.string(), email: z.string().email(), name: z.string().optional() })
+      .object({ idToken: z.string(), name: z.string().optional() })
       .parse(req.body);
-    const result = await authService.socialLogin('google', data.googleId, data.email, data.name);
+    const result = await authService.socialLoginWithGoogle(data.idToken, data.name);
     successResponse(res, result);
   })
 );
@@ -119,9 +128,9 @@ router.post(
   '/apple',
   asyncHandler(async (req, res) => {
     const data = z
-      .object({ appleId: z.string(), email: z.string().email(), name: z.string().optional() })
+      .object({ idToken: z.string(), name: z.string().optional() })
       .parse(req.body);
-    const result = await authService.socialLogin('apple', data.appleId, data.email, data.name);
+    const result = await authService.socialLoginWithApple(data.idToken, data.name);
     successResponse(res, result);
   })
 );

@@ -37,6 +37,33 @@ router.post(
   })
 );
 
+router.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const data = z
+      .object({
+        name: z.string().optional(),
+        amount: z.number().positive().optional(),
+        alertThreshold: z.number().min(1).max(100).optional(),
+        endDate: z.string().optional(),
+      })
+      .parse(req.body);
+
+    const budget = await Budget.findOne({
+      where: { id: req.params.id, userId: (req as AuthRequest).userId! },
+    });
+    if (!budget) throw new AppError(404, 'Budget not found');
+
+    await budget.update({
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.amount !== undefined && { amount: data.amount }),
+      ...(data.alertThreshold !== undefined && { alertThreshold: data.alertThreshold }),
+      ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
+    });
+    successResponse(res, budget);
+  })
+);
+
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {

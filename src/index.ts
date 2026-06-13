@@ -3,15 +3,25 @@ import { connectDatabase } from './config/database';
 import { initModels, sequelize } from './models';
 import { env } from './config/env';
 import { initSentry } from './config/sentry';
+import { validateProductionConfig } from './config/production';
+import { startScheduledJobs } from './services/scheduledJobs';
 
 initSentry();
+validateProductionConfig();
 
 async function bootstrap() {
   try {
     await connectDatabase();
     initModels();
-    await sequelize.sync({ alter: env.NODE_ENV === 'development' });
-    console.log('Database synced');
+
+    if (env.NODE_ENV === 'development') {
+      await sequelize.sync({ alter: true });
+      console.log('Database synced (development)');
+    } else {
+      console.log('Production mode — run npm run db:migrate before deploy');
+    }
+
+    startScheduledJobs();
 
     app.listen(env.PORT, () => {
       console.log(`ExpenseFlow API running on port ${env.PORT}`);

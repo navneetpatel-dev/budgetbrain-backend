@@ -9,6 +9,7 @@ import {
   User,
 } from '../models';
 import { AppError } from '../utils/errors';
+import { checkBudgetAlertsAfterExpense } from './budgetAlertService';
 
 const FREE_BUDGET_LIMIT = 3;
 const FREE_HISTORY_MONTHS = 3;
@@ -176,6 +177,10 @@ export async function createTransaction(
     recurringRule: data.recurringRule ?? null,
     searchVector: buildSearchVector(data),
   });
+
+  if (data.type === 'expense') {
+    await checkBudgetAlertsAfterExpense(userId, data.categoryId);
+  }
 
   return Transaction.findByPk(transaction.id, {
     include: [{ model: Category, as: 'category' }],

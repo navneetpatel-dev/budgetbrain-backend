@@ -21,6 +21,8 @@ router.post(
         app_user_id?: string;
         product_id?: string;
         expiration_at_ms?: number;
+        original_transaction_id?: string;
+        id?: string;
       };
     };
 
@@ -41,15 +43,24 @@ router.post(
     if (productId.includes('yearly')) plan = 'yearly';
     if (productId.includes('lifetime')) plan = 'lifetime';
 
+    const revenueCatId =
+      event.event?.original_transaction_id ?? event.event?.id ?? userId;
+
     const isActive = ['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE'].includes(
       event.event?.type ?? ''
     );
 
     if (isActive) {
+      await Subscription.update(
+        { status: 'expired' },
+        { where: { userId, status: 'active' } }
+      );
+
       await Subscription.create({
         userId,
         plan,
         status: 'active',
+        revenueCatId,
         expiresAt: event.event?.expiration_at_ms
           ? new Date(event.event.expiration_at_ms)
           : plan === 'lifetime'
@@ -60,6 +71,10 @@ router.post(
 
       await user.update({ role: plan === 'lifetime' ? 'lifetime' : 'premium' });
     } else if (event.event?.type === 'EXPIRATION') {
+      await Subscription.update(
+        { status: 'expired' },
+        { where: { userId, status: 'active' } }
+      );
       await user.update({ role: 'free' });
     }
 
@@ -93,21 +108,36 @@ router.get(
 router.post(
   '/restore',
   asyncHandler(async (req, res) => {
-    const { revenueCatId } = z.object({ revenueCatId: z.string() }).parse(req.body);
-    const subscription = await Subscription.findOne({
-      where: { revenueCatId, status: 'active' },
+    const userId = (req as AuthRequest).userId!;
+    const { revenueCatId } = z
+      .object({ revenueCatId: z.string().optional() })
+      .parse(req.body);
+
+    let subscription = await Subscription.findOne({
+      where: { userId, status: 'active' },
+      order: [['createdAt', 'DESC']],
     });
 
-    if (subscription) {
-      const user = await User.findByPk((req as AuthRequest).userId!);
-      if (user) {
-        await user.update({
-          role: subscription.plan === 'lifetime' ? 'lifetime' : 'premium',
-        });
+    if (!subscription && revenueCatId) {
+      subscription = await Subscription.findOne({
+        where: { revenueCatId, status: 'active' },
+      });
+    }
+
+    const user = await User.findByPk(userId);
+    if (subscription && user) {
+      await user.update({
+        role: subscription.plan === 'lifetime' ? 'lifetime' : 'premium',
+      });
+      if (revenueCatId && !subscription.revenueCatId) {
+        await subscription.update({ revenueCatId });
       }
     }
 
-    successResponse(res, { restored: !!subscription });
+    successResponse(res, {
+      restored: !!subscription,
+      role: user?.role ?? 'free',
+    });
   })
 );
 

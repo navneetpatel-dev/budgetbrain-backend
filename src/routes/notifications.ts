@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, successResponse, AppError } from '../utils/errors';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
 import { Notification, Device } from '../models';
 import { sendPushToUser } from '../services/pushService';
 
@@ -64,6 +64,7 @@ router.post(
 
 router.post(
   '/test',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const userId = (req as AuthRequest).userId!;
     const sent = await sendPushToUser(userId, 'ExpenseFlow', 'Push notifications are working!');

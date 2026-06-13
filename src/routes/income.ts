@@ -83,6 +83,27 @@ router.post(
   })
 );
 
+router.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const data = z
+      .object({
+        amount: z.number().positive().optional(),
+        notes: z.string().optional(),
+        date: z.string().optional(),
+        incomeSourceId: z.string().uuid().optional(),
+      })
+      .parse(req.body);
+
+    const transaction = await transactionService.updateTransaction(
+      (req as AuthRequest).userId!,
+      String(req.params.id),
+      data
+    );
+    successResponse(res, transaction);
+  })
+);
+
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {

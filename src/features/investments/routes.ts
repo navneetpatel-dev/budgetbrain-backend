@@ -3,7 +3,7 @@ import { asyncHandler, successResponse } from '../../utils/errors';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import * as investmentService from './investment.service';
 import { createInvestmentSchema, updateInvestmentSchema } from './investment.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -11,8 +11,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const investments = await investmentService.listInvestments((req as AuthRequest).userId!);
-    successResponse(res, investments);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await investmentService.listInvestments((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

@@ -11,8 +11,8 @@ export async function getDashboard(userId: string) {
       transactionService.getTotalIncome(userId, user),
       transactionService.getTotalExpenses(userId, user),
       transactionService.getRecentTransactions(userId, user, 10),
-      budgetService.listBudgets(userId),
-      goalService.listGoals(userId),
+      budgetService.listBudgetsForDashboard(userId, 5),
+      goalService.listGoalsForDashboard(userId, 5),
       transactionService.getCategoryBreakdown(userId, user),
     ]);
 
@@ -28,8 +28,8 @@ export async function getDashboard(userId: string) {
       currency: user.currency,
     },
     recentTransactions,
-    budgets: budgets.slice(0, 5),
-    goals: goals.slice(0, 5),
+    budgets,
+    goals,
     categoryBreakdown,
   };
 }

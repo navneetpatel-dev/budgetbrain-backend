@@ -8,6 +8,7 @@ import {
   updateIncomeSchema,
   createSourceSchema,
 } from './income.validation';
+import { paginationSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -33,8 +34,9 @@ router.post(
 router.get(
   '/sources',
   asyncHandler(async (req, res) => {
-    const sources = await incomeService.listSources((req as AuthRequest).userId!);
-    successResponse(res, sources);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await incomeService.listSources((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 
@@ -44,6 +46,14 @@ router.post(
     const data = createSourceSchema.parse(req.body);
     const source = await incomeService.createSource((req as AuthRequest).userId!, data);
     successResponse(res, source, 201);
+  })
+);
+
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const transaction = await incomeService.getIncome((req as AuthRequest).userId!, String(req.params.id));
+    successResponse(res, transaction);
   })
 );
 

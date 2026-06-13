@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler, successResponse } from '../../utils/errors';
 import { authenticate, requirePremium, AuthRequest } from '../../middleware/auth';
 import * as aiService from './ai.service';
+import { uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -28,6 +29,15 @@ router.get(
   '/conversations',
   asyncHandler(async (req, res) => {
     const data = await aiService.listConversations((req as AuthRequest).userId!);
+    successResponse(res, data);
+  })
+);
+
+router.get(
+  '/conversations/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = uuidParamSchema.parse(req.params);
+    const data = await aiService.getConversation((req as AuthRequest).userId!, id);
     successResponse(res, data);
   })
 );

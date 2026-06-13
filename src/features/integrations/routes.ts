@@ -7,7 +7,7 @@ import {
   parseEmailSchema,
   confirmParsedSchema,
 } from './integrations.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -37,8 +37,9 @@ router.post(
 router.get(
   '/pending',
   asyncHandler(async (req, res) => {
-    const pending = await integrationsService.listPending((req as AuthRequest).userId!);
-    successResponse(res, pending);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await integrationsService.listPending((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

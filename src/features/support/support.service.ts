@@ -1,11 +1,16 @@
 import { SupportTicket } from '../../models';
 import { AppError } from '../../utils/errors';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
-export async function listUserTickets(userId: string) {
-  return SupportTicket.findAll({
+export async function listUserTickets(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await SupportTicket.findAndCountAll({
     where: { userId },
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
+  return paginatedResult('tickets', rows, count, page, limit);
 }
 
 export async function createTicket(

@@ -1,5 +1,6 @@
 import { Investment } from '../../models';
 import { AppError } from '../../utils/errors';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 export interface EnrichedInvestment {
   id: string;
@@ -29,12 +30,16 @@ function enrichInvestment(inv: Investment): EnrichedInvestment {
   };
 }
 
-export async function listInvestments(userId: string): Promise<EnrichedInvestment[]> {
-  const investments = await Investment.findAll({
+export async function listInvestments(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await Investment.findAndCountAll({
     where: { userId },
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
-  return investments.map(enrichInvestment);
+  const investments = rows.map(enrichInvestment);
+  return paginatedResult('investments', investments, count, page, limit);
 }
 
 export async function createInvestment(

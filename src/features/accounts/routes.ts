@@ -3,7 +3,7 @@ import { asyncHandler, successResponse } from '../../utils/errors';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import * as accountService from './account.service';
 import { createAccountSchema, updateAccountSchema } from './account.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -11,8 +11,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const accounts = await accountService.listAccounts((req as AuthRequest).userId!);
-    successResponse(res, accounts);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await accountService.listAccounts((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

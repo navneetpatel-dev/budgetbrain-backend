@@ -9,6 +9,7 @@ import {
 import { AppError } from '../../utils/errors';
 import { checkBudgetAlertsAfterExpense } from '../budgets/budgetAlert.service';
 import { logAuditEvent } from '../shared/audit.service';
+import { resolvePagination, paginatedResult, type PaginationInput } from '../../shared/pagination';
 
 const FREE_HISTORY_MONTHS = 3;
 
@@ -83,9 +84,7 @@ export async function listTransactions(
 ) {
   const user = await User.findByPk(userId);
   const cutoff = user ? getHistoryCutoff(user.role) : null;
-  const page = filters.page ?? 1;
-  const limit = filters.limit ?? 20;
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
 
   const where: Record<string, unknown> = { userId };
   if (filters.type) where.type = filters.type;
@@ -214,26 +213,46 @@ export async function duplicateTransaction(userId: string, id: string) {
   return Transaction.create({ ...data, date: new Date() });
 }
 
-export async function globalSearch(userId: string, query: string) {
-  const pattern = `%${query}%`;
-  const [transactions, categories] = await Promise.all([
-    Transaction.findAll({
-      where: {
-        userId,
-        [Op.or]: [
-          { searchVector: { [Op.iLike]: pattern } },
-          { merchant: { [Op.iLike]: pattern } },
-          { notes: { [Op.iLike]: pattern } },
-        ],
-      },
-      include: [{ model: Category, as: 'category' }],
-      limit: 20,
-    }),
-    Category.findAll({
-      where: { userId, name: { [Op.iLike]: pattern }, isArchived: false },
-      limit: 10,
-    }),
-  ]);
+export async function getTransaction(userId: string, id: string) {
+  const transaction = await Transaction.findOne({
+    where: { id, userId },
+    include: [
+      { model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] },
+      { model: IncomeSource, as: 'incomeSource', attributes: ['id', 'name', 'type'] },
+    ],
+  });
+  if (!transaction) throw new AppError(404, 'Transaction not found');
+  return transaction;
+}
 
-  return { transactions, categories };
+export async function globalSearch(userId: string, query: string, filters: PaginationInput = {}) {
+  const pattern = `%${query}%`;
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 20);
+
+  const matchingCategories = await Category.findAll({
+    where: { userId, name: { [Op.iLike]: pattern }, isArchived: false },
+    attributes: ['id'],
+    limit: 10,
+  });
+  const categoryIds = matchingCategories.map((c) => c.id);
+
+  const orConditions: Record<string, unknown>[] = [
+    { searchVector: { [Op.iLike]: pattern } },
+    { merchant: { [Op.iLike]: pattern } },
+    { notes: { [Op.iLike]: pattern } },
+  ];
+  if (categoryIds.length > 0) {
+    orConditions.push({ categoryId: { [Op.in]: categoryIds } });
+  }
+
+  const { rows, count } = await Transaction.findAndCountAll({
+    where: { userId, [Op.or]: orConditions },
+    include: [{ model: Category, as: 'category' }],
+    order: [['date', 'DESC']],
+    limit,
+    offset,
+    distinct: true,
+  });
+
+  return paginatedResult('transactions', rows, count, page, limit);
 }

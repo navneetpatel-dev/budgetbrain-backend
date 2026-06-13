@@ -44,9 +44,20 @@ router.post(
 router.get(
   '/search',
   asyncHandler(async (req, res) => {
-    const { q } = searchQuerySchema.parse(req.query);
-    const data = await transactionService.globalSearch((req as AuthRequest).userId!, q);
+    const { q, page, limit } = searchQuerySchema.parse(req.query);
+    const data = await transactionService.globalSearch((req as AuthRequest).userId!, q, { page, limit });
     successResponse(res, data);
+  })
+);
+
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const transaction = await transactionService.getTransaction(
+      (req as AuthRequest).userId!,
+      String(req.params.id)
+    );
+    successResponse(res, transaction);
   })
 );
 

@@ -1,11 +1,16 @@
 import { FinancialAccount } from '../../models';
 import { AppError } from '../../utils/errors';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
-export async function listAccounts(userId: string) {
-  return FinancialAccount.findAll({
+export async function listAccounts(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await FinancialAccount.findAndCountAll({
     where: { userId, isActive: true },
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
+  return paginatedResult('accounts', rows, count, page, limit);
 }
 
 export async function createAccount(

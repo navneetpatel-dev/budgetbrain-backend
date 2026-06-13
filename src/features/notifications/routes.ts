@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { asyncHandler, successResponse } from '../../utils/errors';
-import { authenticate, requireAdmin, AuthRequest } from '../../middleware/auth';
+import { authenticate, AuthRequest } from '../../middleware/auth';
 import * as notificationService from './notification.service';
 import { registerDeviceSchema } from './notification.validation';
 import { sendPushToUser } from './push.service';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -12,8 +12,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const notifications = await notificationService.listNotifications((req as AuthRequest).userId!);
-    successResponse(res, notifications);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await notificationService.listNotifications((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 
@@ -37,10 +38,9 @@ router.post(
 
 router.post(
   '/test',
-  requireAdmin,
   asyncHandler(async (req, res) => {
     const userId = (req as AuthRequest).userId!;
-    const sent = await sendPushToUser(userId, 'ExpenseFlow', 'Push notifications are working!');
+    const sent = await sendPushToUser(userId, 'BudgetBrain', 'Push notifications are working!');
     successResponse(res, { sent });
   })
 );

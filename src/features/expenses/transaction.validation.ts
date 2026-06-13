@@ -23,7 +23,7 @@ export const listTransactionsSchema = paginationSchema
     search: z.string().optional(),
   });
 
-export const searchQuerySchema = z.object({ q: z.string().min(1) });
+export const searchQuerySchema = paginationSchema.extend({ q: z.string().min(1) });
 
 export type CreateTransactionInput = z.infer<typeof transactionSchema>;
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;

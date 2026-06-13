@@ -1,6 +1,7 @@
 import { FamilyGroup, FamilyMember } from '../../models';
 import { AppError } from '../../utils/errors';
 import { generateInviteCode } from '../../utils/jwt';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 export async function createGroup(ownerId: string, name: string) {
   const group = await FamilyGroup.create({
@@ -32,9 +33,14 @@ export async function joinGroup(userId: string, inviteCode: string) {
   });
 }
 
-export async function listUserMemberships(userId: string) {
-  return FamilyMember.findAll({
+export async function listUserMemberships(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await FamilyMember.findAndCountAll({
     where: { userId },
     include: [{ model: FamilyGroup, as: 'group' }],
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
+  return paginatedResult('memberships', rows, count, page, limit);
 }

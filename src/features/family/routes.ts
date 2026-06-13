@@ -3,6 +3,7 @@ import { asyncHandler, successResponse } from '../../utils/errors';
 import { authenticate, requirePremium, AuthRequest } from '../../middleware/auth';
 import * as familyService from './family.service';
 import { createGroupSchema, joinGroupSchema } from './family.validation';
+import { paginationSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -29,8 +30,9 @@ router.post(
 router.get(
   '/groups',
   asyncHandler(async (req, res) => {
-    const memberships = await familyService.listUserMemberships((req as AuthRequest).userId!);
-    successResponse(res, memberships);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await familyService.listUserMemberships((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

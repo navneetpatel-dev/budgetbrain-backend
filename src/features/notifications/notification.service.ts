@@ -1,6 +1,7 @@
 import { Notification, NotificationType, Device } from '../../models';
 import { AppError } from '../../utils/errors';
 import { sendPushToUser } from './push.service';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 export async function createNotification(
   userId: string,
@@ -26,12 +27,15 @@ export async function createNotification(
   return notification;
 }
 
-export async function listNotifications(userId: string) {
-  return Notification.findAll({
+export async function listNotifications(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 50);
+  const { rows, count } = await Notification.findAndCountAll({
     where: { userId },
     order: [['sentAt', 'DESC']],
-    limit: 50,
+    limit,
+    offset,
   });
+  return paginatedResult('notifications', rows, count, page, limit);
 }
 
 export async function markAsRead(userId: string, id: string) {

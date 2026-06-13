@@ -1,13 +1,18 @@
 import { Category, User } from '../../models';
 import { AppError } from '../../utils/errors';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 const FREE_CATEGORY_LIMIT = 20;
 
-export async function listCategories(userId: string) {
-  return Category.findAll({
+export async function listCategories(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 100);
+  const { rows, count } = await Category.findAndCountAll({
     where: { userId, isArchived: false },
     order: [['sortOrder', 'ASC']],
+    limit,
+    offset,
   });
+  return paginatedResult('categories', rows, count, page, limit);
 }
 
 export async function createCategory(
@@ -53,5 +58,5 @@ export async function reorderCategories(userId: string, orderedIds: string[]) {
       Category.update({ sortOrder: index }, { where: { id, userId } })
     )
   );
-  return listCategories(userId);
+  return listCategories(userId, { page: 1, limit: 100 });
 }

@@ -1,7 +1,63 @@
-import { Budget, Category, User } from '../../models';
+import { Op, fn, col } from 'sequelize';
+import { Budget, Category, Transaction, User } from '../../models';
 import { AppError } from '../../utils/errors';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 const FREE_BUDGET_LIMIT = 3;
+
+export type BudgetWithSpent = ReturnType<Budget['toJSON']> & {
+  category?: Category | null;
+  spent: number;
+};
+
+function getBudgetDateRange(budget: Budget): { startDate: string; endDate: string } {
+  const now = new Date();
+  if (budget.type === 'weekly') {
+    const day = now.getDay();
+    const start = new Date(now);
+    start.setDate(now.getDate() - day);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+    };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    startDate: budget.startDate.toISOString().split('T')[0] ?? start.toISOString().split('T')[0],
+    endDate: budget.endDate?.toISOString().split('T')[0] ?? end.toISOString().split('T')[0],
+  };
+}
+
+async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {
+  const { startDate, endDate } = getBudgetDateRange(budget);
+  const where: Record<string, unknown> = {
+    userId,
+    type: 'expense',
+    date: { [Op.gte]: startDate, [Op.lte]: endDate },
+  };
+  if (budget.type === 'category' && budget.categoryId) {
+    where.categoryId = budget.categoryId;
+  }
+
+  const result = await Transaction.findOne({
+    where,
+    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+    raw: true,
+  });
+  return Number((result as unknown as { total: string })?.total ?? 0);
+}
+
+async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpent[]> {
+  return Promise.all(
+    budgets.map(async (budget) => {
+      const spent = await computeBudgetSpent(budget.userId, budget);
+      return { ...budget.toJSON(), spent } as BudgetWithSpent;
+    })
+  );
+}
 
 export async function createBudget(
   userId: string,
@@ -39,12 +95,32 @@ export async function createBudget(
   });
 }
 
-export async function listBudgets(userId: string) {
-  return Budget.findAll({
+export async function getBudget(userId: string, id: string): Promise<BudgetWithSpent> {
+  const budget = await Budget.findOne({
+    where: { id, userId },
+    include: [{ model: Category, as: 'category' }],
+  });
+  if (!budget) throw new AppError(404, 'Budget not found');
+  const spent = await computeBudgetSpent(userId, budget);
+  return { ...budget.toJSON(), spent } as BudgetWithSpent;
+}
+
+export async function listBudgets(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await Budget.findAndCountAll({
     where: { userId },
     include: [{ model: Category, as: 'category' }],
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
+  const budgets = await enrichBudgetsWithSpent(rows);
+  return paginatedResult('budgets', budgets, count, page, limit);
+}
+
+export async function listBudgetsForDashboard(userId: string, maxItems = 5) {
+  const { budgets } = await listBudgets(userId, { page: 1, limit: maxItems });
+  return budgets;
 }
 
 export async function updateBudget(

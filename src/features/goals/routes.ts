@@ -7,7 +7,7 @@ import {
   updateGoalSchema,
   contributeGoalSchema,
 } from './goal.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -15,8 +15,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const goals = await goalService.listGoals((req as AuthRequest).userId!);
-    successResponse(res, goals);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await goalService.listGoals((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 
@@ -26,6 +27,15 @@ router.post(
     const data = createGoalSchema.parse(req.body);
     const goal = await goalService.createGoal((req as AuthRequest).userId!, data);
     successResponse(res, goal, 201);
+  })
+);
+
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = uuidParamSchema.parse(req.params);
+    const goal = await goalService.getGoal((req as AuthRequest).userId!, id);
+    successResponse(res, goal);
   })
 );
 

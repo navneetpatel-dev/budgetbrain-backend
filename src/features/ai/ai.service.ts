@@ -113,15 +113,22 @@ export async function chatWithCoach(userId: string, message: string, conversatio
     assistantContent = generateFallbackResponse(message);
   }
 
-  messages.push({
-    role: 'assistant',
+  const assistantMessage = {
+    role: 'assistant' as const,
     content: assistantContent,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  messages.push(assistantMessage);
 
   await conversation.update({ messages });
 
-  return { conversationId: conversation.id, reply: assistantContent, messages };
+  return {
+    conversationId: conversation.id,
+    message: assistantMessage,
+    reply: assistantContent,
+    messages,
+  };
 }
 
 function generateFallbackResponse(message: string): string {
@@ -192,4 +199,13 @@ export async function listConversations(userId: string) {
     attributes: ['id', 'title', 'createdAt', 'updatedAt'],
     order: [['updatedAt', 'DESC']],
   });
+}
+
+export async function getConversation(userId: string, id: string) {
+  const conversation = await AiConversation.findOne({
+    where: { id, userId },
+    attributes: ['id', 'title', 'messages', 'createdAt', 'updatedAt'],
+  });
+  if (!conversation) throw new AppError(404, 'Conversation not found');
+  return conversation;
 }

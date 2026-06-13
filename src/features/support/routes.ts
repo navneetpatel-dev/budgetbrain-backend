@@ -3,7 +3,7 @@ import { asyncHandler, successResponse } from '../../utils/errors';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import * as supportService from './support.service';
 import { createTicketSchema } from './support.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -11,8 +11,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const tickets = await supportService.listUserTickets((req as AuthRequest).userId!);
-    successResponse(res, tickets);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await supportService.listUserTickets((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

@@ -1,6 +1,7 @@
 import { Goal, GoalContribution, User } from '../../models';
 import { AppError } from '../../utils/errors';
 import { createNotification } from '../notifications/notification.service';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 export async function createGoal(
   userId: string,
@@ -23,8 +24,26 @@ export async function createGoal(
   });
 }
 
-export async function listGoals(userId: string) {
-  return Goal.findAll({ where: { userId }, order: [['createdAt', 'DESC']] });
+export async function getGoal(userId: string, id: string) {
+  const goal = await Goal.findOne({ where: { id, userId } });
+  if (!goal) throw new AppError(404, 'Goal not found');
+  return goal;
+}
+
+export async function listGoals(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await Goal.findAndCountAll({
+    where: { userId },
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset,
+  });
+  return paginatedResult('goals', rows, count, page, limit);
+}
+
+export async function listGoalsForDashboard(userId: string, maxItems = 5) {
+  const { goals } = await listGoals(userId, { page: 1, limit: maxItems });
+  return goals;
 }
 
 export async function updateGoal(

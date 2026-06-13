@@ -2,6 +2,7 @@ import { ParsedTransaction } from '../../models';
 import { AppError } from '../../utils/errors';
 import { parseSmsContent, parseEmailReceipt } from './parse.service';
 import * as transactionService from '../expenses/transaction.service';
+import { paginatedResult, resolvePagination, type PaginationInput } from '../../shared/pagination';
 
 export async function parseSms(userId: string, content: string) {
   const parsed = parseSmsContent(content);
@@ -35,11 +36,15 @@ export async function parseEmail(userId: string, subject: string, body: string) 
   return { parsed: record, suggestion: parsed };
 }
 
-export async function listPending(userId: string) {
-  return ParsedTransaction.findAll({
+export async function listPending(userId: string, filters: PaginationInput = {}) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await ParsedTransaction.findAndCountAll({
     where: { userId, status: 'pending' },
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
+  return paginatedResult('pending', rows, count, page, limit);
 }
 
 export async function confirmParsed(

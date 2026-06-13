@@ -7,7 +7,7 @@ import {
   updateCategorySchema,
   reorderCategoriesSchema,
 } from './category.validation';
-import { uuidParamSchema } from '../../shared/validation';
+import { paginationSchema, uuidParamSchema } from '../../shared/validation';
 
 const router = Router();
 router.use(authenticate);
@@ -15,8 +15,9 @@ router.use(authenticate);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const categories = await categoryService.listCategories((req as AuthRequest).userId!);
-    successResponse(res, categories);
+    const { page, limit } = paginationSchema.parse(req.query);
+    const data = await categoryService.listCategories((req as AuthRequest).userId!, { page, limit });
+    successResponse(res, data);
   })
 );
 

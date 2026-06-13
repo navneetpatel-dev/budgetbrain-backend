@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Uploads (keep directory, ignore files)
+uploads/*
+!uploads/.gitkeep
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+
+# Test / coverage
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

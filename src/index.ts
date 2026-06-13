@@ -4,7 +4,7 @@ import { initModels, sequelize } from './models';
 import { env } from './config/env';
 import { initSentry } from './config/sentry';
 import { validateProductionConfig } from './config/production';
-import { startScheduledJobs } from './services/scheduledJobs';
+import { startScheduledJobs } from './features/notifications/scheduledJobs.service';
 
 initSentry();
 validateProductionConfig();

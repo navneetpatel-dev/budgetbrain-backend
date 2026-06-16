@@ -38,6 +38,8 @@ export async function updateProfile(
     country?: string;
     currency?: string;
     avatarUrl?: string;
+    theme?: string;
+    accent?: string;
   }
 ) {
   const user = await getUser(userId);

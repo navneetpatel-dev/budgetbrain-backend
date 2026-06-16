@@ -25,6 +25,8 @@ export interface UserAttributes {
   salaryRange: string | null;
   monthlySavingsTarget: number | null;
   avatarUrl: string | null;
+  theme: string | null;
+  accent: string | null;
   lastLoginAt: Date | null;
   isSuspended: boolean;
   createdAt?: Date;
@@ -69,6 +71,8 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare salaryRange: string | null;
   declare monthlySavingsTarget: number | null;
   declare avatarUrl: string | null;
+  declare theme: string | null;
+  declare accent: string | null;
   declare lastLoginAt: Date | null;
   declare isSuspended: boolean;
   declare readonly createdAt: Date;
@@ -149,6 +153,16 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         type: DataTypes.STRING(500),
         allowNull: true,
         field: 'avatar_url',
+      },
+      theme: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: 'system',
+      },
+      accent: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: 'indigo',
       },
       lastLoginAt: {
         type: DataTypes.DATE,

@@ -8,21 +8,22 @@ if (!existsSync(envFile)) {
 
 async function migrate() {
   const { connectDatabase } = await import('../config/database');
-  const { initModels, sequelize } = await import('../models');
 
   const connected = await connectDatabase();
   if (!connected) {
     console.warn('Skipping migration — database unavailable');
-    process.exit(0);
+    return;
   }
 
+  const { initModels, sequelize } = await import('../models');
   initModels();
   await sequelize.sync({ alter: false });
   console.log('Database migration complete (schema synced).');
-  process.exit(0);
 }
 
-migrate().catch((err) => {
-  console.error('Migration failed:', err);
-  process.exit(1);
-});
+migrate()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  });

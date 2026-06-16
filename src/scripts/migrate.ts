@@ -1,8 +1,21 @@
-import { connectDatabase } from '../config/database';
-import { initModels, sequelize } from '../models';
+import { existsSync } from 'fs';
+
+const envFile = `.env.${process.env.NODE_ENV ?? 'production'}`;
+if (!existsSync(envFile)) {
+  console.error(`Missing ${envFile}. Create it on the server with required secrets (see .env.example).`);
+  process.exit(1);
+}
 
 async function migrate() {
-  await connectDatabase();
+  const { connectDatabase } = await import('../config/database');
+  const { initModels, sequelize } = await import('../models');
+
+  const connected = await connectDatabase();
+  if (!connected) {
+    console.warn('Skipping migration — database unavailable');
+    process.exit(0);
+  }
+
   initModels();
   await sequelize.sync({ alter: false });
   console.log('Database migration complete (schema synced).');

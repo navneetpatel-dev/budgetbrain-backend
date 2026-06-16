@@ -11,17 +11,21 @@ validateProductionConfig();
 
 async function bootstrap() {
   try {
-    await connectDatabase();
+    const dbConnected = await connectDatabase();
     initModels();
 
-    if (env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('Database synced (development)');
-    } else {
-      console.log('Production mode — run npm run db:migrate before deploy');
-    }
+    if (dbConnected) {
+      if (env.NODE_ENV === 'development') {
+        await sequelize.sync({ alter: true });
+        console.log('Database synced (development)');
+      } else {
+        console.log('Production mode — run npm run db:migrate before deploy');
+      }
 
-    startScheduledJobs();
+      startScheduledJobs();
+    } else {
+      console.warn('Starting without database — DB-dependent routes will not work until connected');
+    }
 
     app.listen(env.PORT, () => {
       console.log(`ExpenseFlow API running on port ${env.PORT}`);

@@ -9,7 +9,12 @@ const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!';
 const ADMIN_NAME = 'Admin User';
 
 async function seed() {
-  await connectDatabase();
+  const connected = await connectDatabase();
+  if (!connected) {
+    console.error('Cannot seed — database unavailable');
+    process.exit(1);
+  }
+
   initModels();
   await sequelize.sync({ alter: env.NODE_ENV === 'development' });
 

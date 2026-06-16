@@ -21,6 +21,13 @@ export const sequelize = env.DATABASE_URL
       },
     });
 
-export async function connectDatabase(): Promise<void> {
-  await sequelize.authenticate();
+export async function connectDatabase(): Promise<boolean> {
+  try {
+    await sequelize.authenticate();
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Database connection failed: ${message}`);
+    return false;
+  }
 }

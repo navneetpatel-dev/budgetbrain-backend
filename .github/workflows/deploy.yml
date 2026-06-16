@@ -1,7 +1,9 @@
 name: Deploy to EC2
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -15,12 +17,13 @@ on:
           - staging
 
 concurrency:
-  group: deploy-${{ github.ref }}-${{ inputs.environment || 'production' }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}-${{ inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy (${{ inputs.environment || 'production' }})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'production' }}
 
@@ -39,9 +42,10 @@ jobs:
 
             APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/expenseflow-api' }}"
             DEPLOY_ENV="${{ inputs.environment || 'production' }}"
-            BRANCH="${{ github.ref_name }}"
+            BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
 
-            echo "Deploying ${BRANCH} as ${DEPLOY_ENV} in ${APP_DIR}"
+            echo "Deploying ${COMMIT_SHA} (${BRANCH}) as ${DEPLOY_ENV} in ${APP_DIR}"
 
             cd "${APP_DIR}"
 
@@ -51,8 +55,7 @@ jobs:
             fi
 
             git fetch origin
-            git checkout "${BRANCH}"
-            git pull --ff-only origin "${BRANCH}"
+            git checkout "${COMMIT_SHA}"
 
             npm ci
             npm run build

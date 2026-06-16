@@ -1,176 +1,84 @@
 name: Deploy to EC2
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build Application
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build TypeScript
-        run: npm run build
-        env:
-          JWT_ACCESS_SECRET: ci-access-secret-minimum-32-characters-long
-          JWT_REFRESH_SECRET: ci-refresh-secret-minimum-32-characters-long
-
-      - name: Create deployment package (without node_modules)
-        run: |
-          mkdir -p deploy
-          cp -r dist deploy/
-          cp -r src deploy/
-          cp package*.json deploy/
-          cp ecosystem.config.cjs deploy/
-          [ -f .env.example ] && cp .env.example deploy/ || echo "No .env.example found"
-          tar -czf deploy.tar.gz -C deploy .
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-package
-          path: deploy.tar.gz
-          retention-days: 1
-
   deploy:
-    name: Deploy to EC2
-    needs: build
+    name: Deploy (${{ inputs.environment || 'production' }})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
 
     steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Deploy to EC2 via SSH
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+      - name: Prepare SSH key
+        shell: bash
         run: |
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
+          set -euo pipefail
+          umask 077
+          # Normalize line endings in case the secret was pasted with CRLF.
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' > .ec2_ssh_key
+          chmod 600 .ec2_ssh_key
 
-          scp -i private_key.pem -o StrictHostKeyChecking=no \
-            deploy.tar.gz ${EC2_USER}@${EC2_HOST}:/tmp/
-
-          ssh -i private_key.pem -o StrictHostKeyChecking=no \
-            ${EC2_USER}@${EC2_HOST} << 'EOF'
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || secrets.EC2_USERNAME }}
+          key_path: .ec2_ssh_key
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
             set -euo pipefail
 
-            cd /var/www/BudgetBrain
+            APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/BudgetBrain' }}"
+            DEPLOY_ENV="${{ inputs.environment || 'production' }}"
+            BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
 
-            echo "Fixing directory ownership..."
-            sudo chown -R $USER:$USER /var/www/BudgetBrain
+            echo "Deploying ${COMMIT_SHA} (${BRANCH}) as ${DEPLOY_ENV} in ${APP_DIR}"
 
-            if [ -d "dist" ]; then
-              timestamp=$(date +%Y%m%d_%H%M%S)
-              mkdir -p backups
-              tar -czf backups/backup_${timestamp}.tar.gz dist package.json ecosystem.config.cjs .env.production 2>/dev/null || true
-              ls -t backups/backup_*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm
-            fi
+            cd "${APP_DIR}"
 
-            echo "Extracting new deployment package..."
-            tar --overwrite -xzf /tmp/deploy.tar.gz -C /var/www/BudgetBrain
-            rm /tmp/deploy.tar.gz
-
-            sudo chown -R $USER:$USER /var/www/BudgetBrain
-
-            echo "Installing production dependencies..."
-            npm ci
-
-            if [ ! -f .env.production ]; then
-              echo "ERROR: .env.production not found on server. Create it before deploying."
+            if [ ! -d .git ]; then
+              echo "ERROR: ${APP_DIR} is not a git repository."
               exit 1
             fi
 
-            echo "Running database migrations..."
-            export NODE_ENV=production
+            git fetch origin
+            git checkout "${COMMIT_SHA}"
+
+            npm ci
+            npm run build
+
+            export NODE_ENV="${DEPLOY_ENV}"
             npm run db:migrate
 
-            mkdir -p logs
-
-            if pm2 describe BudgetBrain-api > /dev/null 2>&1; then
-              echo "Reloading PM2 app (zero-downtime)..."
-              pm2 reload ecosystem.config.cjs --env production --update-env
+            if pm2 describe BudgetBrain > /dev/null 2>&1; then
+              pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env
             else
-              echo "Starting new PM2 process..."
-              pm2 start ecosystem.config.cjs --env production
+              pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
             fi
 
             pm2 save
-          EOF
+            pm2 status BudgetBrain
 
-          rm private_key.pem
-
-      - name: Verify deployment
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-        run: |
-          echo "Waiting for application to start..."
-          sleep 10
-
-          for i in {1..2}; do
-            echo "Attempt $i of 2..."
-            response=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_HOST}/health 2>/dev/null || echo "000")
-
-            if [ "$response" = "200" ]; then
-              echo "Deployment successful! App is responding with status: $response"
-              exit 0
-            fi
-
-            echo "Got response: $response, waiting 5 seconds..."
-            sleep 5
-          done
-
-          echo "Deployment verification failed after 2 attempts"
-          echo "Please check PM2 logs on the server"
-          exit 1
-
-      - name: Rollback on failure
-        if: failure()
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          echo "Attempting to rollback to previous version..."
-
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-
-          ssh -i private_key.pem -o StrictHostKeyChecking=no \
-            ${EC2_USER}@${EC2_HOST} << 'EOF'
-            cd /var/www/BudgetBrain
-
-            sudo chown -R $USER:$USER /var/www/BudgetBrain
-
-            latest_backup=$(ls -t backups/backup_*.tar.gz 2>/dev/null | head -1)
-
-            if [ -n "$latest_backup" ]; then
-              echo "Found backup: $latest_backup"
-              tar -xzf "$latest_backup" -C /var/www/BudgetBrain
-              npm ci
-              pm2 reload ecosystem.config.cjs --env production --update-env
-              echo "Rolled back to previous version"
-            else
-              echo "No backup found, cannot rollback"
-            fi
-          EOF
-
-          rm private_key.pem
+            echo "Deploy complete."

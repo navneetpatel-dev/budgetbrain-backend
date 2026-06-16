@@ -1,10 +1,19 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-dotenv.config();
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const envFileByEnvironment: Record<string, string> = {
+  development: '.env.development',
+  test: '.env.test',
+  staging: '.env.staging',
+  production: '.env.production',
+};
+
+dotenv.config({ path: envFileByEnvironment[nodeEnv] ?? '.env.local' });
+dotenv.config({ path: '.env.local' });
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
   API_VERSION: z.string().default('v1'),
   DATABASE_URL: z.string().optional(),

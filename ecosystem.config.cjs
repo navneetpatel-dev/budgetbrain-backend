@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "expenseflow-api",
+      name: "budgetbrain-api",
       cwd: __dirname,
       script: "npm",
       args: "start",

@@ -24,6 +24,9 @@ async function bootstrap() {
     startScheduledJobs();
 
     app.listen(env.PORT, () => {
+      console.log('--------------------------------');
+      console.log('ExpenseFlow API');
+      console.log('--------------------------------');
       console.log(`ExpenseFlow API running on port ${env.PORT}`);
       console.log(`Environment: ${env.NODE_ENV}`);
       console.log(`API: http://localhost:${env.PORT}/api/${env.API_VERSION}`);

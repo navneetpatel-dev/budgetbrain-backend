@@ -19,7 +19,7 @@ export function validateProductionConfig(): void {
   }
 
   if (!env.REVENUECAT_WEBHOOK_SECRET) {
-    throw new Error('Production requires REVENUECAT_WEBHOOK_SECRET');
+    console.warn('[WARN] REVENUECAT_WEBHOOK_SECRET not configured — subscription webhooks will not work');
   }
 
   if (!env.SMTP_USER) {

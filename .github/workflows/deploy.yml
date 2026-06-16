@@ -1,0 +1,72 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment || 'production' }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+
+            APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/expenseflow-api' }}"
+            DEPLOY_ENV="${{ inputs.environment || 'production' }}"
+            BRANCH="${{ github.ref_name }}"
+
+            echo "Deploying ${BRANCH} as ${DEPLOY_ENV} in ${APP_DIR}"
+
+            cd "${APP_DIR}"
+
+            if [ ! -d .git ]; then
+              echo "ERROR: ${APP_DIR} is not a git repository."
+              exit 1
+            fi
+
+            git fetch origin
+            git checkout "${BRANCH}"
+            git pull --ff-only origin "${BRANCH}"
+
+            npm ci
+            npm run build
+
+            export NODE_ENV="${DEPLOY_ENV}"
+            npm run db:migrate
+
+            if pm2 describe expenseflow-api > /dev/null 2>&1; then
+              pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env
+            else
+              pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
+            fi
+
+            pm2 save
+            pm2 status expenseflow-api
+
+            echo "Deploy complete."

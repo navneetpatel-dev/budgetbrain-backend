@@ -40,7 +40,7 @@ router.post(
   '/test',
   asyncHandler(async (req, res) => {
     const userId = (req as AuthRequest).userId!;
-    const sent = await sendPushToUser(userId, 'BudgetBrain', 'Push notifications are working!');
+    const sent = await sendPushToUser(userId, 'budgetbrain', 'Push notifications are working!');
     successResponse(res, { sent });
   })
 );

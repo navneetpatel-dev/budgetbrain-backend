@@ -40,7 +40,7 @@ jobs:
           script: |
             set -euo pipefail
 
-            APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/expenseflow-api' }}"
+            APP_DIR="${{ secrets.EC2_APP_DIR || '/home/ubuntu/BudgetBrain' }}"
             DEPLOY_ENV="${{ inputs.environment || 'production' }}"
             BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
             COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
@@ -63,13 +63,13 @@ jobs:
             export NODE_ENV="${DEPLOY_ENV}"
             npm run db:migrate
 
-            if pm2 describe expenseflow-api > /dev/null 2>&1; then
+            if pm2 describe BudgetBrain > /dev/null 2>&1; then
               pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env
             else
               pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
             fi
 
             pm2 save
-            pm2 status expenseflow-api
+            pm2 status BudgetBrain
 
             echo "Deploy complete."

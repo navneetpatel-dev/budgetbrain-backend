@@ -46,26 +46,42 @@ jobs:
           script_stop: true
           command_timeout: 15m
           script: |
-            set -euo pipefail
+            set -eo pipefail
 
             APP_DIR="${{ secrets.EC2_APP_DIR || '/var/www/budgetbrain' }}"
             DEPLOY_ENV="${{ inputs.environment || 'production' }}"
             BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
             COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
 
-            echo "Deploying ${COMMIT_SHA} (${BRANCH}) as ${DEPLOY_ENV} in ${APP_DIR}"
+            echo "[1/9] Deploying ${COMMIT_SHA} (${BRANCH}) as ${DEPLOY_ENV} in ${APP_DIR}"
 
-            cd "${APP_DIR}"
+            if ! cd "${APP_DIR}"; then
+              echo "ERROR: cannot cd to ${APP_DIR}"
+              exit 1
+            fi
 
+            echo "[2/9] Loading node/pm2 environment"
             export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+            if [ -s "${NVM_DIR}/nvm.sh" ]; then
+              set +e
+              # shellcheck disable=SC1091
+              . "${NVM_DIR}/nvm.sh"
+              set -e
+            fi
 
+            NODE_VERSION_DIR="$(ls -1 "${NVM_DIR}/versions/node" 2>/dev/null | tail -1 || true)"
+            if [ -n "${NODE_VERSION_DIR}" ]; then
+              export PATH="${NVM_DIR}/versions/node/${NODE_VERSION_DIR}/bin:${PATH}"
+            fi
+            export PATH="${HOME}/.local/bin:/usr/local/bin:${PATH}"
+
+            echo "[3/9] node=$(command -v node || echo missing) pm2=$(command -v pm2 || echo missing) npm=$(command -v npm || echo missing)"
             if ! command -v pm2 > /dev/null 2>&1; then
               echo "ERROR: pm2 not found. Install with: npm install -g pm2"
               exit 1
             fi
 
+            echo "[4/9] Validating repository"
             if [ ! -d .git ]; then
               echo "ERROR: ${APP_DIR} is not a git repository."
               exit 1
@@ -78,16 +94,21 @@ jobs:
               exit 1
             fi
 
+            echo "[5/9] Fetching code"
             git fetch origin
             git checkout "${COMMIT_SHA}"
 
+            echo "[6/9] Installing dependencies"
             npm ci
+
+            echo "[7/9] Building"
             npm run build
 
+            echo "[8/9] Running migrations"
             export NODE_ENV="${DEPLOY_ENV}"
             npm run db:migrate || true
 
-            echo "Reloading PM2..."
+            echo "[9/9] Reloading PM2"
             if pm2 describe budgetbrain-api > /dev/null 2>&1; then
               pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env || pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
             else

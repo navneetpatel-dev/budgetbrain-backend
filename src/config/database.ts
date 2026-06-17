@@ -11,11 +11,15 @@ function databaseUrlHost(url: string): string | null {
   }
 }
 
+function isRemoteHost(host: string): boolean {
+  return !LOCAL_DB_HOSTS.has(host);
+}
+
 function useDatabaseUrl(): boolean {
   if (!env.DATABASE_URL) return false;
 
   const urlHost = databaseUrlHost(env.DATABASE_URL);
-  const hostIsRemote = !LOCAL_DB_HOSTS.has(env.DB_HOST);
+  const hostIsRemote = isRemoteHost(env.DB_HOST);
 
   // Ignore leftover localhost DATABASE_URL when DB_HOST points to a real server.
   if (urlHost && LOCAL_DB_HOSTS.has(urlHost) && hostIsRemote) {
@@ -25,6 +29,15 @@ function useDatabaseUrl(): boolean {
   return true;
 }
 
+function usesRemoteDatabase(): boolean {
+  if (useDatabaseUrl() && env.DATABASE_URL) {
+    const urlHost = databaseUrlHost(env.DATABASE_URL);
+    return urlHost ? isRemoteHost(urlHost) : false;
+  }
+
+  return isRemoteHost(env.DB_HOST);
+}
+
 const sequelizeOptions = {
   dialect: 'postgres' as const,
   logging: env.NODE_ENV === 'development' ? console.log : false,
@@ -32,6 +45,16 @@ const sequelizeOptions = {
     underscored: true,
     timestamps: true,
   },
+  ...(usesRemoteDatabase()
+    ? {
+        dialectOptions: {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false,
+          },
+        },
+      }
+    : {}),
 };
 
 export const sequelize = useDatabaseUrl()

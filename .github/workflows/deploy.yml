@@ -109,10 +109,26 @@ jobs:
             npm run db:migrate || true
 
             echo "[9/9] Reloading PM2"
+            set +e
             if pm2 describe budgetbrain-api > /dev/null 2>&1; then
-              pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env || pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
+              pm2 reload ecosystem.config.cjs --env "${DEPLOY_ENV}" --update-env
+              PM2_RC=$?
+              if [ $PM2_RC -ne 0 ]; then
+                echo "WARN: pm2 reload failed (exit ${PM2_RC}), trying fresh start..."
+                pm2 delete budgetbrain-api || true
+                pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
+                PM2_RC=$?
+              fi
             else
               pm2 start ecosystem.config.cjs --env "${DEPLOY_ENV}"
+              PM2_RC=$?
+            fi
+            set -e
+
+            if [ $PM2_RC -ne 0 ]; then
+              echo "ERROR: PM2 failed to start the app"
+              pm2 logs budgetbrain-api --lines 30 --nostream || true
+              exit 1
             fi
 
             pm2 save || true

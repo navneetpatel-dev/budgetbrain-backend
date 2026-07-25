@@ -59,3 +59,9 @@ export async function deleteIncome(req: Request, res: Response) {
   await incomeService.deleteIncome((req as AuthRequest).userId!, id);
   successResponse(res, { message: 'Income deleted' });
 }
+
+export async function duplicateIncome(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const income = await incomeService.duplicateIncome((req as AuthRequest).userId!, id);
+  successResponse(res, income, 201);
+}

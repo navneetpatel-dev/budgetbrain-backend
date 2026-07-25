@@ -38,6 +38,14 @@ export async function deleteIncome(userId: string, id: string) {
   await transactionService.deleteTransaction(userId, id);
 }
 
+export async function duplicateIncome(userId: string, id: string) {
+  const transaction = await transactionService.getTransaction(userId, id);
+  if (transaction.type !== 'income') {
+    throw new AppError(404, 'Income not found');
+  }
+  return transactionService.duplicateTransaction(userId, id);
+}
+
 export async function listSources(userId: string, filters: PaginationInput = {}) {
   const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 100);
   const { rows, count } = await IncomeSource.findAndCountAll({

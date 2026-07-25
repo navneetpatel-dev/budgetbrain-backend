@@ -19,6 +19,11 @@ router.post('/', validateBody(createIncomeSchema), asyncHandler(controller.creat
 router.get('/sources', validateQuery(paginationSchema), asyncHandler(controller.listSources));
 router.post('/sources', validateBody(createSourceSchema), asyncHandler(controller.createSource));
 router.get('/:id', validateParams(uuidParamSchema), asyncHandler(controller.getIncome));
+router.post(
+  '/:id/duplicate',
+  validateParams(uuidParamSchema),
+  asyncHandler(controller.duplicateIncome)
+);
 router.patch(
   '/:id',
   validateParams(uuidParamSchema),

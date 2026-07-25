@@ -1,4 +1,4 @@
-import { FinancialAccount, Investment } from '../../../../shared/models';
+import { FinancialAccount, Investment } from '../../../../models';
 
 export async function getNetWorthDashboard(userId: string) {
   const [accounts, investments] = await Promise.all([

@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { asyncHandler } from '../../../../shared/utils/errors';
-import { authenticate } from '../../../../shared/middleware/auth';
-import { validateBody } from '../../../../shared/middleware/validate';
+import { asyncHandler } from '../../../shared/utils/errors';
+import { authenticate } from '../../../shared/middleware/auth';
+import { validateBody } from '../../../shared/middleware/validate';
 import * as controller from '../controller/subscriptions.controller';
 import { restoreSubscriptionSchema } from '../validator/subscription.validation';
 

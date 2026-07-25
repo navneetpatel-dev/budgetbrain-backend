@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as budgetService from '../service/budget.service';
 import type { CreateBudgetInput, UpdateBudgetInput } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function listBudgets(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

@@ -1,7 +1,7 @@
-import { FinancialAccount } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { FinancialAccount } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { CreateAccountInput, UpdateAccountInput } from '../types';
 
 export async function listAccounts(userId: string, filters: PaginationInput = {}) {

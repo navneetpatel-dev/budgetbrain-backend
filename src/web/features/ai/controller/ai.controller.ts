@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as aiService from '../service/ai.service';
 import type { ChatInput } from '../types';
 

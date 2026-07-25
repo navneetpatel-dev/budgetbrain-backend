@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as familyService from '../service/family.service';
 import type { CreateGroupInput, JoinGroupInput } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function createGroup(req: Request, res: Response) {
   const { name } = req.body as CreateGroupInput;

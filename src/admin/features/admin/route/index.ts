@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { asyncHandler } from '../../../../shared/utils/errors';
-import { authenticate, requireAdmin } from '../../../../shared/middleware/auth';
-import { validateBody, validateParams, validateQuery } from '../../../../shared/middleware/validate';
-import { paginationSchema, uuidParamSchema } from '../../../../shared/validation';
+import { asyncHandler } from '../../../shared/utils/errors';
+import { authenticate, requireAdmin } from '../../../shared/middleware/auth';
+import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
+import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/admin.controller';
 import {
   updateSupportTicketSchema,

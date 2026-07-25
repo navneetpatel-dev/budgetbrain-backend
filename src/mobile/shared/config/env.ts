@@ -1,0 +1,48 @@
+import dotenv from 'dotenv';
+import { z } from 'zod';
+
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const envFileByEnvironment: Record<string, string> = {
+  development: '.env.development',
+  test: '.env.test',
+  staging: '.env.staging',
+  production: '.env.production',
+};
+
+dotenv.config({ path: envFileByEnvironment[nodeEnv] ?? '.env.local' });
+dotenv.config({ path: '.env.local' });
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+  PORT: z.coerce.number().default(3000),
+  API_VERSION: z.string().default('v1'),
+  DB_HOST: z.string().default('localhost'),
+  DB_PORT: z.coerce.number().default(5432),
+  DB_NAME: z.string().default('budgetbrain'),
+  DB_USER: z.string().default('budgetbrain'),
+  DB_PASSWORD: z.string().default('budgetbrain'),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_EXPIRY: z.string().default('15m'),
+  JWT_REFRESH_EXPIRY: z.string().default('7d'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('BudgetBrain <noreply@budgetbrain.app>'),
+  AWS_REGION: z.string().default('ap-south-1'),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_BUCKET: z.string().default('budgetbrain-receipts'),
+  OPENAI_API_KEY: z.string().optional(),
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  APPLE_CLIENT_ID: z.string().optional(),
+  SENTRY_DSN: z.string().optional(),
+  EXPO_ACCESS_TOKEN: z.string().optional(),
+  POSTHOG_API_KEY: z.string().optional(),
+  APP_URL: z.string().default('http://localhost:3000'),
+  CORS_ORIGIN: z.string().default('*'),
+});
+
+export const env = envSchema.parse(process.env);

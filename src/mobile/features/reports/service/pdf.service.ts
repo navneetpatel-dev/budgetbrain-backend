@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { Transaction, Category } from '../../../../shared/models';
+import { Transaction, Category } from '../../../../models';
 import { Op } from 'sequelize';
 
 export async function generatePdfReport(

@@ -1,5 +1,5 @@
-import { AppError } from '../../../../shared/utils/errors';
-import { env } from '../../../../shared/config/env';
+import { AppError } from '../../../shared/utils/errors';
+import { env } from '../../../shared/config/env';
 
 interface GoogleTokenInfo {
   sub: string;

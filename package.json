@@ -2,14 +2,20 @@
   "name": "budgetbrain-api",
   "version": "1.0.0",
   "description": "BudgetBrain - AI Powered Expense Tracking API",
-  "main": "dist/index.js",
+  "main": "dist/web/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "npm run dev:web",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "npm run start:web",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "dev:mobile": "PORT=${PORT_MOBILE:-3001} tsx watch src/mobile/index.ts",
+    "dev:web": "PORT=${PORT_WEB:-3002} tsx watch src/web/index.ts",
+    "dev:admin": "PORT=${PORT_ADMIN:-3003} tsx watch src/admin/index.ts",
+    "start:mobile": "PORT=${PORT_MOBILE:-3001} node dist/mobile/index.js",
+    "start:web": "PORT=${PORT_WEB:-3002} node dist/web/index.js",
+    "start:admin": "PORT=${PORT_ADMIN:-3003} node dist/admin/index.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",

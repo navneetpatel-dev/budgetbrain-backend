@@ -6,7 +6,7 @@ import {
   DEFAULT_CATEGORIES,
   VerificationToken,
   TokenType,
-} from '../../../../shared/models';
+} from '../../../../models';
 import {
   hashPassword,
   comparePassword,
@@ -15,10 +15,10 @@ import {
   hashToken,
   verifyRefreshToken,
   generateOtp,
-} from '../../../../shared/utils/jwt';
-import { logAuditEvent } from '../../../../shared/services/audit.service';
-import { AppError } from '../../../../shared/utils/errors';
-import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '../../../../shared/services/email.service';
+} from '../../../shared/utils/jwt';
+import { logAuditEvent } from '../../../shared/services/audit.service';
+import { AppError } from '../../../shared/utils/errors';
+import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user.toJSON();

@@ -1,5 +1,5 @@
-import { sequelize } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
+import { sequelize } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
 import {
   User,
   RefreshToken,
@@ -23,7 +23,7 @@ import {
   ParsedTransaction,
   SupportTicket,
   VerificationToken,
-} from '../../../../shared/models';
+} from '../../../../models';
 import type { OnboardingInput, UpdateProfileInput } from '../types';
 
 export async function getUser(userId: string) {

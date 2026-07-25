@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as adminService from '../service/admin.service';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,
 } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function getDashboard(_req: Request, res: Response) {
   const data = await adminService.getAdminDashboard();

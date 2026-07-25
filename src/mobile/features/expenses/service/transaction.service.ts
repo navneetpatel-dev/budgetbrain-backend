@@ -5,12 +5,12 @@ import {
   Category,
   IncomeSource,
   User,
-} from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
+} from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
 import { checkBudgetAlertsAfterExpense } from '../../budgets/service/budgetAlert.service';
-import { logAuditEvent } from '../../../../shared/services/audit.service';
-import { resolvePagination, paginatedResult } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { logAuditEvent } from '../../../shared/services/audit.service';
+import { resolvePagination, paginatedResult } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type {
   CreateTransactionInput,
   UpdateTransactionInput,

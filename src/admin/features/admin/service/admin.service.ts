@@ -1,8 +1,8 @@
 import { Op, fn, col } from 'sequelize';
-import { User, Subscription, AuditLog, Transaction, AiConversation, RefreshToken, SupportTicket } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { logAuditEvent } from '../../../../shared/services/audit.service';
-import type { TicketStatus } from '../../../../shared/models/SupportTicket';
+import { User, Subscription, AuditLog, Transaction, AiConversation, RefreshToken, SupportTicket } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { logAuditEvent } from '../../../shared/services/audit.service';
+import type { TicketStatus } from '../../../../models/SupportTicket';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,

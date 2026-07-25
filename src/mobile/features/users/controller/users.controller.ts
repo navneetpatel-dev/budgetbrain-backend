@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import { sanitizeUser } from '../../auth/service/auth.service';
 import { deleteUserAccount, getUser, updateOnboarding, updateProfile } from '../service/user.service';
 import type { OnboardingInput, UpdateProfileInput } from '../types';

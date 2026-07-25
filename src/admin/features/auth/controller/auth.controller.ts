@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
+import { successResponse } from '../../../shared/utils/errors';
 import * as authService from '../service/auth.service';
 import type {
   EmailInput,

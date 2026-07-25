@@ -1,6 +1,6 @@
-import { Transaction } from '../../../../shared/models';
+import { Transaction } from '../../../../models';
 import * as transactionService from '../../expenses/service/transaction.service';
-import { AppError } from '../../../../shared/utils/errors';
+import { AppError } from '../../../shared/utils/errors';
 import type { SyncBatchItem } from '../types';
 
 export async function processBatchSync(userId: string, items: SyncBatchItem[]) {

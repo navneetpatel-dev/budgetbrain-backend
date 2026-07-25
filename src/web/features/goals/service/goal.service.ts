@@ -1,8 +1,8 @@
-import { Goal, GoalContribution, User } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
+import { Goal, GoalContribution, User } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
 import { createNotification } from '../../notifications/service/notification.service';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { CreateGoalInput, UpdateGoalInput } from '../types';
 
 export async function createGoal(userId: string, data: CreateGoalInput) {

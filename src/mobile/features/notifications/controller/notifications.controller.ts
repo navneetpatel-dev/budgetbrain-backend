@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as notificationService from '../service/notification.service';
 import { sendPushToUser } from '../service/push.service';
 import type { RegisterDeviceInput } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function listNotifications(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

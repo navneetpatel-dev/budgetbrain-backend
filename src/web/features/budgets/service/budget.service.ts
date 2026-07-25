@@ -1,8 +1,8 @@
 import { Op, fn, col } from 'sequelize';
-import { Budget, Category, Transaction, User } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { Budget, Category, Transaction, User } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types'
 
 const FREE_BUDGET_LIMIT = 3;

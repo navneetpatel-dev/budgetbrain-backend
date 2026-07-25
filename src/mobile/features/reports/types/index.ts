@@ -1,1 +1,1 @@
-export type { DateRangeInput } from '../../../../shared/types';
+export type { DateRangeInput } from '../../../shared/types';

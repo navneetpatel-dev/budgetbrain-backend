@@ -4,7 +4,7 @@ import { createInvestmentSchema, updateInvestmentSchema } from '../validator/inv
 export type CreateInvestmentInput = z.infer<typeof createInvestmentSchema>;
 export type UpdateInvestmentInput = z.infer<typeof updateInvestmentSchema>;
 
-import type { Investment } from '../../../../shared/models';
+import type { Investment } from '../../../../models';
 
 export interface EnrichedInvestment {
   id: string;

@@ -1,7 +1,7 @@
-import { Investment } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { Investment } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { CreateInvestmentInput, UpdateInvestmentInput, EnrichedInvestment } from '../types';
 
 function enrichInvestment(inv: Investment): EnrichedInvestment {

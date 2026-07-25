@@ -1,4 +1,4 @@
-import { User, Subscription } from '../../../../shared/models';
+import { User, Subscription } from '../../../../models';
 
 interface RevenueCatEvent {
   event?: {

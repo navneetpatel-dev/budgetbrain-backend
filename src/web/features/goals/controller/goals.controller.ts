@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as goalService from '../service/goal.service';
 import type {
   ContributeGoalInput,
   CreateGoalInput,
   UpdateGoalInput,
 } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function listGoals(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

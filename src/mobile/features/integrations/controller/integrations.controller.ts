@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as integrationsService from '../service/integrations.service';
 import type {
   ConfirmParsedInput,
   ParseEmailInput,
   ParseSmsInput,
 } from '../types';
-import type { PaginationInput } from '../../../../shared/types';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function parseSms(req: Request, res: Response) {
   const { content } = req.body as ParseSmsInput;

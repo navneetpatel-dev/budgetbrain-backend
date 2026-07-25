@@ -1,6 +1,6 @@
-import { AiConversation, Transaction, Category } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { env } from '../../../../shared/config/env';
+import { AiConversation, Transaction, Category } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { env } from '../../../shared/config/env';
 import { Op, fn, col } from 'sequelize';
 
 export async function getSpendingInsights(userId: string) {

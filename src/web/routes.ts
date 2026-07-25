@@ -18,7 +18,6 @@ import supportRoutes from './features/support/route';
 import expenseAttachmentRoutes from './features/expenses/route/attachments.routes';
 import type { Express } from 'express';
 
-/** Web platform routers (full copies under ./features). */
 export function registerWebRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/auth`, authRoutes);
   app.use(`${apiPrefix}/users`, usersRoutes);

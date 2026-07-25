@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as transactionService from '../service/transaction.service';
 import * as dashboardService from '../../dashboard/service/dashboard.service';
 import type {

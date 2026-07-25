@@ -1,7 +1,7 @@
-import { SupportTicket } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { SupportTicket } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { CreateTicketInput } from '../types';
 
 export async function listUserTickets(userId: string, filters: PaginationInput = {}) {

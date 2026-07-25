@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { successResponse, AppError } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse, AppError } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import * as subscriptionService from '../service/subscription.service';
 import type { RestoreSubscriptionInput } from '../types';
-import { env } from '../../../../shared/config/env';
+import { env } from '../../../shared/config/env';
 
 export async function handleWebhook(req: Request, res: Response) {
   const secret = req.headers['authorization'];

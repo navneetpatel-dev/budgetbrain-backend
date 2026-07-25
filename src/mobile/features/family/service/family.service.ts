@@ -1,8 +1,8 @@
-import { FamilyGroup, FamilyMember } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
-import { generateInviteCode } from '../../../../shared/utils/jwt';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { FamilyGroup, FamilyMember } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
+import { generateInviteCode } from '../../../shared/utils/jwt';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 
 export async function createGroup(ownerId: string, name: string) {
   const group = await FamilyGroup.create({

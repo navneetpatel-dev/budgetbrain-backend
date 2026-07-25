@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../../../../shared/types';
+import { AuthRequest } from '../../../shared/types';
 import * as reportService from '../service/report.service';
 import { generatePdfReport } from '../service/pdf.service';
-import type { DateRangeInput } from '../../../../shared/types';
+import type { DateRangeInput } from '../../../shared/types';
 
 export async function exportCsv(req: Request, res: Response) {
   const { startDate, endDate } = req.query as DateRangeInput;

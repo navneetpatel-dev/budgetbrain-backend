@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../../shared/utils/errors';
-import { AuthRequest } from '../../../../shared/types';
+import { successResponse } from '../../../shared/utils/errors';
+import { AuthRequest } from '../../../shared/types';
 import { processBatchSync } from '../service/sync.service';
 import type { SyncBatchInput } from '../types';
 

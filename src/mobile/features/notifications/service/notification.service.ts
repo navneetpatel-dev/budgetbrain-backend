@@ -1,8 +1,8 @@
-import { Notification, NotificationType, Device } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
+import { Notification, NotificationType, Device } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
 import { sendPushToUser } from './push.service';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { RegisterDeviceInput } from '../types';
 
 export async function createNotification(

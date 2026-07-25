@@ -1,9 +1,9 @@
-import { ParsedTransaction } from '../../../../shared/models';
-import { AppError } from '../../../../shared/utils/errors';
+import { ParsedTransaction } from '../../../../models';
+import { AppError } from '../../../shared/utils/errors';
 import { parseSmsContent, parseEmailReceipt } from './parse.service';
 import * as transactionService from '../../expenses/service/transaction.service';
-import { paginatedResult, resolvePagination } from '../../../../shared/pagination';
-import type { PaginationInput } from '../../../../shared/types';
+import { paginatedResult, resolvePagination } from '../../../shared/pagination';
+import type { PaginationInput } from '../../../shared/types';
 import type { ConfirmParsedInput } from '../types';
 
 export async function parseSms(userId: string, content: string) {

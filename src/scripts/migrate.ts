@@ -7,7 +7,7 @@ if (!existsSync(envFile)) {
 }
 
 async function migrate(): Promise<number> {
-  const { connectDatabase } = await import('../shared/config/database');
+  const { connectDatabase } = await import('../db/database');
   const connected = await connectDatabase();
 
   if (!connected) {
@@ -15,7 +15,7 @@ async function migrate(): Promise<number> {
     return 0;
   }
 
-  const { initModels, sequelize } = await import('../shared/models');
+  const { initModels, sequelize } = await import('../models');
   initModels();
   await sequelize.sync({ alter: false });
   console.log('Database migration complete (schema synced).');

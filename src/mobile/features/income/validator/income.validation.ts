@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { dateRangeSchema, paginationSchema } from '../../../../shared/validation';
+import { dateRangeSchema, paginationSchema } from '../../../shared/validation';
 
 export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
 

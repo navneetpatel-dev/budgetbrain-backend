@@ -1,6 +1,6 @@
 import app from './app';
-import { connectDatabase } from '../shared/db/database';
-import { initModels, sequelize } from '../shared/models';
+import { initModels } from '../shared/models';
+import { prepareDatabase, listenAndLog } from '../shared/startup';
 import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';
 import { validateProductionConfig } from './shared/config/production';
@@ -14,28 +14,18 @@ validateProductionConfig();
 
 async function bootstrap() {
   try {
-    const dbConnected = await connectDatabase();
     initModels();
 
-    if (dbConnected) {
-      if (env.NODE_ENV === 'development') {
-        await sequelize.sync({ alter: true });
-        log.info('Database synced (development)');
-      } else {
-        log.info('Production mode — run npm run db:migrate before deploy');
-      }
+    const dbConnected = await prepareDatabase(log);
 
+    if (dbConnected) {
       startScheduledJobs();
-    } else {
-      log.warn('Starting without database — DB-dependent routes will not work until connected');
     }
 
-    app.listen(env.PORT, () => {
-      log.info('BudgetBrain API running', {
-        port: env.PORT,
-        environment: env.NODE_ENV,
-        api: `http://localhost:${env.PORT}/api/${env.API_VERSION}`,
-      });
+    listenAndLog(app, log, 'mobile', {
+      port: env.PORT,
+      apiVersion: env.API_VERSION,
+      environment: env.NODE_ENV,
     });
   } catch (error) {
     log.error('Failed to start server', {

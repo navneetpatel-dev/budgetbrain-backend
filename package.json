@@ -4,18 +4,12 @@
   "description": "BudgetBrain - AI Powered Expense Tracking API",
   "main": "dist/web/index.js",
   "scripts": {
-    "dev": "npm run dev:web",
+    "dev": "concurrently -k -n mobile,web,admin -c cyan,magenta,yellow \"PORT=${PORT_MOBILE:-3001} tsx watch src/mobile/index.ts\" \"PORT=${PORT_WEB:-3002} tsx watch src/web/index.ts\" \"PORT=${PORT_ADMIN:-3003} tsx watch src/admin/index.ts\"",
     "build": "tsc",
-    "start": "npm run start:web",
+    "start": "concurrently -k -n mobile,web,admin -c cyan,magenta,yellow \"PORT=${PORT_MOBILE:-3001} node dist/mobile/index.js\" \"PORT=${PORT_WEB:-3002} node dist/web/index.js\" \"PORT=${PORT_ADMIN:-3003} node dist/admin/index.js\"",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
-    "lint": "eslint src --ext .ts",
-    "dev:mobile": "PORT=${PORT_MOBILE:-3001} tsx watch src/mobile/index.ts",
-    "dev:web": "PORT=${PORT_WEB:-3002} tsx watch src/web/index.ts",
-    "dev:admin": "PORT=${PORT_ADMIN:-3003} tsx watch src/admin/index.ts",
-    "start:mobile": "PORT=${PORT_MOBILE:-3001} node dist/mobile/index.js",
-    "start:web": "PORT=${PORT_WEB:-3002} node dist/web/index.js",
-    "start:admin": "PORT=${PORT_ADMIN:-3003} node dist/admin/index.js"
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
@@ -49,6 +43,7 @@
     "@types/nodemailer": "^6.4.17",
     "@types/pdfkit": "^0.13.9",
     "@types/uuid": "^10.0.0",
+    "concurrently": "^10.0.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

@@ -40,7 +40,6 @@ export const sequelize = new Sequelize(dbEnv.DB_NAME, dbEnv.DB_USER, dbEnv.DB_PA
 export async function connectDatabase(): Promise<boolean> {
   try {
     await sequelize.authenticate();
-    log.info('Database connected', { host: dbEnv.DB_HOST, database: dbEnv.DB_NAME });
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

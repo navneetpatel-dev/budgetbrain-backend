@@ -4,6 +4,7 @@ import {
   requiredText,
   currencyField,
   urlField,
+  amountField,
   FieldLimits,
 } from '../../../../validation';
 
@@ -19,7 +20,7 @@ export const updateProfileSchema = z.object({
 export const onboardingSchema = z.object({
   name: requiredText('name'),
   country: requiredText('country'),
-  currency: currencyField(false),
+  currency: currencyField(),
   financialGoals: z
     .array(
       z
@@ -30,5 +31,5 @@ export const onboardingSchema = z.object({
     )
     .max(20),
   salaryRange: requiredText('salaryRange'),
-  monthlySavingsTarget: z.number().positive(),
+  monthlySavingsTarget: amountField(),
 });

@@ -6,8 +6,16 @@ export const paginationSchema = z.object({
 });
 
 export const dateRangeSchema = z.object({
-  startDate: z.string().max(40).optional(),
-  endDate: z.string().max(40).optional(),
+  startDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .optional(),
+  endDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .optional(),
 });
 
 export const uuidParamSchema = z.object({

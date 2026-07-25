@@ -1,16 +1,23 @@
 import { z } from 'zod';
 import { dateRangeSchema, paginationSchema } from '../../../shared/validation';
-import { optionalText, requiredText, currencyField } from '../../../../validation';
+import {
+  optionalText,
+  requiredText,
+  currencyField,
+  requiredDate,
+  optionalDate,
+  amountField,
+} from '../../../../validation';
 
 export const transactionSchema = z.object({
   type: z.enum(['expense', 'income']),
-  amount: z.number().positive(),
+  amount: amountField(),
   currency: currencyField(true),
   categoryId: z.string().uuid().optional(),
   incomeSourceId: z.string().uuid().optional(),
   notes: optionalText('notes'),
   merchant: optionalText('merchant'),
-  date: z.string().min(1).max(40),
+  date: requiredDate,
   paymentMethod: z.enum(['cash', 'card', 'upi', 'bank_transfer', 'other']).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
@@ -27,6 +34,16 @@ export const searchQuerySchema = paginationSchema.extend({
 });
 
 export const updateTransactionSchema = transactionSchema.partial();
+
+export const syncTransactionCreateSchema = transactionSchema;
+
+export const syncTransactionUpdateSchema = updateTransactionSchema.extend({
+  id: z.string().uuid().optional(),
+});
+
+export const syncTransactionDeleteSchema = z.object({
+  id: z.string().uuid().optional(),
+});
 
 export const attachmentParamsSchema = z.object({
   id: z.string().uuid(),

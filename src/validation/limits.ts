@@ -29,7 +29,7 @@ export const FieldLimits = {
   institution: { min: 1, max: 255 },
   accountNumberLast4: { min: 4, max: 4 },
   symbol: { min: 1, max: 20 },
-  inviteCode: { min: 1, max: 20 },
+  inviteCode: { min: 6, max: 20 },
 
   subject: { min: 3, max: 255 },
   message: { min: 10, max: 5000 },
@@ -49,5 +49,10 @@ export const FieldLimits = {
   auditResource: { min: 1, max: 100 },
   requestId: { min: 1, max: 64 },
 } as const;
+
+/** DECIMAL(15,2) safe ceiling */
+export const MAX_MONEY_AMOUNT = 9_999_999_999_999.99;
+
+export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'] as const;
 
 export type FieldLimitKey = keyof typeof FieldLimits;

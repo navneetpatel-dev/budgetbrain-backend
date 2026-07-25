@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { FieldLimits, type FieldLimitKey } from './limits';
+import {
+  FieldLimits,
+  MAX_MONEY_AMOUNT,
+  SUPPORTED_CURRENCIES,
+  type FieldLimitKey,
+} from './limits';
+import { ValidationMessages as M } from './messages';
 
 function lim(key: FieldLimitKey) {
   return FieldLimits[key];
@@ -11,8 +17,8 @@ export function requiredText(key: FieldLimitKey) {
   return z
     .string()
     .trim()
-    .min(min, `Must be at least ${min} characters`)
-    .max(max, `Must be at most ${max} characters`);
+    .min(min, M.minChars(min))
+    .max(max, M.maxChars(max));
 }
 
 /**
@@ -24,7 +30,7 @@ export function optionalText(key: FieldLimitKey) {
   return z
     .string()
     .trim()
-    .max(max, `Must be at most ${max} characters`)
+    .max(max, M.maxChars(max))
     .optional()
     .transform((val) => (val && val.length > 0 ? val : undefined))
     .superRefine((val, ctx) => {
@@ -34,7 +40,7 @@ export function optionalText(key: FieldLimitKey) {
           minimum: min,
           type: 'string',
           inclusive: true,
-          message: `Must be at least ${min} characters`,
+          message: M.minChars(min),
         });
       }
     });
@@ -45,32 +51,99 @@ export function emailField() {
   return z
     .string()
     .trim()
-    .min(1, 'Email is required')
-    .max(max, `Email must be at most ${max} characters`)
-    .email('Enter a valid email address');
+    .min(1, M.emailRequired)
+    .max(max, M.emailMax())
+    .email(M.emailInvalid)
+    .transform((value) => value.toLowerCase());
 }
 
 export function passwordField() {
   const { min, max } = lim('password');
   return z
     .string()
-    .min(min, `Password must be at least ${min} characters`)
-    .max(max, `Password must be at most ${max} characters`);
+    .min(min, M.passwordMin())
+    .max(max, M.passwordMax())
+    .regex(/[A-Za-z]/, M.passwordLetter)
+    .regex(/[0-9]/, M.passwordNumber);
 }
 
-/** Login password: required + max only (no min, avoids leaking policy on failed logins). */
+/** Login password: required + max only (no complexity leak on failed logins). */
 export function loginPasswordField() {
   const { max } = lim('password');
-  return z.string().min(1, 'Password is required').max(max, `Password must be at most ${max} characters`);
+  return z.string().min(1, M.passwordRequired).max(max, M.passwordMax());
 }
 
 export function otpField() {
-  return z.string().trim().length(FieldLimits.otp.max, 'Enter the 6-digit code');
+  return z.string().trim().regex(/^\d{6}$/, M.otpInvalid);
 }
 
+const currencyEnum = z.enum(SUPPORTED_CURRENCIES, {
+  errorMap: () => ({ message: M.currencyInvalid }),
+});
+
 export function currencyField(optional = false) {
-  const field = z.string().trim().length(3, 'Currency must be a 3-letter code');
-  return optional ? field.optional() : field;
+  if (optional) {
+    return z.preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      if (typeof value === 'string') return value.trim().toUpperCase();
+      return value;
+    }, currencyEnum.optional()) as z.ZodType<(typeof SUPPORTED_CURRENCIES)[number] | undefined>;
+  }
+
+  return z.preprocess((value) => {
+    if (typeof value === 'string') return value.trim().toUpperCase();
+    return value;
+  }, currencyEnum) as z.ZodType<(typeof SUPPORTED_CURRENCIES)[number]>;
+}
+
+const isoDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, M.dateFormat)
+  .refine((value) => {
+    const [y, m, d] = value.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  }, M.dateInvalid);
+
+export function dateField(optional = false) {
+  return optional ? isoDateSchema.optional() : isoDateSchema;
+}
+
+/** Required YYYY-MM-DD date. */
+export const requiredDate = isoDateSchema;
+/** Optional YYYY-MM-DD date. */
+export const optionalDate = isoDateSchema.optional();
+
+/** Positive money amount within DECIMAL(15,2) range. */
+export function amountField() {
+  return z
+    .number({ invalid_type_error: M.amountType })
+    .finite(M.amountFinite)
+    .positive(M.amountPositive)
+    .max(MAX_MONEY_AMOUNT, M.amountMax());
+}
+
+/** Required money value (allows zero; set allowNegative for credit balances). */
+export function moneyValueField(opts?: { allowNegative?: boolean }) {
+  return z
+    .number({ invalid_type_error: M.valueType })
+    .finite(M.valueFinite)
+    .min(opts?.allowNegative ? -MAX_MONEY_AMOUNT : 0)
+    .max(MAX_MONEY_AMOUNT);
+}
+
+/** Optional money value. */
+export function optionalMoneyValueField(opts?: { allowNegative?: boolean }) {
+  return moneyValueField(opts).optional();
+}
+
+export function inviteCodeField() {
+  return z.string().trim().regex(/^[a-fA-F0-9]{6,20}$/, M.inviteCodeInvalid);
+}
+
+export function accountLast4Field() {
+  return z.string().trim().regex(/^\d{4}$/, M.last4Invalid).optional();
 }
 
 export function urlField(key: FieldLimitKey = 'avatarUrl') {
@@ -78,9 +151,9 @@ export function urlField(key: FieldLimitKey = 'avatarUrl') {
   return z
     .string()
     .trim()
-    .max(max, `URL must be at most ${max} characters`)
-    .url('Enter a valid URL')
+    .max(max, M.urlMax(max))
+    .url(M.urlInvalid)
     .optional();
 }
 
-export { FieldLimits };
+export { FieldLimits, MAX_MONEY_AMOUNT, SUPPORTED_CURRENCIES, ValidationMessages };

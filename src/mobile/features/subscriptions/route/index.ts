@@ -8,7 +8,6 @@ import { restoreSubscriptionSchema } from '../validator/subscription.validation'
 const router = Router();
 router.use(authenticate);
 
-router.post('/webhook', asyncHandler(controller.handleWebhook));
 router.get('/status', asyncHandler(controller.getStatus));
 router.post(
   '/restore',

@@ -14,6 +14,8 @@ export async function processBatchSync(userId: string, items: SyncBatchItem[]) {
     try {
       if (item.resource === 'transaction') {
         await processTransactionSync(userId, item);
+      } else {
+        throw new AppError(400, `Unsupported sync resource: ${item.resource}`, 'UNSUPPORTED_RESOURCE');
       }
       results.push({ id: item.id, status: 'success' });
     } catch (err) {
@@ -30,12 +32,13 @@ export async function processBatchSync(userId: string, items: SyncBatchItem[]) {
 
 async function processTransactionSync(userId: string, item: SyncBatchItem) {
   if (item.action === 'create') {
-    await transactionService.createTransaction(userId, item.payload as never);
+    await transactionService.createTransaction(userId, item.payload);
   } else if (item.action === 'update') {
-    const id = String(item.payload.id ?? item.id);
-    await transactionService.updateTransaction(userId, id, item.payload as never);
+    const id = item.payload.id ?? item.id;
+    const { id: _id, ...data } = item.payload;
+    await transactionService.updateTransaction(userId, id, data);
   } else if (item.action === 'delete') {
-    const id = String(item.payload.id ?? item.id);
+    const id = item.payload.id ?? item.id;
     const existing = await Transaction.findOne({ where: { id, userId } });
     if (existing) {
       await transactionService.deleteTransaction(userId, id);

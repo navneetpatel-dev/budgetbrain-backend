@@ -1,20 +1,27 @@
 import { z } from 'zod';
-import { optionalText, requiredText, currencyField } from '../../../../validation';
+import {
+  optionalText,
+  requiredText,
+  currencyField,
+  requiredDate,
+  optionalDate,
+  amountField,
+} from '../../../../validation';
 
 export const createBudgetSchema = z.object({
   name: requiredText('entityName'),
   type: z.enum(['monthly', 'weekly', 'category']),
-  amount: z.number().positive(),
+  amount: amountField(),
   currency: currencyField(true),
   categoryId: z.string().uuid().optional(),
-  startDate: z.string().min(1).max(40),
-  endDate: z.string().min(1).max(40).optional(),
+  startDate: requiredDate,
+  endDate: optionalDate,
   alertThreshold: z.number().min(1).max(100).optional(),
 });
 
 export const updateBudgetSchema = z.object({
   name: optionalText('entityName'),
-  amount: z.number().positive().optional(),
+  amount: amountField().optional(),
   alertThreshold: z.number().min(1).max(100).optional(),
-  endDate: z.string().min(1).max(40).optional(),
+  endDate: optionalDate,
 });

@@ -18,8 +18,8 @@ export const updateSupportTicketSchema = z.object({
 });
 
 export const auditLogsQuerySchema = z.object({
-  page: z.coerce.number().optional(),
-  limit: z.coerce.number().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
   action: optionalText('auditAction'),
   resource: optionalText('auditResource'),
   source: z.enum(['mobile', 'web', 'admin', 'system']).optional(),
@@ -27,6 +27,14 @@ export const auditLogsQuerySchema = z.object({
   severity: z.enum(['info', 'warning', 'critical']).optional(),
   actorUserId: z.string().uuid().optional(),
   requestId: optionalText('requestId'),
-  startDate: z.string().max(40).optional(),
-  endDate: z.string().max(40).optional(),
+  startDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .optional(),
+  endDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .optional(),
 });

@@ -1,23 +1,30 @@
 import { z } from 'zod';
 import { dateRangeSchema, paginationSchema } from '../../../shared/validation';
-import { optionalText, requiredText, currencyField } from '../../../../validation';
+import {
+  optionalText,
+  requiredText,
+  currencyField,
+  requiredDate,
+  optionalDate,
+  amountField,
+} from '../../../../validation';
 
 export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
 
 export const createIncomeSchema = z.object({
-  amount: z.number().positive(),
+  amount: amountField(),
   currency: currencyField(true),
   incomeSourceId: z.string().uuid().optional(),
   notes: optionalText('notes'),
-  date: z.string().min(1).max(40),
+  date: requiredDate,
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
 });
 
 export const updateIncomeSchema = z.object({
-  amount: z.number().positive().optional(),
+  amount: amountField().optional(),
   notes: optionalText('notes'),
-  date: z.string().min(1).max(40).optional(),
+  date: optionalDate,
   incomeSourceId: z.string().uuid().optional(),
 });
 

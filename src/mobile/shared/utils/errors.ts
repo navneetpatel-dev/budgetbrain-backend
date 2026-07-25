@@ -37,10 +37,11 @@ export function errorHandler(
   }
 
   if (err instanceof ZodError) {
+    const first = err.errors[0];
     res.status(400).json({
       success: false,
       error: {
-        message: 'Validation failed',
+        message: first?.message ?? 'Validation failed',
         code: 'VALIDATION_ERROR',
         details: err.errors,
       },

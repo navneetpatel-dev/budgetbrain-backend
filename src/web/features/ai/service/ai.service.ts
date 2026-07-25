@@ -1,7 +1,16 @@
 import { AiConversation, Transaction, Category } from '../../../../shared/models';
+import type { AiMessage } from '../../../../shared/models/AiConversation';
 import { AppError } from '../../../shared/utils/errors';
 import { env } from '../../../shared/config/env';
 import { Op, fn, col } from 'sequelize';
+import {
+  AI_COACH_CONFIG,
+  buildCoachSystemPrompt,
+  buildFinanceContext,
+  buildFinanceContextMessage,
+  chatCompletion,
+  generateCoachFallback,
+} from '../../../../shared/ai';
 
 export async function getSpendingInsights(userId: string) {
   const now = new Date();
@@ -59,69 +68,77 @@ export async function getSpendingInsights(userId: string) {
   return { insights, summary: { current, previous, changePercent } };
 }
 
+function titleFromMessage(message: string): string {
+  const cleaned = message.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return 'New Conversation';
+  return cleaned.length > 60 ? `${cleaned.slice(0, 57)}...` : cleaned;
+}
+
 export async function chatWithCoach(userId: string, message: string, conversationId?: string) {
-  let conversation: AiConversation | null = null;
+  const [context, existingConversation] = await Promise.all([
+    buildFinanceContext(userId),
+    conversationId
+      ? AiConversation.findOne({ where: { id: conversationId, userId } })
+      : Promise.resolve(null),
+  ]);
 
-  if (conversationId) {
-    conversation = await AiConversation.findOne({ where: { id: conversationId, userId } });
-  }
+  const conversation =
+    existingConversation ?? (await AiConversation.create({ userId, messages: [] }));
 
-  if (!conversation) {
-    conversation = await AiConversation.create({ userId, messages: [] });
-  }
-
-  const messages = [...conversation.messages, {
-    role: 'user' as const,
+  const userMessage: AiMessage = {
+    role: 'user',
     content: message,
     timestamp: new Date().toISOString(),
-  }];
+  };
+
+  const priorMessages = (conversation.messages ?? []).filter(
+    (m): m is AiMessage => m.role === 'user' || m.role === 'assistant'
+  );
+  const historyForModel = priorMessages.slice(-AI_COACH_CONFIG.historyLimit);
 
   let assistantContent: string;
 
   if (env.OPENAI_API_KEY) {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are BudgetBrain AI Financial Coach. Provide concise, actionable budget and savings advice based on user questions. Use INR when mentioning amounts unless specified otherwise.',
-            },
-            ...messages.map((m) => ({ role: m.role, content: m.content })),
-          ],
-          max_tokens: 500,
-        }),
+      assistantContent = await chatCompletion({
+        apiKey: env.OPENAI_API_KEY,
+        messages: [
+          {
+            role: 'system',
+            content: buildCoachSystemPrompt({
+              currency: context.currency,
+              userName: context.userName,
+            }),
+          },
+          {
+            role: 'system',
+            content: buildFinanceContextMessage(context.text),
+          },
+          ...historyForModel.map((m) => ({ role: m.role, content: m.content })),
+          { role: 'user', content: message },
+        ],
       });
-
-      const data = (await response.json()) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      assistantContent =
-        data.choices?.[0]?.message?.content ??
-        'I am unable to provide advice right now. Please try again.';
     } catch {
-      assistantContent = generateFallbackResponse(message);
+      assistantContent = generateCoachFallback(message, context);
     }
   } else {
-    assistantContent = generateFallbackResponse(message);
+    assistantContent = generateCoachFallback(message, context);
   }
 
-  const assistantMessage = {
-    role: 'assistant' as const,
+  const assistantMessage: AiMessage = {
+    role: 'assistant',
     content: assistantContent,
     timestamp: new Date().toISOString(),
   };
 
-  messages.push(assistantMessage);
+  const messages = [...priorMessages, userMessage, assistantMessage];
+  const shouldTitle =
+    !conversation.title || conversation.title === 'New Conversation';
 
-  await conversation.update({ messages });
+  await conversation.update({
+    messages,
+    ...(shouldTitle ? { title: titleFromMessage(message) } : {}),
+  });
 
   return {
     conversationId: conversation.id,
@@ -129,17 +146,6 @@ export async function chatWithCoach(userId: string, message: string, conversatio
     reply: assistantContent,
     messages,
   };
-}
-
-function generateFallbackResponse(message: string): string {
-  const lower = message.toLowerCase();
-  if (lower.includes('save') || lower.includes('saving')) {
-    return 'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings. Review your top 3 expense categories this week to find quick wins.';
-  }
-  if (lower.includes('budget')) {
-    return 'Set category-based budgets for your top spending areas. Start with Food, Transportation, and Entertainment — these typically offer the most savings potential.';
-  }
-  return 'Track every expense for 2 weeks to identify patterns. Small recurring subscriptions often add up to significant monthly costs.';
 }
 
 export async function detectAnomalies(userId: string) {

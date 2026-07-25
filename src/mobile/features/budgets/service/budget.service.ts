@@ -6,6 +6,13 @@ import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
 
+/** Sequelize DATEONLY may come back as a string or Date. */
+function toDateOnly(value: Date | string | null | undefined, fallback: string): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
 function getBudgetDateRange(budget: Budget): { startDate: string; endDate: string } {
   const now = new Date();
   if (budget.type === 'weekly') {
@@ -15,15 +22,15 @@ function getBudgetDateRange(budget: Budget): { startDate: string; endDate: strin
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
     return {
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0],
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
     };
   }
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return {
-    startDate: budget.startDate.toISOString().split('T')[0] ?? start.toISOString().split('T')[0],
-    endDate: budget.endDate?.toISOString().split('T')[0] ?? end.toISOString().split('T')[0],
+    startDate: toDateOnly(budget.startDate, start.toISOString().slice(0, 10)),
+    endDate: toDateOnly(budget.endDate, end.toISOString().slice(0, 10)),
   };
 }
 

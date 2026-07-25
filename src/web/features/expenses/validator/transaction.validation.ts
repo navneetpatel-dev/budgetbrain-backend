@@ -45,6 +45,8 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
 export const listTransactionsSchema = paginationSchema.merge(dateRangeSchema).extend({
   type: enumField(['expense', 'income'] as const).optional(),
   categoryId: uuidField().optional(),
+  incomeSourceId: uuidField().optional(),
+  paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
   search: optionalText('search'),
 });
 

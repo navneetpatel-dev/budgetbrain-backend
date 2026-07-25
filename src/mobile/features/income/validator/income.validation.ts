@@ -11,7 +11,9 @@ import {
   enumField,
 } from '../../../../shared/validation';
 
-export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
+export const listIncomeSchema = dateRangeSchema.merge(paginationSchema).extend({
+  incomeSourceId: uuidField().optional(),
+});
 
 export const createIncomeSchema = z.object({
   amount: amountField(),

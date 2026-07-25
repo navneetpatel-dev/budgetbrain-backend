@@ -11,9 +11,9 @@ export async function getDashboard(userId: string) {
       transactionService.getTotalIncome(userId, user),
       transactionService.getTotalExpenses(userId, user),
       transactionService.getRecentTransactions(userId, user, 10),
-      budgetService.listBudgetsForDashboard(userId, 5),
-      goalService.listGoalsForDashboard(userId, 5),
-      transactionService.getCategoryBreakdown(userId, user),
+      budgetService.listBudgetsForDashboard(userId, 3),
+      goalService.listGoalsForDashboard(userId, 2),
+      transactionService.getCategoryBreakdown(userId, user, 2),
     ]);
 
   const netSavings = totalIncome - totalExpenses;

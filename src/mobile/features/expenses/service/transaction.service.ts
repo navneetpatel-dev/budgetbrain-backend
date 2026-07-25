@@ -53,13 +53,15 @@ export async function getRecentTransactions(userId: string, _user: User, limit: 
   });
 }
 
-export async function getCategoryBreakdown(userId: string, _user: User) {
+export async function getCategoryBreakdown(userId: string, _user: User, limit = 2) {
   return Transaction.findAll({
     where: { userId, type: 'expense' },
     attributes: ['categoryId', [fn('SUM', col('amount')), 'total']],
-    include: [{ model: Category, as: 'category', attributes: ['name', 'icon', 'color'] }],
-    group: ['categoryId', 'category.id', 'category.name', 'category.icon', 'category.color'],
-    raw: true,
+    include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] }],
+    group: ['category_id', 'category.id', 'category.name', 'category.icon', 'category.color'],
+    order: [[fn('SUM', col('amount')), 'DESC']],
+    limit,
+    subQuery: false,
   });
 }
 
@@ -68,6 +70,8 @@ export async function listTransactions(
   filters: {
     type?: 'expense' | 'income';
     categoryId?: string;
+    incomeSourceId?: string;
+    paymentMethod?: string;
     startDate?: string;
     endDate?: string;
     search?: string;
@@ -80,6 +84,8 @@ export async function listTransactions(
   const where: Record<string, unknown> = { userId };
   if (filters.type) where.type = filters.type;
   if (filters.categoryId) where.categoryId = filters.categoryId;
+  if (filters.incomeSourceId) where.incomeSourceId = filters.incomeSourceId;
+  if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
 
   if (filters.startDate || filters.endDate) {
     where.date = {};

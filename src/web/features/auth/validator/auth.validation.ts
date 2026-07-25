@@ -5,7 +5,7 @@ import {
   loginPasswordField,
   otpField,
   requiredText,
-  optionalText,
+  uuidField,
 } from '../../../../validation';
 
 export const registerSchema = z.object({
@@ -17,7 +17,7 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: emailField(),
   password: loginPasswordField(),
-  deviceId: z.string().uuid().optional(),
+  deviceId: uuidField().optional(),
 });
 
 export const refreshTokenSchema = z.object({
@@ -31,7 +31,7 @@ export const emailSchema = z.object({
 export const otpVerifySchema = z.object({
   email: emailField(),
   otp: otpField(),
-  deviceId: z.string().uuid().optional(),
+  deviceId: uuidField().optional(),
 });
 
 export const resetPasswordSchema = z.object({

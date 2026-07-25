@@ -6,13 +6,12 @@ import {
   requiredDate,
   amountField,
   quantityField,
+  enumField,
 } from '../../../../validation';
 
 export const createInvestmentSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['stocks', 'mutual_fund', 'fd', 'crypto', 'gold', 'other'], {
-    errorMap: () => ({ message: 'Invalid option' }),
-  }),
+  type: enumField(['stocks', 'mutual_fund', 'fd', 'crypto', 'gold', 'other'] as const),
   symbol: optionalText('symbol'),
   quantity: quantityField(),
   purchasePrice: amountField(),

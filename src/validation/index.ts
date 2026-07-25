@@ -21,6 +21,7 @@ export {
   dateRangeSchema,
   paginationSchema,
   uuidField,
+  enumField,
   amountField,
   moneyValueField,
   optionalMoneyValueField,

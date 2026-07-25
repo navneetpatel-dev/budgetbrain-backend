@@ -61,6 +61,12 @@ export const ValidationMessages = {
   limitRange: 'Limit must be between 1 and 100',
   enumInvalid: 'Invalid option',
 
+  categoryRequired: 'Please select a category',
+  incomeSourceRequired: 'Select an income source',
+  sortOrderRange: 'Sort order must be between 0 and 10000',
+  reorderMin: 'Must include at least 1 category',
+  reorderMax: 'Must be at most 200 categories',
+
   financialGoalsMin: 'Please select at least one financial goal',
   financialGoalsMax: 'Must be at most 20 financial goals',
   syncBatchMin: 'Must include at least 1 sync item',

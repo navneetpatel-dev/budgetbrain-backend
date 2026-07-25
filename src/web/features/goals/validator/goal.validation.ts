@@ -6,11 +6,12 @@ import {
   requiredDate,
   optionalDate,
   amountField,
+  enumField,
 } from '../../../../validation';
 
 export const createGoalSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['emergency_fund', 'vacation', 'car', 'home', 'investments', 'other']),
+  type: enumField(['emergency_fund', 'vacation', 'car', 'home', 'investments', 'other'] as const),
   targetAmount: amountField(),
   currency: currencyField(true),
   targetDate: optionalDate,

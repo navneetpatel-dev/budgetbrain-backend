@@ -7,6 +7,8 @@ import {
   requiredDate,
   optionalDate,
   amountField,
+  uuidField,
+  enumField,
 } from '../../../../validation';
 
 export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
@@ -14,7 +16,7 @@ export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
 export const createIncomeSchema = z.object({
   amount: amountField(),
   currency: currencyField(true),
-  incomeSourceId: z.string().uuid('Invalid id').optional(),
+  incomeSourceId: uuidField(),
   notes: optionalText('notes'),
   date: requiredDate,
   isRecurring: z.boolean().optional(),
@@ -25,12 +27,12 @@ export const updateIncomeSchema = z.object({
   amount: amountField().optional(),
   notes: optionalText('notes'),
   date: optionalDate,
-  incomeSourceId: z.string().uuid('Invalid id').optional(),
+  incomeSourceId: uuidField().optional(),
 });
 
 export const createSourceSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['salary', 'freelancing', 'investments', 'rental', 'other']),
+  type: enumField(['salary', 'freelancing', 'investments', 'rental', 'other'] as const),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
 });

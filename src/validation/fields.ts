@@ -137,6 +137,13 @@ export function uuidField() {
   return z.string().uuid(M.uuidInvalid);
 }
 
+/** String enum with catalogued invalid-option message. Pass `as const` tuples. */
+export function enumField<T extends readonly [string, ...string[]]>(values: T) {
+  return z.enum(values as unknown as [T[number], ...T[number][]], {
+    errorMap: () => ({ message: M.enumInvalid }),
+  });
+}
+
 /** Positive money amount within DECIMAL(15,2) range. */
 export function amountField() {
   return z

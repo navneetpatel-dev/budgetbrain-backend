@@ -6,11 +6,12 @@ import {
   moneyValueField,
   optionalMoneyValueField,
   accountLast4Field,
+  enumField,
 } from '../../../../validation';
 
 export const createAccountSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['bank', 'credit_card', 'cash', 'wallet']),
+  type: enumField(['bank', 'credit_card', 'cash', 'wallet'] as const),
   institution: optionalText('institution'),
   accountNumberLast4: accountLast4Field(),
   balance: moneyValueField({ allowNegative: true }),

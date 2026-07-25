@@ -6,7 +6,7 @@ import {
   urlField,
   amountField,
   financialGoalsField,
-  ValidationMessages,
+  enumField,
 } from '../../../../validation';
 
 export const updateProfileSchema = z.object({
@@ -14,8 +14,8 @@ export const updateProfileSchema = z.object({
   country: optionalText('country'),
   currency: currencyField(true),
   avatarUrl: urlField('avatarUrl'),
-  theme: z.enum(['light', 'dark', 'system'], { errorMap: () => ({ message: ValidationMessages.enumInvalid }) }).optional(),
-  accent: z.enum(['indigo', 'emerald', 'ocean', 'rose', 'violet'], { errorMap: () => ({ message: ValidationMessages.enumInvalid }) }).optional(),
+  theme: enumField(['light', 'dark', 'system'] as const).optional(),
+  accent: enumField(['indigo', 'emerald', 'ocean', 'rose', 'violet'] as const).optional(),
 });
 
 export const onboardingSchema = z.object({

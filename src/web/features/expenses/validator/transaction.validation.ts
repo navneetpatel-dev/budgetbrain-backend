@@ -6,19 +6,21 @@ import {
   currencyField,
   requiredDate,
   amountField,
+  uuidField,
+  enumField,
   ValidationMessages as M,
 } from '../../../../validation';
 
 const transactionObjectSchema = z.object({
-  type: z.enum(['expense', 'income']),
+  type: enumField(['expense', 'income'] as const),
   amount: amountField(),
   currency: currencyField(true),
-  categoryId: z.string().uuid(M.uuidInvalid).optional(),
-  incomeSourceId: z.string().uuid(M.uuidInvalid).optional(),
+  categoryId: uuidField().optional(),
+  incomeSourceId: uuidField().optional(),
   notes: optionalText('notes'),
   merchant: optionalText('merchant'),
   date: requiredDate,
-  paymentMethod: z.enum(['cash', 'card', 'upi', 'bank_transfer', 'other']).optional(),
+  paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
 });
@@ -31,11 +33,18 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
       message: M.minChars(1),
     });
   }
+  if (data.type === 'expense' && !data.categoryId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['categoryId'],
+      message: M.categoryRequired,
+    });
+  }
 });
 
 export const listTransactionsSchema = paginationSchema.merge(dateRangeSchema).extend({
-  type: z.enum(['expense', 'income']).optional(),
-  categoryId: z.string().uuid(M.uuidInvalid).optional(),
+  type: enumField(['expense', 'income'] as const).optional(),
+  categoryId: uuidField().optional(),
   search: optionalText('search'),
 });
 
@@ -48,14 +57,14 @@ export const updateTransactionSchema = transactionObjectSchema.partial();
 export const syncTransactionCreateSchema = transactionSchema;
 
 export const syncTransactionUpdateSchema = updateTransactionSchema.extend({
-  id: z.string().uuid(M.uuidInvalid).optional(),
+  id: uuidField().optional(),
 });
 
 export const syncTransactionDeleteSchema = z.object({
-  id: z.string().uuid(M.uuidInvalid).optional(),
+  id: uuidField().optional(),
 });
 
 export const attachmentParamsSchema = z.object({
-  id: z.string().uuid(M.uuidInvalid),
-  attachmentId: z.string().uuid(M.uuidInvalid),
+  id: uuidField(),
+  attachmentId: uuidField(),
 });

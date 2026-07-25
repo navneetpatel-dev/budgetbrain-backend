@@ -5,19 +5,17 @@ import {
   uuidField,
   FieldLimits,
   ValidationMessages as M,
+  paginationSchema,
+  enumField,
 } from '../../../../validation';
 
 export const updateUserSchema = z.object({
-  role: z.enum(['free', 'premium', 'lifetime', 'admin'], {
-    errorMap: () => ({ message: M.enumInvalid }),
-  }).optional(),
+  role: enumField(['free', 'premium', 'lifetime', 'admin'] as const).optional(),
   suspended: z.boolean().optional(),
 });
 
 export const updateSupportTicketSchema = z.object({
-  status: z.enum(['open', 'in_progress', 'resolved', 'closed'], {
-    errorMap: () => ({ message: M.enumInvalid }),
-  }).optional(),
+  status: enumField(['open', 'in_progress', 'resolved', 'closed'] as const).optional(),
   adminNotes: z
     .string()
     .trim()
@@ -27,20 +25,12 @@ export const updateSupportTicketSchema = z.object({
     .transform((v) => (v === '' || v === undefined ? null : v)),
 });
 
-export const auditLogsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1, M.pageMin).optional(),
-  limit: z.coerce.number().int().min(1, M.limitRange).max(100, M.limitRange).optional(),
+export const auditLogsQuerySchema = paginationSchema.extend({
   action: optionalText('auditAction'),
   resource: optionalText('auditResource'),
-  source: z.enum(['mobile', 'web', 'admin', 'system'], {
-    errorMap: () => ({ message: M.enumInvalid }),
-  }).optional(),
-  outcome: z.enum(['success', 'failure'], {
-    errorMap: () => ({ message: M.enumInvalid }),
-  }).optional(),
-  severity: z.enum(['info', 'warning', 'critical'], {
-    errorMap: () => ({ message: M.enumInvalid }),
-  }).optional(),
+  source: enumField(['mobile', 'web', 'admin', 'system'] as const).optional(),
+  outcome: enumField(['success', 'failure'] as const).optional(),
+  severity: enumField(['info', 'warning', 'critical'] as const).optional(),
   actorUserId: uuidField().optional(),
   requestId: optionalText('requestId'),
   startDate: optionalDate,

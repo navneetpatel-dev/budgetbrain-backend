@@ -13,9 +13,9 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: expenseflow
-          POSTGRES_PASSWORD: expenseflow
-          POSTGRES_DB: expenseflow
+          POSTGRES_USER: budgetbrain
+          POSTGRES_PASSWORD: budgetbrain
+          POSTGRES_DB: budgetbrain
         ports:
           - 5432:5432
         options: >-
@@ -37,6 +37,6 @@ jobs:
           JWT_REFRESH_SECRET: ci-refresh-secret-minimum-32-characters-long
           DB_HOST: localhost
           DB_PORT: 5432
-          DB_NAME: expenseflow
-          DB_USER: expenseflow
-          DB_PASSWORD: expenseflow
+          DB_NAME: budgetbrain
+          DB_USER: budgetbrain
+          DB_PASSWORD: budgetbrain

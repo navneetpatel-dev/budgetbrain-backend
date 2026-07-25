@@ -56,7 +56,7 @@ docker compose up --build
 See `.env.example` for all variables. Required:
 
 - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (min 32 chars)
-- Database connection (`DB_*` or `DATABASE_URL`)
+- Database connection (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
 
 ## API modules
 

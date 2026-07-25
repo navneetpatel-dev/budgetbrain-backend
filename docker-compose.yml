@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: expenseflow-db
+    container_name: budgetbrain-db
     environment:
-      POSTGRES_USER: expenseflow
-      POSTGRES_PASSWORD: expenseflow
-      POSTGRES_DB: expenseflow
+      POSTGRES_USER: budgetbrain
+      POSTGRES_PASSWORD: budgetbrain
+      POSTGRES_DB: budgetbrain
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U expenseflow']
+      test: ['CMD-SHELL', 'pg_isready -U budgetbrain']
       interval: 5s
       timeout: 5s
       retries: 5
 
   api:
     build: .
-    container_name: expenseflow-api
+    container_name: budgetbrain-api
     ports:
       - '3000:3000'
     environment:
@@ -26,9 +26,9 @@ services:
       PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: expenseflow
-      DB_USER: expenseflow
-      DB_PASSWORD: expenseflow
+      DB_NAME: budgetbrain
+      DB_USER: budgetbrain
+      DB_PASSWORD: budgetbrain
       JWT_ACCESS_SECRET: dev-access-secret-minimum-32-characters-long
       JWT_REFRESH_SECRET: dev-refresh-secret-minimum-32-characters-long
     depends_on:

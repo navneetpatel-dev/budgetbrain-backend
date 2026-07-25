@@ -92,7 +92,7 @@ export async function chatWithCoach(userId: string, message: string, conversatio
             {
               role: 'system',
               content:
-                'You are ExpenseFlow AI Financial Coach. Provide concise, actionable budget and savings advice based on user questions. Use INR when mentioning amounts unless specified otherwise.',
+                'You are BudgetBrain AI Financial Coach. Provide concise, actionable budget and savings advice based on user questions. Use INR when mentioning amounts unless specified otherwise.',
             },
             ...messages.map((m) => ({ role: m.role, content: m.content })),
           ],

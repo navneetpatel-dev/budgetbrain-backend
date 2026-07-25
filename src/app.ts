@@ -46,9 +46,9 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.get('/health', async (_req, res) => {
   try {
     await sequelize.authenticate();
-    res.json({ status: 'ok', service: 'expenseflow-api', version: env.API_VERSION, database: 'connected' });
+    res.json({ status: 'ok', service: 'budgetbrain-api', version: env.API_VERSION, database: 'connected' });
   } catch {
-    res.status(503).json({ status: 'degraded', service: 'expenseflow-api', database: 'disconnected' });
+    res.status(503).json({ status: 'degraded', service: 'budgetbrain-api', database: 'disconnected' });
   }
 });
 

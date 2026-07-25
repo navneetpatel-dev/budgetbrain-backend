@@ -29,7 +29,7 @@ async function bootstrap() {
 
     app.listen(env.PORT, () => {
       console.log('Database connected');
-      console.log(`ExpenseFlow API running on port ${env.PORT}`);
+      console.log(`BudgetBrain API running on port ${env.PORT}`);
       console.log(`Environment: ${env.NODE_ENV}`);
       console.log(`API: http://localhost:${env.PORT}/api/${env.API_VERSION}`);
     });

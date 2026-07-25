@@ -31,7 +31,7 @@ export async function sendEmail(
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
   await sendEmail(
     to,
-    'Your ExpenseFlow Login Code',
+    'Your BudgetBrain Login Code',
     `<p>Your OTP code is: <strong>${otp}</strong></p><p>This code expires in 10 minutes.</p>`
   );
 }
@@ -40,7 +40,7 @@ export async function sendVerificationEmail(to: string, token: string): Promise<
   const link = `${env.APP_URL}/verify-email?token=${token}`;
   await sendEmail(
     to,
-    'Verify your ExpenseFlow account',
+    'Verify your BudgetBrain account',
     `<p>Click <a href="${link}">here</a> to verify your email address.</p>`
   );
 }
@@ -49,7 +49,7 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
   const link = `${env.APP_URL}/reset-password?token=${token}`;
   await sendEmail(
     to,
-    'Reset your ExpenseFlow password',
+    'Reset your BudgetBrain password',
     `<p>Click <a href="${link}">here</a> to reset your password. Link expires in 1 hour.</p>`
   );
 }

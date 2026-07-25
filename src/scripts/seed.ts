@@ -4,7 +4,7 @@ import { hashPassword } from '../utils/jwt';
 import { DEFAULT_CATEGORIES, Category } from '../models/Category';
 import { env } from '../config/env';
 
-const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@expenseflow.app';
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@budgetbrain.app';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!';
 const ADMIN_NAME = 'Admin User';
 

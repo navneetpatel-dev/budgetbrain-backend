@@ -31,7 +31,7 @@ export async function generatePdfReport(
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.fontSize(20).text('ExpenseFlow Report', { align: 'center' });
+    doc.fontSize(20).text('BudgetBrain Report', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).fillColor('#666').text(`Generated: ${new Date().toISOString()}`, { align: 'center' });
     doc.moveDown(2);

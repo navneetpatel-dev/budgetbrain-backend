@@ -20,7 +20,7 @@ router.get(
     );
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=expenseflow-report.csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=budgetbrain-report.csv');
     res.send(csv);
   })
 );
@@ -37,7 +37,7 @@ router.get(
     );
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=expenseflow-report.pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=budgetbrain-report.pdf');
     res.send(buffer);
   })
 );

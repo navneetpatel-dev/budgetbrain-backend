@@ -1,7 +1,7 @@
 {
-  "name": "expenseflow-api",
+  "name": "budgetbrain-api",
   "version": "1.0.0",
-  "description": "ExpenseFlow - AI Powered Expense Tracking API",
+  "description": "BudgetBrain - AI Powered Expense Tracking API",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

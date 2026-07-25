@@ -1,7 +1,8 @@
-import { ParsedTransaction } from '../../../../models';
+import { ParsedTransaction, sequelize } from '../../../../models';
 import { AppError } from '../../../shared/utils/errors';
 import { parseSmsContent, parseEmailReceipt } from './parse.service';
 import * as transactionService from '../../expenses/service/transaction.service';
+import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { ConfirmParsedInput } from '../types';
@@ -54,24 +55,45 @@ export async function confirmParsed(
   parsedId: string,
   data: ConfirmParsedInput
 ) {
-  const parsed = await ParsedTransaction.findOne({
-    where: { id: parsedId, userId, status: 'pending' },
-  });
-  if (!parsed) throw new AppError(404, 'Parsed transaction not found');
+  return sequelize.transaction(async (t) => {
+    const parsed = await ParsedTransaction.findOne({
+      where: { id: parsedId, userId, status: 'pending' },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!parsed) throw new AppError(404, 'Parsed transaction not found');
 
-  const transaction = await transactionService.createTransaction(userId, {
-    type: 'expense',
-    amount: data.amount ?? Number(parsed.parsedAmount),
-    categoryId: data.categoryId,
-    merchant: data.merchant ?? parsed.parsedMerchant ?? undefined,
-    date:
-      data.date ??
-      parsed.parsedDate?.toISOString().split('T')[0] ??
-      new Date().toISOString().split('T')[0],
-  });
+    const transaction = await transactionService.createTransaction(
+      userId,
+      {
+        type: 'expense',
+        amount: data.amount ?? Number(parsed.parsedAmount),
+        categoryId: data.categoryId,
+        merchant: data.merchant ?? parsed.parsedMerchant ?? undefined,
+        date:
+          data.date ??
+          parsed.parsedDate?.toISOString().split('T')[0] ??
+          new Date().toISOString().split('T')[0],
+      },
+      { transaction: t }
+    );
 
-  await parsed.update({ status: 'confirmed', transactionId: transaction?.id ?? null });
-  return { transaction, parsed };
+    await parsed.update(
+      { status: 'confirmed', transactionId: transaction?.id ?? null },
+      { transaction: t }
+    );
+
+    await writeAuditLog({
+      action: AuditAction.INTEGRATION_CONFIRM,
+      resource: AuditResource.PARSED_TRANSACTION,
+      resourceId: parsedId,
+      actorUserId: userId,
+      afterState: { transactionId: transaction?.id ?? null, status: 'confirmed' },
+      transaction: t,
+    });
+
+    return { transaction, parsed };
+  });
 }
 
 export async function rejectParsed(userId: string, parsedId: string) {
@@ -81,5 +103,14 @@ export async function rejectParsed(userId: string, parsedId: string) {
   if (!parsed) throw new AppError(404, 'Parsed transaction not found');
 
   await parsed.update({ status: 'rejected' });
+
+  await writeAuditLog({
+    action: AuditAction.INTEGRATION_REJECT,
+    resource: AuditResource.PARSED_TRANSACTION,
+    resourceId: parsedId,
+    actorUserId: userId,
+    afterState: { status: 'rejected' },
+  });
+
   return parsed;
 }

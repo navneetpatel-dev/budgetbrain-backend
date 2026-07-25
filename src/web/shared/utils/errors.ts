@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { createLogger } from '../../../logging';
+import { getAuditContext } from '../../../audit';
+
+const log = createLogger('web');
 
 export class AppError extends Error {
   constructor(
@@ -18,10 +22,16 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  const requestId = getAuditContext()?.requestId;
+
   if (err instanceof AppError) {
+    if (err.statusCode >= 500) {
+      log.error(err.message, { code: err.code, requestId, stack: err.stack });
+    }
     res.status(err.statusCode).json({
       success: false,
       error: { message: err.message, code: err.code },
+      ...(requestId ? { requestId } : {}),
     });
     return;
   }
@@ -34,14 +44,20 @@ export function errorHandler(
         code: 'VALIDATION_ERROR',
         details: err.errors,
       },
+      ...(requestId ? { requestId } : {}),
     });
     return;
   }
 
-  console.error(err);
+  log.error('Unhandled error', {
+    requestId,
+    message: err.message,
+    stack: err.stack,
+  });
   res.status(500).json({
     success: false,
     error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+    ...(requestId ? { requestId } : {}),
   });
 }
 

@@ -42,8 +42,13 @@ export async function listSubscriptions(req: Request, res: Response) {
 }
 
 export async function listAuditLogs(req: Request, res: Response) {
-  const { page, limit } = req.query as PaginationInput;
-  const data = await adminService.listAuditLogs(page, limit);
+  const data = await adminService.listAuditLogs(req.query as adminService.AuditLogFilters);
+  successResponse(res, data);
+}
+
+export async function getAuditLog(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const data = await adminService.getAuditLog(id);
   successResponse(res, data);
 }
 

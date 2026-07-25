@@ -24,6 +24,7 @@ import {
   SupportTicket,
   VerificationToken,
 } from '../../../../models';
+import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import type { OnboardingInput, UpdateProfileInput } from '../types';
 
 export async function getUser(userId: string) {
@@ -34,19 +35,48 @@ export async function getUser(userId: string) {
 
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const user = await getUser(userId);
+  const beforeState = { name: user.name, currency: user.currency };
   await user.update(data);
+  await writeAuditLog({
+    action: AuditAction.USER_UPDATE,
+    resource: AuditResource.USER,
+    resourceId: userId,
+    actorUserId: userId,
+    beforeState,
+    afterState: { name: user.name, currency: user.currency },
+  });
   return user;
 }
 
 export async function updateOnboarding(userId: string, data: OnboardingInput) {
   const user = await getUser(userId);
   await user.update({ ...data, onboardingCompleted: true });
+  await writeAuditLog({
+    action: AuditAction.USER_UPDATE,
+    resource: AuditResource.USER,
+    resourceId: userId,
+    actorUserId: userId,
+    metadata: { onboardingCompleted: true },
+  });
   return user;
 }
 
 export async function deleteUserAccount(userId: string): Promise<void> {
   await sequelize.transaction(async (t) => {
     const txOpts = { transaction: t };
+
+    await writeAuditLog({
+      action: AuditAction.USER_DELETE,
+      resource: AuditResource.USER,
+      resourceId: userId,
+      actorUserId: userId,
+      severity: 'critical',
+      metadata: { deletedAt: new Date().toISOString(), deletedUserId: userId },
+      transaction: t,
+    });
+
+    // Keep immutable audit rows; clear FK so the user row can be removed.
+    await AuditLog.update({ userId: null }, { where: { userId }, ...txOpts });
 
     const transactions = await Transaction.findAll({ where: { userId }, attributes: ['id'], ...txOpts });
     const txIds = transactions.map((x) => x.id);
@@ -87,7 +117,6 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     await Goal.destroy({ where: { userId }, ...txOpts });
     await Notification.destroy({ where: { userId }, ...txOpts });
     await AiConversation.destroy({ where: { userId }, ...txOpts });
-    await AuditLog.destroy({ where: { userId }, ...txOpts });
     await FinancialAccount.destroy({ where: { userId }, ...txOpts });
     await Investment.destroy({ where: { userId }, ...txOpts });
     await ParsedTransaction.destroy({ where: { userId }, ...txOpts });

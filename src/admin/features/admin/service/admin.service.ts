@@ -1,12 +1,35 @@
 import { Op, fn, col } from 'sequelize';
-import { User, Subscription, AuditLog, Transaction, AiConversation, RefreshToken, SupportTicket } from '../../../../models';
+import {
+  User,
+  Subscription,
+  AuditLog,
+  Transaction,
+  AiConversation,
+  RefreshToken,
+  SupportTicket,
+  sequelize,
+} from '../../../../models';
 import { AppError } from '../../../shared/utils/errors';
-import { logAuditEvent } from '../../../shared/services/audit.service';
+import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import type { TicketStatus } from '../../../../models/SupportTicket';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,
 } from '../types';
+
+export interface AuditLogFilters {
+  page?: number;
+  limit?: number;
+  action?: string;
+  resource?: string;
+  source?: string;
+  outcome?: string;
+  severity?: string;
+  actorUserId?: string;
+  requestId?: string;
+  startDate?: string;
+  endDate?: string;
+}
 
 const PLAN_PRICING: Record<string, number> = { monthly: 199, yearly: 1499 / 12, lifetime: 0 };
 
@@ -85,15 +108,55 @@ export async function listSubscriptions(page = 1, limit = 20) {
   return { subscriptions: rows, total: count, page, limit };
 }
 
-export async function listAuditLogs(page = 1, limit = 50) {
+export async function listAuditLogs(filters: AuditLogFilters = {}) {
+  const page = filters.page ?? 1;
+  const limit = Math.min(filters.limit ?? 50, 100);
   const offset = (page - 1) * limit;
+
+  const where: Record<string, unknown> = {};
+  if (filters.action) where.action = filters.action;
+  if (filters.resource) where.resource = filters.resource;
+  if (filters.source) where.source = filters.source;
+  if (filters.outcome) where.outcome = filters.outcome;
+  if (filters.severity) where.severity = filters.severity;
+  if (filters.actorUserId) where.userId = filters.actorUserId;
+  if (filters.requestId) where.requestId = filters.requestId;
+  if (filters.startDate || filters.endDate) {
+    where.createdAt = {
+      ...(filters.startDate ? { [Op.gte]: new Date(filters.startDate) } : {}),
+      ...(filters.endDate ? { [Op.lte]: new Date(filters.endDate) } : {}),
+    };
+  }
+
   const { rows, count } = await AuditLog.findAndCountAll({
-    include: [{ model: User, as: 'user', attributes: ['id', 'email'] }],
+    where,
+    include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
     order: [['createdAt', 'DESC']],
     limit,
     offset,
   });
-  return { logs: rows, total: count, page, limit };
+
+  return {
+    logs: rows,
+    total: count,
+    page,
+    limit,
+    filters: {
+      action: filters.action ?? null,
+      resource: filters.resource ?? null,
+      source: filters.source ?? null,
+      outcome: filters.outcome ?? null,
+      severity: filters.severity ?? null,
+    },
+  };
+}
+
+export async function getAuditLog(id: string) {
+  const log = await AuditLog.findByPk(id, {
+    include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
+  });
+  if (!log) throw new AppError(404, 'Audit log not found', 'NOT_FOUND');
+  return log;
 }
 
 export async function getTransactionStats() {
@@ -171,29 +234,50 @@ export async function updateSupportTicket(
   data: UpdateSupportTicketInput,
   adminUserId?: string
 ) {
-  const ticket = await SupportTicket.findByPk(id);
-  if (!ticket) {
-    throw new AppError(404, 'Support ticket not found', 'NOT_FOUND');
-  }
+  return sequelize.transaction(async (t) => {
+    const ticket = await SupportTicket.findByPk(id, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!ticket) {
+      throw new AppError(404, 'Support ticket not found', 'NOT_FOUND');
+    }
 
-  const updates: Partial<{ status: TicketStatus; adminNotes: string | null; resolvedAt: Date | null }> =
-    {};
-  if (data.status) {
-    updates.status = data.status;
-    updates.resolvedAt = ['resolved', 'closed'].includes(data.status) ? new Date() : null;
-  }
-  if (data.adminNotes !== undefined) {
-    updates.adminNotes = data.adminNotes;
-  }
+    const beforeState = {
+      status: ticket.status,
+      adminNotes: ticket.adminNotes,
+      resolvedAt: ticket.resolvedAt,
+    };
 
-  await ticket.update(updates);
+    const updates: Partial<{ status: TicketStatus; adminNotes: string | null; resolvedAt: Date | null }> =
+      {};
+    if (data.status) {
+      updates.status = data.status;
+      updates.resolvedAt = ['resolved', 'closed'].includes(data.status) ? new Date() : null;
+    }
+    if (data.adminNotes !== undefined) {
+      updates.adminNotes = data.adminNotes;
+    }
 
-  if (adminUserId) {
-    await logAuditEvent(adminUserId, 'admin_update_ticket', 'support_ticket', id, data);
-  }
+    await ticket.update(updates, { transaction: t });
 
-  return SupportTicket.findByPk(id, {
-    include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
+    if (adminUserId) {
+      await writeAuditLog({
+        action: AuditAction.SUPPORT_TICKET_UPDATE,
+        resource: AuditResource.SUPPORT_TICKET,
+        resourceId: id,
+        actorUserId: adminUserId,
+        actorType: 'admin',
+        beforeState,
+        afterState: { ...beforeState, ...updates },
+        transaction: t,
+      });
+    }
+
+    return SupportTicket.findByPk(id, {
+      include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
+      transaction: t,
+    });
   });
 }
 
@@ -212,28 +296,57 @@ export async function updateUser(
   data: UpdateUserInput,
   adminUserId?: string
 ) {
-  const user = await User.findByPk(id);
-  if (!user) {
-    throw new AppError(404, 'User not found', 'NOT_FOUND');
-  }
-
-  if (data.role) {
-    await user.update({ role: data.role });
-  }
-
-  if (data.suspended !== undefined) {
-    await user.update({ isSuspended: data.suspended });
-    if (data.suspended) {
-      await RefreshToken.update(
-        { revokedAt: new Date() },
-        { where: { userId: id, revokedAt: null } }
-      );
+  return sequelize.transaction(async (t) => {
+    const user = await User.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!user) {
+      throw new AppError(404, 'User not found', 'NOT_FOUND');
     }
-  }
 
-  if (adminUserId) {
-    await logAuditEvent(adminUserId, 'admin_update_user', 'user', id, data);
-  }
+    const beforeState = { role: user.role, isSuspended: user.isSuspended };
 
-  return User.findByPk(id, { attributes: { exclude: ['passwordHash'] } });
+    if (data.role) {
+      await user.update({ role: data.role }, { transaction: t });
+      if (adminUserId) {
+        await writeAuditLog({
+          action: AuditAction.USER_ROLE_CHANGE,
+          resource: AuditResource.USER,
+          resourceId: id,
+          actorUserId: adminUserId,
+          actorType: 'admin',
+          beforeState: { role: beforeState.role },
+          afterState: { role: data.role },
+          severity: 'warning',
+          transaction: t,
+        });
+      }
+    }
+
+    if (data.suspended !== undefined) {
+      await user.update({ isSuspended: data.suspended }, { transaction: t });
+      if (data.suspended) {
+        await RefreshToken.update(
+          { revokedAt: new Date() },
+          { where: { userId: id, revokedAt: null }, transaction: t }
+        );
+      }
+      if (adminUserId) {
+        await writeAuditLog({
+          action: data.suspended ? AuditAction.USER_SUSPEND : AuditAction.USER_UNSUSPEND,
+          resource: AuditResource.USER,
+          resourceId: id,
+          actorUserId: adminUserId,
+          actorType: 'admin',
+          beforeState: { isSuspended: beforeState.isSuspended },
+          afterState: { isSuspended: data.suspended },
+          severity: 'critical',
+          transaction: t,
+        });
+      }
+    }
+
+    return User.findByPk(id, {
+      attributes: { exclude: ['passwordHash'] },
+      transaction: t,
+    });
+  });
 }

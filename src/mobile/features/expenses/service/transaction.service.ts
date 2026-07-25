@@ -1,14 +1,16 @@
-import { Op, fn, col } from 'sequelize';
+import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
 import {
   Transaction,
   TransactionAttributes,
+  TransactionAttachment,
   Category,
   IncomeSource,
   User,
+  sequelize,
 } from '../../../../models';
 import { AppError } from '../../../shared/utils/errors';
 import { checkBudgetAlertsAfterExpense } from '../../budgets/service/budgetAlert.service';
-import { logAuditEvent } from '../../../shared/services/audit.service';
+import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { resolvePagination, paginatedResult } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type {
@@ -124,36 +126,64 @@ export async function listTransactions(
   return { transactions: rows, total: count, page, limit };
 }
 
-export async function createTransaction(userId: string, data: CreateTransactionInput) {
-  const user = await User.findByPk(userId);
+export async function createTransaction(
+  userId: string,
+  data: CreateTransactionInput,
+  options?: { transaction?: DbTransaction }
+) {
+  const user = await User.findByPk(userId, options?.transaction ? { transaction: options.transaction } : undefined);
   if (!user) throw new AppError(404, 'User not found');
 
-  const transaction = await Transaction.create({
-    userId,
-    type: data.type,
-    amount: data.amount,
-    currency: data.currency ?? user.currency,
-    categoryId: data.categoryId ?? null,
-    incomeSourceId: data.incomeSourceId ?? null,
-    notes: data.notes ?? null,
-    merchant: data.merchant ?? null,
-    date: new Date(data.date),
-    paymentMethod: (data.paymentMethod as Transaction['paymentMethod']) ?? null,
-    isRecurring: data.isRecurring ?? false,
-    recurringRule: data.recurringRule ?? null,
-    searchVector: buildSearchVector(data),
-  });
+  const run = async (t: DbTransaction) => {
+    const transaction = await Transaction.create(
+      {
+        userId,
+        type: data.type,
+        amount: data.amount,
+        currency: data.currency ?? user.currency,
+        categoryId: data.categoryId ?? null,
+        incomeSourceId: data.incomeSourceId ?? null,
+        notes: data.notes ?? null,
+        merchant: data.merchant ?? null,
+        date: new Date(data.date),
+        paymentMethod: (data.paymentMethod as Transaction['paymentMethod']) ?? null,
+        isRecurring: data.isRecurring ?? false,
+        recurringRule: data.recurringRule ?? null,
+        searchVector: buildSearchVector(data),
+      },
+      { transaction: t }
+    );
 
-  if (data.type === 'expense') {
-    await checkBudgetAlertsAfterExpense(userId, data.categoryId);
+    if (data.type === 'expense') {
+      await checkBudgetAlertsAfterExpense(userId, data.categoryId, t);
+    }
+
+    const result = await Transaction.findByPk(transaction.id, {
+      include: [{ model: Category, as: 'category' }],
+      transaction: t,
+    });
+
+    await writeAuditLog({
+      action: AuditAction.TRANSACTION_CREATE,
+      resource: AuditResource.TRANSACTION,
+      resourceId: result?.id,
+      actorUserId: userId,
+      afterState: {
+        type: data.type,
+        amount: data.amount,
+        categoryId: data.categoryId ?? null,
+        merchant: data.merchant ?? null,
+      },
+      transaction: t,
+    });
+
+    return result;
+  };
+
+  if (options?.transaction) {
+    return run(options.transaction);
   }
-
-  const result = await Transaction.findByPk(transaction.id, {
-    include: [{ model: Category, as: 'category' }],
-  });
-
-  await logAuditEvent(userId, 'create', 'transaction', result?.id);
-  return result;
+  return sequelize.transaction(run);
 }
 
 export async function updateTransaction(
@@ -161,30 +191,84 @@ export async function updateTransaction(
   id: string,
   data: UpdateTransactionInput
 ) {
-  const transaction = await Transaction.findOne({ where: { id, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
+  return sequelize.transaction(async (t) => {
+    const transaction = await Transaction.findOne({
+      where: { id, userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!transaction) throw new AppError(404, 'Transaction not found');
 
-  const updateData: Partial<TransactionAttributes> = {};
-  if (data.amount !== undefined) updateData.amount = data.amount;
-  if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-  if (data.notes !== undefined) updateData.notes = data.notes;
-  if (data.merchant !== undefined) updateData.merchant = data.merchant;
-  if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod;
-  if (data.incomeSourceId !== undefined) updateData.incomeSourceId = data.incomeSourceId;
-  if (data.date) updateData.date = new Date(data.date);
+    const beforeState = {
+      amount: transaction.amount,
+      categoryId: transaction.categoryId,
+      notes: transaction.notes,
+      merchant: transaction.merchant,
+      paymentMethod: transaction.paymentMethod,
+      incomeSourceId: transaction.incomeSourceId,
+      date: transaction.date,
+    };
 
-  await transaction.update({
-    ...updateData,
-    searchVector: buildSearchVector({ ...transaction.toJSON(), ...data }),
+    const updateData: Partial<TransactionAttributes> = {};
+    if (data.amount !== undefined) updateData.amount = data.amount;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.merchant !== undefined) updateData.merchant = data.merchant;
+    if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod;
+    if (data.incomeSourceId !== undefined) updateData.incomeSourceId = data.incomeSourceId;
+    if (data.date) updateData.date = new Date(data.date);
+
+    await transaction.update(
+      {
+        ...updateData,
+        searchVector: buildSearchVector({ ...transaction.toJSON(), ...data }),
+      },
+      { transaction: t }
+    );
+
+    await writeAuditLog({
+      action: AuditAction.TRANSACTION_UPDATE,
+      resource: AuditResource.TRANSACTION,
+      resourceId: id,
+      actorUserId: userId,
+      beforeState,
+      afterState: { ...beforeState, ...updateData },
+      transaction: t,
+    });
+
+    return transaction;
   });
-
-  return transaction;
 }
 
 export async function deleteTransaction(userId: string, id: string) {
-  const transaction = await Transaction.findOne({ where: { id, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
-  await transaction.destroy();
+  await sequelize.transaction(async (t) => {
+    const transaction = await Transaction.findOne({
+      where: { id, userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!transaction) throw new AppError(404, 'Transaction not found');
+
+    const beforeState = {
+      type: transaction.type,
+      amount: transaction.amount,
+      categoryId: transaction.categoryId,
+      merchant: transaction.merchant,
+    };
+
+    await TransactionAttachment.destroy({ where: { transactionId: id }, transaction: t });
+    await transaction.destroy({ transaction: t });
+
+    await writeAuditLog({
+      action: AuditAction.TRANSACTION_DELETE,
+      resource: AuditResource.TRANSACTION,
+      resourceId: id,
+      actorUserId: userId,
+      beforeState,
+      severity: 'warning',
+      transaction: t,
+    });
+  });
 }
 
 export async function duplicateTransaction(userId: string, id: string) {

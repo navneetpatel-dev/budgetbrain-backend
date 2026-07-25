@@ -1,3 +1,4 @@
+import type { Transaction as DbTransaction } from 'sequelize';
 import { Notification, NotificationType, Device } from '../../../../models';
 import { AppError } from '../../../shared/utils/errors';
 import { sendPushToUser } from './push.service';
@@ -11,18 +12,23 @@ export async function createNotification(
   title: string,
   body: string,
   data?: Record<string, unknown>,
-  sendPush = true
+  sendPush = true,
+  dbTx?: DbTransaction
 ) {
-  const notification = await Notification.create({
-    userId,
-    type,
-    title,
-    body,
-    data: data ?? null,
-    sentAt: new Date(),
-  });
+  const notification = await Notification.create(
+    {
+      userId,
+      type,
+      title,
+      body,
+      data: data ?? null,
+      sentAt: new Date(),
+    },
+    dbTx ? { transaction: dbTx } : undefined
+  );
 
-  if (sendPush) {
+  // Never send push inside an open DB transaction (external side-effect).
+  if (sendPush && !dbTx) {
     await sendPushToUser(userId, title, body, data);
   }
 

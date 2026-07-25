@@ -5,6 +5,7 @@ import { validateBody, validateParams, validateQuery } from '../../../shared/mid
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/admin.controller';
 import {
+  auditLogsQuerySchema,
   updateSupportTicketSchema,
   updateUserSchema,
 } from '../validator/admin.validation';
@@ -27,7 +28,12 @@ router.get(
   validateQuery(paginationSchema),
   asyncHandler(controller.listSubscriptions)
 );
-router.get('/audit-logs', validateQuery(paginationSchema), asyncHandler(controller.listAuditLogs));
+router.get('/audit-logs', validateQuery(auditLogsQuerySchema), asyncHandler(controller.listAuditLogs));
+router.get(
+  '/audit-logs/:id',
+  validateParams(uuidParamSchema),
+  asyncHandler(controller.getAuditLog)
+);
 router.get('/stats', asyncHandler(controller.getStats));
 router.get('/revenue', asyncHandler(controller.getRevenue));
 router.get('/ai-usage', validateQuery(paginationSchema), asyncHandler(controller.listAiUsage));

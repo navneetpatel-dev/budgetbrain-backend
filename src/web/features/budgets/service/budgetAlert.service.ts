@@ -1,11 +1,14 @@
-import { Op, fn, col } from 'sequelize';
+import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
 import { Budget, BudgetAlert, Transaction } from '../../../../models';
 import { createNotification } from '../../notifications/service/notification.service';
 
 export async function checkBudgetAlertsAfterExpense(
   userId: string,
-  categoryId?: string | null
+  categoryId?: string | null,
+  dbTx?: DbTransaction
 ): Promise<void> {
+  const txOpts = dbTx ? { transaction: dbTx } : {};
+
   const budgets = await Budget.findAll({
     where: {
       userId,
@@ -13,6 +16,7 @@ export async function checkBudgetAlertsAfterExpense(
         ? { [Op.or]: [{ categoryId }, { categoryId: null, type: 'monthly' }] }
         : {}),
     },
+    ...txOpts,
   });
 
   for (const budget of budgets) {
@@ -36,6 +40,7 @@ export async function checkBudgetAlertsAfterExpense(
       },
       attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
       raw: true,
+      ...txOpts,
     });
 
     const spent = Number((spentResult as unknown as { total: string })?.total ?? 0);
@@ -54,16 +59,20 @@ export async function checkBudgetAlertsAfterExpense(
         threshold,
         triggeredAt: { [Op.gte]: budget.startDate },
       },
+      ...txOpts,
     });
 
     if (existingAlert) continue;
 
-    await BudgetAlert.create({
-      budgetId: budget.id,
-      userId,
-      threshold,
-      triggeredAt: new Date(),
-    });
+    await BudgetAlert.create(
+      {
+        budgetId: budget.id,
+        userId,
+        threshold,
+        triggeredAt: new Date(),
+      },
+      txOpts
+    );
 
     const exceeded = percentUsed >= 100;
     await createNotification(
@@ -73,7 +82,9 @@ export async function checkBudgetAlertsAfterExpense(
       exceeded
         ? `You've exceeded your "${budget.name}" budget (${Math.round(percentUsed)}% used).`
         : `You've used ${Math.round(percentUsed)}% of your "${budget.name}" budget.`,
-      { budgetId: budget.id, percentUsed: Math.round(percentUsed) }
+      { budgetId: budget.id, percentUsed: Math.round(percentUsed) },
+      !dbTx,
+      dbTx
     );
   }
 }

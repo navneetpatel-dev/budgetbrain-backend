@@ -1,6 +1,8 @@
 import { Sequelize } from 'sequelize';
 import { dbEnv } from './env';
+import { createLogger } from '../logging';
 
+const log = createLogger('system');
 const LOCAL_DB_HOSTS = new Set(['localhost', '127.0.0.1']);
 
 function usesRemoteDatabase(): boolean {
@@ -9,7 +11,10 @@ function usesRemoteDatabase(): boolean {
 
 const sequelizeOptions = {
   dialect: 'postgres' as const,
-  logging: dbEnv.NODE_ENV === 'development' ? console.log : false,
+  logging:
+    dbEnv.NODE_ENV === 'development'
+      ? (sql: string) => log.debug(sql)
+      : false,
   define: {
     underscored: true,
     timestamps: true,
@@ -35,10 +40,11 @@ export const sequelize = new Sequelize(dbEnv.DB_NAME, dbEnv.DB_USER, dbEnv.DB_PA
 export async function connectDatabase(): Promise<boolean> {
   try {
     await sequelize.authenticate();
+    log.info('Database connected', { host: dbEnv.DB_HOST, database: dbEnv.DB_NAME });
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`Database connection failed: ${message}`);
+    log.warn('Database connection failed', { message });
     return false;
   }
 }

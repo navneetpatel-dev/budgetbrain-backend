@@ -4,6 +4,9 @@ import { initModels, sequelize } from '../models';
 import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';
 import { validateProductionConfig } from './shared/config/production';
+import { createLogger } from '../logging';
+
+const log = createLogger('admin');
 
 initSentry();
 validateProductionConfig();
@@ -16,22 +19,26 @@ async function bootstrap() {
     if (dbConnected) {
       if (env.NODE_ENV === 'development') {
         await sequelize.sync({ alter: true });
-        console.log('[admin] Database synced (development)');
+        log.info('Database synced (development)');
       } else {
-        console.log('[admin] Production mode — run npm run db:migrate before deploy');
+        log.info('Production mode — run npm run db:migrate before deploy');
       }
-
     } else {
-      console.warn('[admin] Starting without database — DB-dependent routes will not work until connected');
+      log.warn('Starting without database — DB-dependent routes will not work until connected');
     }
 
     app.listen(env.PORT, () => {
-      console.log(`[admin] BudgetBrain API running on port ${env.PORT}`);
-      console.log(`[admin] Environment: ${env.NODE_ENV}`);
-      console.log(`[admin] API: http://localhost:${env.PORT}/api/${env.API_VERSION}`);
+      log.info('BudgetBrain API running', {
+        port: env.PORT,
+        environment: env.NODE_ENV,
+        api: `http://localhost:${env.PORT}/api/${env.API_VERSION}`,
+      });
     });
   } catch (error) {
-    console.error('[admin] Failed to start server:', error);
+    log.error('Failed to start server', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exit(1);
   }
 }

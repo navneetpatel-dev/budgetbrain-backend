@@ -1,9 +1,10 @@
 import { Op, fn, col } from 'sequelize';
-import { Budget, Category, Transaction, User } from '../../../../models';
+import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '../../../../models';
 import { AppError } from '../../../shared/utils/errors';
+import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
-import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types'
+import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
 
 const FREE_BUDGET_LIMIT = 3;
 
@@ -67,7 +68,7 @@ export async function createBudget(userId: string, data: CreateBudgetInput) {
     }
   }
 
-  return Budget.create({
+  const budget = await Budget.create({
     userId,
     name: data.name,
     type: data.type,
@@ -78,6 +79,16 @@ export async function createBudget(userId: string, data: CreateBudgetInput) {
     endDate: data.endDate ? new Date(data.endDate) : null,
     alertThreshold: data.alertThreshold ?? 80,
   });
+
+  await writeAuditLog({
+    action: AuditAction.BUDGET_CREATE,
+    resource: AuditResource.BUDGET,
+    resourceId: budget.id,
+    actorUserId: userId,
+    afterState: { name: budget.name, amount: budget.amount, type: budget.type },
+  });
+
+  return budget;
 }
 
 export async function getBudget(userId: string, id: string): Promise<BudgetWithSpent> {
@@ -112,6 +123,13 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
   const budget = await Budget.findOne({ where: { id, userId } });
   if (!budget) throw new AppError(404, 'Budget not found');
 
+  const beforeState = {
+    name: budget.name,
+    amount: budget.amount,
+    alertThreshold: budget.alertThreshold,
+    endDate: budget.endDate,
+  };
+
   await budget.update({
     ...(data.name !== undefined && { name: data.name }),
     ...(data.amount !== undefined && { amount: data.amount }),
@@ -119,11 +137,43 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
     ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
   });
 
+  await writeAuditLog({
+    action: AuditAction.BUDGET_UPDATE,
+    resource: AuditResource.BUDGET,
+    resourceId: id,
+    actorUserId: userId,
+    beforeState,
+    afterState: {
+      name: budget.name,
+      amount: budget.amount,
+      alertThreshold: budget.alertThreshold,
+      endDate: budget.endDate,
+    },
+  });
+
   return budget;
 }
 
 export async function deleteBudget(userId: string, id: string) {
-  const budget = await Budget.findOne({ where: { id, userId } });
-  if (!budget) throw new AppError(404, 'Budget not found');
-  await budget.destroy();
+  await sequelize.transaction(async (t) => {
+    const budget = await Budget.findOne({
+      where: { id, userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!budget) throw new AppError(404, 'Budget not found');
+
+    await BudgetAlert.destroy({ where: { budgetId: id }, transaction: t });
+    await budget.destroy({ transaction: t });
+
+    await writeAuditLog({
+      action: AuditAction.BUDGET_DELETE,
+      resource: AuditResource.BUDGET,
+      resourceId: id,
+      actorUserId: userId,
+      beforeState: { name: budget.name, amount: budget.amount },
+      severity: 'warning',
+      transaction: t,
+    });
+  });
 }

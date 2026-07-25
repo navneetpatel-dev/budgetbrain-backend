@@ -15,6 +15,7 @@ uploads/*
 !uploads/.gitkeep
 
 # Logs & OS
+logs/
 *.log
 npm-debug.log*
 .DS_Store

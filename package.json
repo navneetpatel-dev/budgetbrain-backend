@@ -3,12 +3,22 @@
   "version": "1.0.0",
   "description": "BudgetBrain - AI Powered Expense Tracking API",
   "main": "dist/web/index.js",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "concurrently -k -n mobile,web,admin -c cyan,magenta,yellow \"PORT=${PORT_MOBILE:-3001} tsx watch src/mobile/index.ts\" \"PORT=${PORT_WEB:-3002} tsx watch src/web/index.ts\" \"PORT=${PORT_ADMIN:-3003} tsx watch src/admin/index.ts\"",
     "build": "tsc",
     "start": "concurrently -k -n mobile,web,admin -c cyan,magenta,yellow \"PORT=${PORT_MOBILE:-3001} node dist/mobile/index.js\" \"PORT=${PORT_WEB:-3002} node dist/web/index.js\" \"PORT=${PORT_ADMIN:-3003} node dist/admin/index.js\"",
+    "start:mobile": "node dist/mobile/index.js",
+    "start:web": "node dist/web/index.js",
+    "start:admin": "node dist/admin/index.js",
+    "start:pm2": "pm2 start ecosystem.config.cjs",
+    "reload:pm2": "pm2 reload ecosystem.config.cjs --update-env",
     "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:migrate:prod": "node dist/scripts/migrate.js",
     "db:seed": "tsx src/scripts/seed.ts",
+    "db:seed:prod": "node dist/scripts/seed.js",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {

@@ -6,8 +6,6 @@ import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
 
-const FREE_BUDGET_LIMIT = 3;
-
 function getBudgetDateRange(budget: Budget): { startDate: string; endDate: string } {
   const now = new Date();
   if (budget.type === 'weekly') {
@@ -60,13 +58,6 @@ async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpen
 export async function createBudget(userId: string, data: CreateBudgetInput) {
   const user = await User.findByPk(userId);
   if (!user) throw new AppError(404, 'User not found');
-
-  if (user.role === 'free') {
-    const count = await Budget.count({ where: { userId } });
-    if (count >= FREE_BUDGET_LIMIT) {
-      throw new AppError(403, 'Free plan limited to 3 budgets', 'LIMIT_REACHED');
-    }
-  }
 
   const budget = await Budget.create({
     userId,

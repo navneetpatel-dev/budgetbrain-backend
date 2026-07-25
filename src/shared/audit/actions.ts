@@ -32,10 +32,6 @@ export const AuditAction = {
   FAMILY_GROUP_CREATE: 'family.group_create',
   FAMILY_GROUP_JOIN: 'family.group_join',
 
-  SUBSCRIPTION_ACTIVATE: 'subscription.activate',
-  SUBSCRIPTION_EXPIRE: 'subscription.expire',
-  SUBSCRIPTION_RESTORE: 'subscription.restore',
-
   SUPPORT_TICKET_UPDATE: 'support_ticket.update',
 
   INTEGRATION_CONFIRM: 'integration.confirm_parsed',
@@ -51,7 +47,6 @@ export const AuditResource = {
   BUDGET: 'budget',
   FAMILY_GROUP: 'family_group',
   FAMILY_MEMBER: 'family_member',
-  SUBSCRIPTION: 'subscription',
   SUPPORT_TICKET: 'support_ticket',
   PARSED_TRANSACTION: 'parsed_transaction',
   AUTH: 'auth',

@@ -18,10 +18,6 @@ export function validateProductionConfig(): void {
     throw new Error('Production requires explicit CORS_ORIGIN (comma-separated allowed origins)');
   }
 
-  if (!env.REVENUECAT_WEBHOOK_SECRET) {
-    console.warn('[WARN] REVENUECAT_WEBHOOK_SECRET not configured — subscription webhooks will not work');
-  }
-
   if (!env.SMTP_USER) {
     console.warn('[WARN] SMTP not configured — email auth flows will not work');
   }

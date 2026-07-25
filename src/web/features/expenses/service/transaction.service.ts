@@ -18,15 +18,6 @@ import type {
   UpdateTransactionInput,
 } from '../types';
 
-const FREE_HISTORY_MONTHS = 3;
-
-function getHistoryCutoff(role: string): Date | null {
-  if (['premium', 'lifetime', 'admin'].includes(role)) return null;
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - FREE_HISTORY_MONTHS);
-  return cutoff;
-}
-
 function buildSearchVector(data: {
   notes?: string | null;
   merchant?: string | null;
@@ -35,41 +26,36 @@ function buildSearchVector(data: {
   return [data.notes, data.merchant, data.amount?.toString()].filter(Boolean).join(' ');
 }
 
-function buildDateFilter(user: User) {
-  const cutoff = getHistoryCutoff(user.role);
-  return cutoff ? { date: { [Op.gte]: cutoff } } : {};
-}
-
-export async function getTotalIncome(userId: string, user: User): Promise<number> {
+export async function getTotalIncome(userId: string, _user: User): Promise<number> {
   const result = await Transaction.findOne({
-    where: { userId, type: 'income', ...buildDateFilter(user) },
+    where: { userId, type: 'income' },
     attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
     raw: true,
   });
   return Number((result as unknown as { total: string })?.total ?? 0);
 }
 
-export async function getTotalExpenses(userId: string, user: User): Promise<number> {
+export async function getTotalExpenses(userId: string, _user: User): Promise<number> {
   const result = await Transaction.findOne({
-    where: { userId, type: 'expense', ...buildDateFilter(user) },
+    where: { userId, type: 'expense' },
     attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
     raw: true,
   });
   return Number((result as unknown as { total: string })?.total ?? 0);
 }
 
-export async function getRecentTransactions(userId: string, user: User, limit: number) {
+export async function getRecentTransactions(userId: string, _user: User, limit: number) {
   return Transaction.findAll({
-    where: { userId, ...buildDateFilter(user) },
+    where: { userId },
     include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] }],
     order: [['date', 'DESC'], ['createdAt', 'DESC']],
     limit,
   });
 }
 
-export async function getCategoryBreakdown(userId: string, user: User) {
+export async function getCategoryBreakdown(userId: string, _user: User) {
   return Transaction.findAll({
-    where: { userId, type: 'expense', ...buildDateFilter(user) },
+    where: { userId, type: 'expense' },
     attributes: ['categoryId', [fn('SUM', col('amount')), 'total']],
     include: [{ model: Category, as: 'category', attributes: ['name', 'icon', 'color'] }],
     group: ['categoryId', 'category.id', 'category.name', 'category.icon', 'category.color'],
@@ -89,23 +75,16 @@ export async function listTransactions(
     limit?: number;
   }
 ) {
-  const user = await User.findByPk(userId);
-  const cutoff = user ? getHistoryCutoff(user.role) : null;
   const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
 
   const where: Record<string, unknown> = { userId };
   if (filters.type) where.type = filters.type;
   if (filters.categoryId) where.categoryId = filters.categoryId;
 
-  if (filters.startDate || filters.endDate || cutoff) {
+  if (filters.startDate || filters.endDate) {
     where.date = {};
     if (filters.startDate) (where.date as Record<string, unknown>)[Op.gte as unknown as string] = filters.startDate;
     if (filters.endDate) (where.date as Record<string, unknown>)[Op.lte as unknown as string] = filters.endDate;
-    if (cutoff) {
-      const existing = (where.date as Record<string, unknown>)[Op.gte as unknown as string];
-      (where.date as Record<string, unknown>)[Op.gte as unknown as string] =
-        existing && new Date(existing as string) > cutoff ? existing : cutoff;
-    }
   }
 
   if (filters.search) {

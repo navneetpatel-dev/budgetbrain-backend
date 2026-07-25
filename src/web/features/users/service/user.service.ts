@@ -4,7 +4,6 @@ import {
   User,
   RefreshToken,
   Device,
-  Subscription,
   Transaction,
   TransactionAttachment,
   Category,
@@ -118,7 +117,6 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     await FamilyMember.destroy({ where: { userId }, ...txOpts });
     await RefreshToken.destroy({ where: { userId }, ...txOpts });
     await Device.destroy({ where: { userId }, ...txOpts });
-    await Subscription.destroy({ where: { userId }, ...txOpts });
     await Transaction.destroy({ where: { userId }, ...txOpts });
     await Category.destroy({ where: { userId }, ...txOpts });
     await IncomeSource.destroy({ where: { userId }, ...txOpts });

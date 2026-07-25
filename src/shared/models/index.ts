@@ -3,7 +3,6 @@ import { sequelize } from '../db/database';
 import { initUserModel, User, associateUser } from './User';
 import { initRefreshTokenModel, RefreshToken, associateRefreshToken } from './RefreshToken';
 import { initDeviceModel, Device, associateDevice } from './Device';
-import { initSubscriptionModel, Subscription, associateSubscription } from './Subscription';
 import { initTransactionModel, Transaction, TransactionAttributes, associateTransaction } from './Transaction';
 import { initTransactionAttachmentModel, TransactionAttachment, associateTransactionAttachment } from './TransactionAttachment';
 import { initCategoryModel, Category, DEFAULT_CATEGORIES, associateCategory } from './Category';
@@ -27,7 +26,6 @@ export function initModels(db: Sequelize = sequelize): void {
   initUserModel(db);
   initRefreshTokenModel(db);
   initDeviceModel(db);
-  initSubscriptionModel(db);
   initTransactionModel(db);
   initTransactionAttachmentModel(db);
   initCategoryModel(db);
@@ -50,7 +48,6 @@ export function initModels(db: Sequelize = sequelize): void {
   associateUser();
   associateRefreshToken();
   associateDevice();
-  associateSubscription();
   associateTransaction();
   associateTransactionAttachment();
   associateCategory();
@@ -76,7 +73,6 @@ export {
   User,
   RefreshToken,
   Device,
-  Subscription,
   Transaction,
   TransactionAttributes,
   TransactionAttachment,

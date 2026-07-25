@@ -40,15 +40,6 @@ export async function authenticate(
   }
 }
 
-export function requirePremium(req: AuthRequest, _res: Response, next: NextFunction): void {
-  const role = req.user?.role;
-  if (!role || !['premium', 'lifetime', 'admin'].includes(role)) {
-    next(new AppError(403, 'Premium subscription required', 'PREMIUM_REQUIRED'));
-    return;
-  }
-  next();
-}
-
 export function requireAdmin(req: AuthRequest, _res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
     next(new AppError(403, 'Admin access required', 'ADMIN_REQUIRED'));

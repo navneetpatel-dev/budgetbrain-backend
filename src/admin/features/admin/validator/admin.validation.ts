@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/validation';
 
 export const updateUserSchema = z.object({
-  role: enumField(['free', 'premium', 'lifetime', 'admin'] as const).optional(),
+  role: enumField(['free', 'admin'] as const).optional(),
   suspended: z.boolean().optional(),
 });
 

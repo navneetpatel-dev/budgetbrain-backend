@@ -5,6 +5,7 @@ import {
   Sequelize,
 } from 'sequelize';
 
+/** `premium`/`lifetime` retained for existing DB rows; all users have full access. */
 export type UserRole = 'free' | 'premium' | 'lifetime' | 'admin';
 export type AuthProvider = 'email' | 'google' | 'apple';
 
@@ -187,7 +188,6 @@ export function initUserModel(sequelize: Sequelize): typeof User {
 export function associateUser(): void {
   const { RefreshToken } = require('./RefreshToken') as typeof import('./RefreshToken');
   const { Device } = require('./Device') as typeof import('./Device');
-  const { Subscription } = require('./Subscription') as typeof import('./Subscription');
   const { Transaction } = require('./Transaction') as typeof import('./Transaction');
   const { Category } = require('./Category') as typeof import('./Category');
   const { IncomeSource } = require('./IncomeSource') as typeof import('./IncomeSource');
@@ -205,7 +205,6 @@ export function associateUser(): void {
 
   User.hasMany(RefreshToken, { foreignKey: 'userId', as: 'refreshTokens' });
   User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
-  User.hasMany(Subscription, { foreignKey: 'userId', as: 'subscriptions' });
   User.hasMany(Transaction, { foreignKey: 'userId', as: 'transactions' });
   User.hasMany(Category, { foreignKey: 'userId', as: 'categories' });
   User.hasMany(IncomeSource, { foreignKey: 'userId', as: 'incomeSources' });

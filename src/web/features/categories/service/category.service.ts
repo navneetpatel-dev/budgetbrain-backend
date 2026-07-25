@@ -1,10 +1,8 @@
-import { Category, User } from '../../../../shared/models';
+import { Category } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { CreateCategoryInput, UpdateCategoryInput } from '../types';
-
-const FREE_CATEGORY_LIMIT = 20;
 
 export async function listCategories(userId: string, filters: PaginationInput = {}) {
   const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 100);
@@ -19,10 +17,6 @@ export async function listCategories(userId: string, filters: PaginationInput = 
 
 export async function createCategory(userId: string, data: CreateCategoryInput) {
   const count = await Category.count({ where: { userId, isArchived: false } });
-  const user = await User.findByPk(userId);
-  if (user?.role === 'free' && count >= FREE_CATEGORY_LIMIT) {
-    throw new AppError(403, 'Category limit reached for free plan', 'LIMIT_REACHED');
-  }
 
   return Category.create({
     userId,

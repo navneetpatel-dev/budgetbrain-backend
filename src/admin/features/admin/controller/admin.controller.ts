@@ -35,12 +35,6 @@ export async function updateUser(req: Request, res: Response) {
   successResponse(res, data);
 }
 
-export async function listSubscriptions(req: Request, res: Response) {
-  const { page, limit } = req.query as PaginationInput;
-  const data = await adminService.listSubscriptions(page, limit);
-  successResponse(res, data);
-}
-
 export async function listAuditLogs(req: Request, res: Response) {
   const data = await adminService.listAuditLogs(req.query as adminService.AuditLogFilters);
   successResponse(res, data);
@@ -54,11 +48,6 @@ export async function getAuditLog(req: Request, res: Response) {
 
 export async function getStats(_req: Request, res: Response) {
   const data = await adminService.getTransactionStats();
-  successResponse(res, data);
-}
-
-export async function getRevenue(_req: Request, res: Response) {
-  const data = await adminService.getRevenue();
   successResponse(res, data);
 }
 

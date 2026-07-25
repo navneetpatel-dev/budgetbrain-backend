@@ -12,7 +12,6 @@ src/
     goals/            # goal.service.ts
     dashboard/        # dashboard.service.ts
     reports/          # report.service.ts, pdf.service.ts
-    subscriptions/
     notifications/    # notification, push, scheduledJobs services
     family/
     ai/

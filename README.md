@@ -60,7 +60,7 @@ See `.env.example` for all variables. Required:
 
 ## API modules
 
-`/api/v1/auth` · `/users` · `/expenses` · `/income` · `/categories` · `/budgets` · `/goals` · `/reports` · `/subscriptions` · `/notifications` · `/family` · `/ai` · `/admin` · `/sync` · `/accounts` · `/investments` · `/net-worth` · `/integrations`
+`/api/v1/auth` · `/users` · `/expenses` · `/income` · `/categories` · `/budgets` · `/goals` · `/reports` · `/notifications` · `/family` · `/ai` · `/admin` · `/sync` · `/accounts` · `/investments` · `/net-worth` · `/integrations`
 
 ## CORS
 

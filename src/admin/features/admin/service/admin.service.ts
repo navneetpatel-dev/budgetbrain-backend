@@ -1,7 +1,6 @@
-import { Op, fn, col } from 'sequelize';
+import { Op } from 'sequelize';
 import {
   User,
-  Subscription,
   AuditLog,
   Transaction,
   AiConversation,
@@ -31,18 +30,6 @@ export interface AuditLogFilters {
   endDate?: string;
 }
 
-const PLAN_PRICING: Record<string, number> = { monthly: 199, yearly: 1499 / 12, lifetime: 0 };
-
-function computeMrrByPlan(rows: Array<{ plan: string; count: string }>) {
-  const mrrByPlan = rows.map((row) => {
-    const count = Number(row.count);
-    const unitPrice = PLAN_PRICING[row.plan] ?? 0;
-    return { plan: row.plan, count, revenue: Math.round(unitPrice * count) };
-  });
-  const estimatedMRR = mrrByPlan.reduce((sum, p) => sum + p.revenue, 0);
-  return { estimatedMRR, mrrByPlan };
-}
-
 export async function getAdminDashboard() {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -51,35 +38,18 @@ export async function getAdminDashboard() {
   const thirtyDaysAgoStart = new Date(thirtyDaysAgo);
   thirtyDaysAgoStart.setHours(0, 0, 0, 0);
 
-  const [totalUsers, premiumUsers, activeSubscriptions, recentUsers, revenueEstimate, aiUsage, dau, mau] =
-    await Promise.all([
-      User.count(),
-      User.count({ where: { role: { [Op.in]: ['premium', 'lifetime'] } } }),
-      Subscription.count({ where: { status: 'active' } }),
-      User.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
-      Subscription.findAll({
-        where: { status: 'active' },
-        attributes: ['plan', [fn('COUNT', col('id')), 'count']],
-        group: ['plan'],
-        raw: true,
-      }),
-      AiConversation.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
-      User.count({ where: { lastLoginAt: { [Op.gte]: today } } }),
-      User.count({ where: { lastLoginAt: { [Op.gte]: thirtyDaysAgoStart } } }),
-    ]);
-
-  const { estimatedMRR } = computeMrrByPlan(
-    revenueEstimate as unknown as Array<{ plan: string; count: string }>
-  );
+  const [totalUsers, recentUsers, aiUsage, dau, mau] = await Promise.all([
+    User.count(),
+    User.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
+    AiConversation.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
+    User.count({ where: { lastLoginAt: { [Op.gte]: today } } }),
+    User.count({ where: { lastLoginAt: { [Op.gte]: thirtyDaysAgoStart } } }),
+  ]);
 
   return {
     totalUsers,
-    premiumUsers,
-    activeSubscriptions,
     newUsersLast30Days: recentUsers,
-    estimatedMRR,
     aiConversationsLast30Days: aiUsage,
-    conversionRate: totalUsers > 0 ? Math.round((premiumUsers / totalUsers) * 100) : 0,
     dau,
     mau,
     retentionRate: mau > 0 ? Math.round((dau / mau) * 100) : 0,
@@ -95,17 +65,6 @@ export async function listUsers(page = 1, limit = 20) {
     offset,
   });
   return { users: rows, total: count, page, limit };
-}
-
-export async function listSubscriptions(page = 1, limit = 20) {
-  const offset = (page - 1) * limit;
-  const { rows, count } = await Subscription.findAndCountAll({
-    include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
-  });
-  return { subscriptions: rows, total: count, page, limit };
 }
 
 export async function listAuditLogs(filters: AuditLogFilters = {}) {
@@ -165,24 +124,6 @@ export async function getTransactionStats() {
     Transaction.sum('amount', { where: { type: 'expense' } }),
   ]);
   return { totalTransactions, totalExpenseVolume: Number(totalExpenses ?? 0) };
-}
-
-export async function getRevenue() {
-  const [activeSubscriptions, revenueEstimate] = await Promise.all([
-    Subscription.count({ where: { status: 'active' } }),
-    Subscription.findAll({
-      where: { status: 'active' },
-      attributes: ['plan', [fn('COUNT', col('id')), 'count']],
-      group: ['plan'],
-      raw: true,
-    }),
-  ]);
-
-  const { estimatedMRR, mrrByPlan } = computeMrrByPlan(
-    revenueEstimate as unknown as Array<{ plan: string; count: string }>
-  );
-
-  return { estimatedMRR, mrrByPlan, activeSubscriptions };
 }
 
 export async function listAiUsage(page = 1, limit = 20) {

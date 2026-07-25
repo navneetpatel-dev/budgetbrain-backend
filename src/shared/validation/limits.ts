@@ -43,7 +43,6 @@ export const FieldLimits = {
 
   pushToken: { min: 1, max: 500 },
   deviceName: { min: 1, max: 255 },
-  revenueCatId: { min: 1, max: 255 },
   syncResource: { min: 1, max: 100 },
   syncItemId: { min: 1, max: 64 },
   auditAction: { min: 1, max: 100 },

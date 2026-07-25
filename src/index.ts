@@ -1,10 +1,10 @@
 import app from './app';
-import { connectDatabase } from './config/database';
-import { initModels, sequelize } from './models';
-import { env } from './config/env';
-import { initSentry } from './config/sentry';
-import { validateProductionConfig } from './config/production';
-import { startScheduledJobs } from './features/notifications/scheduledJobs.service';
+import { connectDatabase } from './shared/config/database';
+import { initModels, sequelize } from './shared/models';
+import { env } from './shared/config/env';
+import { initSentry } from './shared/config/sentry';
+import { validateProductionConfig } from './shared/config/production';
+import { startScheduledJobs } from './mobile/features/notifications/service/scheduledJobs.service';
 
 initSentry();
 validateProductionConfig();

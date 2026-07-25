@@ -1,8 +1,8 @@
-import { connectDatabase } from '../config/database';
-import { initModels, sequelize, User } from '../models';
-import { hashPassword } from '../utils/jwt';
-import { DEFAULT_CATEGORIES, Category } from '../models/Category';
-import { env } from '../config/env';
+import { connectDatabase } from '../shared/config/database';
+import { initModels, sequelize, User } from '../shared/models';
+import { hashPassword } from '../shared/utils/jwt';
+import { DEFAULT_CATEGORIES, Category } from '../shared/models/Category';
+import { env } from '../shared/config/env';
 
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@budgetbrain.app';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!';

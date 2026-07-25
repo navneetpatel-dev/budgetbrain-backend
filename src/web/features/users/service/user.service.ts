@@ -33,9 +33,19 @@ export async function getUser(userId: string) {
   return user;
 }
 
+function profileAuditSnapshot(user: User, data: UpdateProfileInput) {
+  const keys = Object.keys(data) as (keyof UpdateProfileInput)[];
+  const fields =
+    keys.length > 0
+      ? keys
+      : (['name', 'country', 'currency', 'avatarUrl', 'theme', 'accent'] as const);
+
+  return Object.fromEntries(fields.map((key) => [key, user[key as keyof User]]));
+}
+
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const user = await getUser(userId);
-  const beforeState = { name: user.name, currency: user.currency };
+  const beforeState = profileAuditSnapshot(user, data);
   await user.update(data);
   await writeAuditLog({
     action: AuditAction.USER_UPDATE,
@@ -43,7 +53,7 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
     resourceId: userId,
     actorUserId: userId,
     beforeState,
-    afterState: { name: user.name, currency: user.currency },
+    afterState: profileAuditSnapshot(user, data),
   });
   return user;
 }

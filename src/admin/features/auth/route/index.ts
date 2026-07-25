@@ -25,6 +25,7 @@ router.post(
 );
 router.post('/login', authRateLimiter, validateBody(loginSchema), asyncHandler(controller.login));
 router.post('/refresh', validateBody(refreshTokenSchema), asyncHandler(controller.refresh));
+router.get('/me', authenticate, asyncHandler(controller.me));
 router.post(
   '/logout',
   authenticate,

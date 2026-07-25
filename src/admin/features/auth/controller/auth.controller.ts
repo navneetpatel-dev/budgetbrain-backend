@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
+import type { AuthRequest } from '../../../shared/types';
 import * as authService from '../service/auth.service';
 import type {
   EmailInput,
@@ -22,6 +23,11 @@ export async function login(req: Request, res: Response) {
   const { email, password, deviceId } = req.body as LoginInput;
   const result = await authService.login(email, password, deviceId);
   successResponse(res, result);
+}
+
+export async function me(req: Request, res: Response) {
+  const user = (req as AuthRequest).user!;
+  successResponse(res, authService.sanitizeUser(user));
 }
 
 export async function refresh(req: Request, res: Response) {

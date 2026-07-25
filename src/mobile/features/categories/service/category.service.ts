@@ -1,4 +1,4 @@
-import { Category, User } from '../../../../models';
+import { Category, User } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';

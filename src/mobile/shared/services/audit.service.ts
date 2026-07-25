@@ -4,4 +4,4 @@ export {
   AuditAction,
   AuditResource,
   type AuditEventInput,
-} from '../../../audit';
+} from '../../../shared/audit';

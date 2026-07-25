@@ -7,7 +7,7 @@ import {
   amountField,
   quantityField,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const createInvestmentSchema = z.object({
   name: requiredText('entityName'),

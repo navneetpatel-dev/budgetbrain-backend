@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ValidationMessages as M } from '../../../../validation';
+import { ValidationMessages as M } from '../../../../shared/validation';
 
 export const revenueCatWebhookSchema = z
   .object({

@@ -1,5 +1,5 @@
 import { Op, fn, col } from 'sequelize';
-import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '../../../../models';
+import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';

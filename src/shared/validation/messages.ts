@@ -21,8 +21,12 @@ export const ValidationMessages = {
   passwordRequired: 'Password is required',
   passwordMin: () => `Password must be at least ${FieldLimits.password.min} characters`,
   passwordMax: () => `Password must be at most ${FieldLimits.password.max} characters`,
+  /** Must include a letter, a number, and a special character. */
+  passwordAlphanumeric: 'Password must include a letter, a number, and a special character',
   passwordLetter: 'Password must include a letter',
   passwordNumber: 'Password must include a number',
+  passwordSpecial: 'Password must include a special character',
+  passwordNoSpaces: 'Password cannot contain spaces',
 
   otpInvalid: 'Enter the 6-digit code',
 

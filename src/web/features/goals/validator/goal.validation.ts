@@ -7,7 +7,7 @@ import {
   optionalDate,
   amountField,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const createGoalSchema = z.object({
   name: requiredText('entityName'),

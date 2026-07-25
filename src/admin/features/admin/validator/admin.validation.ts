@@ -7,7 +7,7 @@ import {
   ValidationMessages as M,
   paginationSchema,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const updateUserSchema = z.object({
   role: enumField(['free', 'premium', 'lifetime', 'admin'] as const).optional(),

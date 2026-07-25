@@ -6,7 +6,7 @@ import {
   otpField,
   requiredText,
   uuidField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const registerSchema = z.object({
   email: emailField(),

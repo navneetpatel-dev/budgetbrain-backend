@@ -5,7 +5,7 @@ import {
   optionalDate,
   amountField,
   uuidField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const parseSmsSchema = z.object({
   content: requiredText('smsContent'),

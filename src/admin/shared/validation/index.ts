@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { dateRangeSchema, paginationSchema, uuidField } from '../../../validation';
+import { dateRangeSchema, paginationSchema, uuidField } from '../../../shared/validation';
 
 export { dateRangeSchema, paginationSchema };
 

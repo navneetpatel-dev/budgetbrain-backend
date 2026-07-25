@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { User } from '../../../models';
+import type { User } from '../../../shared/models';
 import { z } from 'zod';
 import { dateRangeSchema, paginationSchema, uuidParamSchema } from '../validation';
 

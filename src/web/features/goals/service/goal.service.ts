@@ -1,4 +1,4 @@
-import { Goal, GoalContribution, User, sequelize } from '../../../../models';
+import { Goal, GoalContribution, User, sequelize } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { createNotification } from '../../notifications/service/notification.service';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';

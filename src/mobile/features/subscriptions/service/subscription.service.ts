@@ -1,4 +1,4 @@
-import { User, Subscription, sequelize } from '../../../../models';
+import { User, Subscription, sequelize } from '../../../../shared/models';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 
 interface RevenueCatEvent {

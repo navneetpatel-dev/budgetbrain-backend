@@ -7,7 +7,7 @@ import {
   amountField,
   financialGoalsField,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const updateProfileSchema = z.object({
   name: optionalText('name'),

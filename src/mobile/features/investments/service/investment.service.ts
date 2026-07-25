@@ -1,4 +1,4 @@
-import { Investment } from '../../../../models';
+import { Investment } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';

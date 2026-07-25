@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requiredText, FieldLimits, ValidationMessages as M, enumField } from '../../../../validation';
+import { requiredText, FieldLimits, ValidationMessages as M, enumField } from '../../../../shared/validation';
 
 export const registerDeviceSchema = z.object({
   pushToken: requiredText('pushToken'),

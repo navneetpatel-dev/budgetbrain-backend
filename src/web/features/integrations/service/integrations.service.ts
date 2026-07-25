@@ -1,4 +1,4 @@
-import { ParsedTransaction, sequelize } from '../../../../models';
+import { ParsedTransaction, sequelize } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { parseSmsContent, parseEmailReceipt } from './parse.service';
 import * as transactionService from '../../expenses/service/transaction.service';

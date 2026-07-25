@@ -5,8 +5,8 @@ import path from 'path';
 import { env } from './shared/config/env';
 import { errorHandler } from './shared/utils/errors';
 import { globalRateLimiter } from './shared/middleware/rateLimit';
-import { createRequestContextMiddleware } from '../audit';
-import { sequelize } from '../models';
+import { createRequestContextMiddleware } from '../shared/audit';
+import { sequelize } from '../shared/models';
 import { registerWebRoutes } from './routes';
 
 const app = express();

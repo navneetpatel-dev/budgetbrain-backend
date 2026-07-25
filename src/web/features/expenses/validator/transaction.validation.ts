@@ -9,7 +9,7 @@ import {
   uuidField,
   enumField,
   ValidationMessages as M,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 const transactionObjectSchema = z.object({
   type: enumField(['expense', 'income'] as const),

@@ -1,1 +1,1 @@
-export { sequelize, connectDatabase } from '../../../db/database';
+export { sequelize, connectDatabase } from '../../../shared/db/database';

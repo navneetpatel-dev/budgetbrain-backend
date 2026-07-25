@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requiredText, enumField } from '../../../../validation';
+import { requiredText, enumField } from '../../../../shared/validation';
 
 export const createTicketSchema = z.object({
   subject: requiredText('subject'),

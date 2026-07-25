@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Transaction, Category } from '../../../../models';
+import { Transaction, Category } from '../../../../shared/models';
 
 export async function generateCsvReport(userId: string, startDate?: string, endDate?: string) {
   const where: Record<string, unknown> = { userId };

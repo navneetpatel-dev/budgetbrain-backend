@@ -1,4 +1,4 @@
-import { Device } from '../../../../models';
+import { Device } from '../../../../shared/models';
 import { env } from '../../../shared/config/env';
 
 interface ExpoPushMessage {

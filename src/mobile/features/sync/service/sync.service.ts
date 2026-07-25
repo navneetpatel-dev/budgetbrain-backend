@@ -1,4 +1,4 @@
-import { Transaction } from '../../../../models';
+import { Transaction } from '../../../../shared/models';
 import * as transactionService from '../../expenses/service/transaction.service';
 import { AppError } from '../../../shared/utils/errors';
 import type { SyncBatchItem } from '../types';

@@ -1,4 +1,4 @@
-import { AiConversation, Transaction, Category } from '../../../../models';
+import { AiConversation, Transaction, Category } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { env } from '../../../shared/config/env';
 import { Op, fn, col } from 'sequelize';

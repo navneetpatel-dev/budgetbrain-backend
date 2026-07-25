@@ -10,7 +10,7 @@ import {
   uuidField,
   enumField,
   ValidationMessages as M,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const createBudgetSchema = z
   .object({

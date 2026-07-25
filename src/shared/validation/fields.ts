@@ -59,14 +59,22 @@ export function emailField() {
     .transform((value) => value.toLowerCase());
 }
 
+/**
+ * Strong password for register / reset:
+ * min–max length, no spaces, must include a letter, a number, and a special character.
+ */
 export function passwordField() {
   const { min, max } = lim('password');
   return z
     .string()
     .min(min, M.passwordMin())
     .max(max, M.passwordMax())
-    .regex(/[A-Za-z]/, M.passwordLetter)
-    .regex(/[0-9]/, M.passwordNumber);
+    .regex(/^\S+$/, M.passwordNoSpaces)
+    .refine(
+      (value) =>
+        /[A-Za-z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value),
+      { message: M.passwordAlphanumeric }
+    );
 }
 
 /** Login password: required + max only (no complexity leak on failed logins). */

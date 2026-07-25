@@ -9,7 +9,7 @@ import {
   amountField,
   uuidField,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
 

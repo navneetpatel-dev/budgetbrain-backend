@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requiredText, timestampField, ValidationMessages as M } from '../../../../validation';
+import { requiredText, timestampField, ValidationMessages as M } from '../../../../shared/validation';
 import {
   syncTransactionCreateSchema,
   syncTransactionUpdateSchema,

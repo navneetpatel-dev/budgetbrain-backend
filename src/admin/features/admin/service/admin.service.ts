@@ -8,10 +8,10 @@ import {
   RefreshToken,
   SupportTicket,
   sequelize,
-} from '../../../../models';
+} from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
-import type { TicketStatus } from '../../../../models/SupportTicket';
+import type { TicketStatus } from '../../../../shared/models/SupportTicket';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,

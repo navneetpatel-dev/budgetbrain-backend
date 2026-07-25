@@ -1,5 +1,5 @@
 import type { Transaction as DbTransaction } from 'sequelize';
-import { Notification, NotificationType, Device } from '../../../../models';
+import { Notification, NotificationType, Device } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { sendPushToUser } from './push.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';

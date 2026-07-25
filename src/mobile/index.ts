@@ -1,11 +1,11 @@
 import app from './app';
-import { connectDatabase } from '../db/database';
-import { initModels, sequelize } from '../models';
+import { connectDatabase } from '../shared/db/database';
+import { initModels, sequelize } from '../shared/models';
 import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';
 import { validateProductionConfig } from './shared/config/production';
 import { startScheduledJobs } from './features/notifications/service/scheduledJobs.service';
-import { createLogger } from '../logging';
+import { createLogger } from '../shared/logging';
 
 const log = createLogger('mobile');
 

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
-import { User, Transaction, Notification } from '../../../../models';
+import { User, Transaction, Notification } from '../../../../shared/models';
 import { createNotification } from './notification.service';
 
 export function startScheduledJobs(): void {

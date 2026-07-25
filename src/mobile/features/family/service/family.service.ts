@@ -1,4 +1,4 @@
-import { FamilyGroup, FamilyMember, sequelize } from '../../../../models';
+import { FamilyGroup, FamilyMember, sequelize } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { generateInviteCode } from '../../../shared/utils/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';

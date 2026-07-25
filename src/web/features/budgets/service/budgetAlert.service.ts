@@ -1,5 +1,5 @@
 import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
-import { Budget, BudgetAlert, Transaction } from '../../../../models';
+import { Budget, BudgetAlert, Transaction } from '../../../../shared/models';
 import { createNotification } from '../../notifications/service/notification.service';
 
 export async function checkBudgetAlertsAfterExpense(

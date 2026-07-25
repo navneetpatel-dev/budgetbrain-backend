@@ -4,7 +4,7 @@ import {
   requiredText,
   uuidField,
   ValidationMessages as M,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const createCategorySchema = z.object({
   name: requiredText('categoryName'),

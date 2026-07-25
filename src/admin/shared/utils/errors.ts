@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { createLogger } from '../../../logging';
-import { getAuditContext } from '../../../audit';
+import { createLogger } from '../../../shared/logging';
+import { getAuditContext } from '../../../shared/audit';
 
 const log = createLogger('admin');
 

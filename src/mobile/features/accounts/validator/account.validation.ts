@@ -7,7 +7,7 @@ import {
   optionalMoneyValueField,
   accountLast4Field,
   enumField,
-} from '../../../../validation';
+} from '../../../../shared/validation';
 
 export const createAccountSchema = z.object({
   name: requiredText('entityName'),

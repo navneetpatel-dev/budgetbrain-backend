@@ -1,4 +1,4 @@
-import { sequelize } from '../../../../models';
+import { sequelize } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import {
   User,
@@ -23,7 +23,7 @@ import {
   ParsedTransaction,
   SupportTicket,
   VerificationToken,
-} from '../../../../models';
+} from '../../../../shared/models';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import type { OnboardingInput, UpdateProfileInput } from '../types';
 

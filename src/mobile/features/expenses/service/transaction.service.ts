@@ -7,7 +7,7 @@ import {
   IncomeSource,
   User,
   sequelize,
-} from '../../../../models';
+} from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { checkBudgetAlertsAfterExpense } from '../../budgets/service/budgetAlert.service';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';

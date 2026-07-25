@@ -20,7 +20,8 @@ export const FieldLimits = {
   merchant: { min: 1, max: 255 },
   notes: { min: 1, max: 2000 },
   recurringRule: { min: 1, max: 100 },
-  search: { min: 1, max: 100 },
+  /** Search query — FE enables at min; BE enforces same floor. */
+  search: { min: 2, max: 100 },
 
   entityName: { min: 1, max: 255 },
   categoryName: { min: 1, max: 100 },
@@ -48,10 +49,17 @@ export const FieldLimits = {
   auditAction: { min: 1, max: 100 },
   auditResource: { min: 1, max: 100 },
   requestId: { min: 1, max: 64 },
+  timestamp: { min: 1, max: 40 },
 } as const;
 
 /** DECIMAL(15,2) safe ceiling */
 export const MAX_MONEY_AMOUNT = 9_999_999_999_999.99;
+
+/** Investment quantity ceiling */
+export const MAX_QUANTITY = 1_000_000_000;
+
+/** Budget alert threshold (%) */
+export const ALERT_THRESHOLD = { min: 1, max: 100 } as const;
 
 export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'] as const;
 

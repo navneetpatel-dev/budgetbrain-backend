@@ -14,7 +14,7 @@ export const listIncomeSchema = dateRangeSchema.merge(paginationSchema);
 export const createIncomeSchema = z.object({
   amount: amountField(),
   currency: currencyField(true),
-  incomeSourceId: z.string().uuid().optional(),
+  incomeSourceId: z.string().uuid('Invalid id').optional(),
   notes: optionalText('notes'),
   date: requiredDate,
   isRecurring: z.boolean().optional(),
@@ -25,7 +25,7 @@ export const updateIncomeSchema = z.object({
   amount: amountField().optional(),
   notes: optionalText('notes'),
   date: optionalDate,
-  incomeSourceId: z.string().uuid().optional(),
+  incomeSourceId: z.string().uuid('Invalid id').optional(),
 });
 
 export const createSourceSchema = z.object({

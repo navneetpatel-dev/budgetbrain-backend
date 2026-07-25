@@ -6,22 +6,26 @@ import {
   requiredDate,
   optionalDate,
   amountField,
+  alertThresholdField,
+  uuidField,
 } from '../../../../validation';
 
 export const createBudgetSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['monthly', 'weekly', 'category']),
+  type: z.enum(['monthly', 'weekly', 'category'], {
+    errorMap: () => ({ message: 'Invalid option' }),
+  }),
   amount: amountField(),
   currency: currencyField(true),
-  categoryId: z.string().uuid().optional(),
+  categoryId: uuidField().optional(),
   startDate: requiredDate,
   endDate: optionalDate,
-  alertThreshold: z.number().min(1).max(100).optional(),
+  alertThreshold: alertThresholdField(true),
 });
 
 export const updateBudgetSchema = z.object({
   name: optionalText('entityName'),
   amount: amountField().optional(),
-  alertThreshold: z.number().min(1).max(100).optional(),
+  alertThreshold: alertThresholdField(true),
   endDate: optionalDate,
 });

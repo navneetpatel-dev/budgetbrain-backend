@@ -1,6 +1,13 @@
-import { FieldLimits, MAX_MONEY_AMOUNT, SUPPORTED_CURRENCIES, type FieldLimitKey } from './limits';
+import {
+  ALERT_THRESHOLD,
+  FieldLimits,
+  MAX_MONEY_AMOUNT,
+  MAX_QUANTITY,
+  SUPPORTED_CURRENCIES,
+  type FieldLimitKey,
+} from './limits';
 
-/** Canonical validation copy — keep mobile/web fieldLimits messages identical. */
+/** Canonical validation copy — keep mobile/web/admin fieldLimits messages identical. */
 export const ValidationMessages = {
   minChars: (min: number) => `Must be at least ${min} characters`,
   maxChars: (max: number) => `Must be at most ${max} characters`,
@@ -22,6 +29,7 @@ export const ValidationMessages = {
   currencyInvalid: `Currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`,
   dateFormat: 'Date must be YYYY-MM-DD',
   dateInvalid: 'Invalid date',
+  timestampInvalid: 'Invalid timestamp',
 
   amountType: 'Amount must be a number',
   amountFinite: 'Amount must be a finite number',
@@ -30,11 +38,33 @@ export const ValidationMessages = {
 
   valueType: 'Value must be a number',
   valueFinite: 'Value must be a finite number',
+  valueMin: (min: number) => `Value must be at least ${min}`,
+  valueMax: (max: number) => `Value must be at most ${max}`,
+
+  quantityType: 'Quantity must be a number',
+  quantityFinite: 'Quantity must be a finite number',
+  quantityPositive: 'Quantity must be greater than zero',
+  quantityMax: () => `Quantity must be at most ${MAX_QUANTITY}`,
+
+  alertThresholdType: 'Alert threshold must be a number',
+  alertThresholdFinite: 'Alert threshold must be a finite number',
+  alertThresholdMin: () => `Alert threshold must be at least ${ALERT_THRESHOLD.min}`,
+  alertThresholdMax: () => `Alert threshold must be at most ${ALERT_THRESHOLD.max}`,
 
   inviteCodeInvalid: 'Invalid invite code',
   last4Invalid: 'Last 4 digits must be numeric',
   urlInvalid: 'Enter a valid URL',
   urlMax: (max: number) => `URL must be at most ${max} characters`,
+
+  uuidInvalid: 'Invalid id',
+  pageMin: 'Page must be at least 1',
+  limitRange: 'Limit must be between 1 and 100',
+  enumInvalid: 'Invalid option',
+
+  financialGoalsMin: 'Please select at least one financial goal',
+  financialGoalsMax: 'Must be at most 20 financial goals',
+  syncBatchMin: 'Must include at least 1 sync item',
+  syncBatchMax: 'Must be at most 100 sync items',
 
   validationFailed: 'Validation failed',
 } as const;

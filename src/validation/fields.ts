@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
+  ALERT_THRESHOLD,
   FieldLimits,
   MAX_MONEY_AMOUNT,
+  MAX_QUANTITY,
   SUPPORTED_CURRENCIES,
   type FieldLimitKey,
 } from './limits';
-import { ValidationMessages as M } from './messages';
+import { ValidationMessages, ValidationMessages as M } from './messages';
 
 function lim(key: FieldLimitKey) {
   return FieldLimits[key];
@@ -115,6 +117,26 @@ export const requiredDate = isoDateSchema;
 /** Optional YYYY-MM-DD date. */
 export const optionalDate = isoDateSchema.optional();
 
+/** Optional start/end date query params. */
+export const dateRangeSchema = z.object({
+  startDate: optionalDate,
+  endDate: optionalDate,
+});
+
+export const paginationSchema = z.object({
+  page: z.coerce.number({ invalid_type_error: M.valueType }).int().min(1, M.pageMin).optional(),
+  limit: z.coerce
+    .number({ invalid_type_error: M.valueType })
+    .int()
+    .min(1, M.limitRange)
+    .max(100, M.limitRange)
+    .optional(),
+});
+
+export function uuidField() {
+  return z.string().uuid(M.uuidInvalid);
+}
+
 /** Positive money amount within DECIMAL(15,2) range. */
 export function amountField() {
   return z
@@ -126,16 +148,41 @@ export function amountField() {
 
 /** Required money value (allows zero; set allowNegative for credit balances). */
 export function moneyValueField(opts?: { allowNegative?: boolean }) {
+  const min = opts?.allowNegative ? -MAX_MONEY_AMOUNT : 0;
   return z
     .number({ invalid_type_error: M.valueType })
     .finite(M.valueFinite)
-    .min(opts?.allowNegative ? -MAX_MONEY_AMOUNT : 0)
-    .max(MAX_MONEY_AMOUNT);
+    .min(min, M.valueMin(min))
+    .max(MAX_MONEY_AMOUNT, M.valueMax(MAX_MONEY_AMOUNT));
 }
 
 /** Optional money value. */
 export function optionalMoneyValueField(opts?: { allowNegative?: boolean }) {
   return moneyValueField(opts).optional();
+}
+
+/** Investment quantity. */
+export function quantityField(optional?: false): z.ZodNumber;
+export function quantityField(optional: true): z.ZodOptional<z.ZodNumber>;
+export function quantityField(optional = false) {
+  const schema = z
+    .number({ invalid_type_error: M.quantityType })
+    .finite(M.quantityFinite)
+    .positive(M.quantityPositive)
+    .max(MAX_QUANTITY, M.quantityMax());
+  return optional ? schema.optional() : schema;
+}
+
+/** Budget alert threshold percent (1–100). */
+export function alertThresholdField(optional?: true): z.ZodOptional<z.ZodNumber>;
+export function alertThresholdField(optional: false): z.ZodNumber;
+export function alertThresholdField(optional = true) {
+  const schema = z
+    .number({ invalid_type_error: M.alertThresholdType })
+    .finite(M.alertThresholdFinite)
+    .min(ALERT_THRESHOLD.min, M.alertThresholdMin())
+    .max(ALERT_THRESHOLD.max, M.alertThresholdMax());
+  return optional ? schema.optional() : schema;
 }
 
 export function inviteCodeField() {
@@ -156,4 +203,22 @@ export function urlField(key: FieldLimitKey = 'avatarUrl') {
     .optional();
 }
 
-export { FieldLimits, MAX_MONEY_AMOUNT, SUPPORTED_CURRENCIES, ValidationMessages };
+/** ISO / parseable timestamp string (sync payloads). */
+export function timestampField() {
+  const { min, max } = lim('timestamp');
+  return z
+    .string()
+    .trim()
+    .min(min, M.minChars(min))
+    .max(max, M.maxChars(max))
+    .refine((v) => !Number.isNaN(Date.parse(v)), M.timestampInvalid);
+}
+
+export function financialGoalsField() {
+  return z
+    .array(requiredText('financialGoal'))
+    .min(1, M.financialGoalsMin)
+    .max(20, M.financialGoalsMax);
+}
+
+export { FieldLimits, MAX_MONEY_AMOUNT, MAX_QUANTITY, ALERT_THRESHOLD, SUPPORTED_CURRENCIES, ValidationMessages };

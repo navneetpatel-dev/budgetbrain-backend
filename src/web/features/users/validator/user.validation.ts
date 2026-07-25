@@ -5,7 +5,8 @@ import {
   currencyField,
   urlField,
   amountField,
-  FieldLimits,
+  financialGoalsField,
+  ValidationMessages,
 } from '../../../../validation';
 
 export const updateProfileSchema = z.object({
@@ -13,23 +14,15 @@ export const updateProfileSchema = z.object({
   country: optionalText('country'),
   currency: currencyField(true),
   avatarUrl: urlField('avatarUrl'),
-  theme: z.enum(['light', 'dark', 'system']).optional(),
-  accent: z.enum(['indigo', 'emerald', 'ocean', 'rose', 'violet']).optional(),
+  theme: z.enum(['light', 'dark', 'system'], { errorMap: () => ({ message: ValidationMessages.enumInvalid }) }).optional(),
+  accent: z.enum(['indigo', 'emerald', 'ocean', 'rose', 'violet'], { errorMap: () => ({ message: ValidationMessages.enumInvalid }) }).optional(),
 });
 
 export const onboardingSchema = z.object({
   name: requiredText('name'),
   country: requiredText('country'),
   currency: currencyField(),
-  financialGoals: z
-    .array(
-      z
-        .string()
-        .trim()
-        .min(FieldLimits.financialGoal.min)
-        .max(FieldLimits.financialGoal.max)
-    )
-    .max(20),
+  financialGoals: financialGoalsField(),
   salaryRange: requiredText('salaryRange'),
   monthlySavingsTarget: amountField(),
 });

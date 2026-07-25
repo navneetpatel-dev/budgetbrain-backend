@@ -4,15 +4,17 @@ import {
   requiredText,
   currencyField,
   requiredDate,
-  optionalDate,
   amountField,
+  quantityField,
 } from '../../../../validation';
 
 export const createInvestmentSchema = z.object({
   name: requiredText('entityName'),
-  type: z.enum(['stocks', 'mutual_fund', 'fd', 'crypto', 'gold', 'other']),
+  type: z.enum(['stocks', 'mutual_fund', 'fd', 'crypto', 'gold', 'other'], {
+    errorMap: () => ({ message: 'Invalid option' }),
+  }),
   symbol: optionalText('symbol'),
-  quantity: z.number().finite().positive().max(1_000_000_000),
+  quantity: quantityField(),
   purchasePrice: amountField(),
   currentPrice: amountField().optional(),
   currency: currencyField(true),
@@ -21,5 +23,5 @@ export const createInvestmentSchema = z.object({
 
 export const updateInvestmentSchema = z.object({
   currentPrice: amountField(),
-  quantity: z.number().finite().positive().max(1_000_000_000).optional(),
+  quantity: quantityField(true),
 });

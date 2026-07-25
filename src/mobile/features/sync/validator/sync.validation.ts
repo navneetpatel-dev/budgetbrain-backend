@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requiredText } from '../../../../validation';
+import { requiredText, timestampField, ValidationMessages as M } from '../../../../validation';
 import {
   syncTransactionCreateSchema,
   syncTransactionUpdateSchema,
@@ -9,12 +9,7 @@ import {
 const syncItemBase = z.object({
   id: requiredText('syncItemId'),
   resource: z.literal('transaction'),
-  timestamp: z
-    .string()
-    .trim()
-    .min(1)
-    .max(40)
-    .refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid timestamp'),
+  timestamp: timestampField(),
 });
 
 const createItemSchema = syncItemBase.extend({
@@ -33,5 +28,8 @@ const deleteItemSchema = syncItemBase.extend({
 });
 
 export const syncBatchSchema = z.object({
-  items: z.array(z.discriminatedUnion('action', [createItemSchema, updateItemSchema, deleteItemSchema])).min(1).max(100),
+  items: z
+    .array(z.discriminatedUnion('action', [createItemSchema, updateItemSchema, deleteItemSchema]))
+    .min(1, M.syncBatchMin)
+    .max(100, M.syncBatchMax),
 });

@@ -11,7 +11,7 @@ import {
 export const registerSchema = z.object({
   email: emailField(),
   password: passwordField(),
-  name: optionalText('name'),
+  name: requiredText('name'),
 });
 
 export const loginSchema = z.object({
@@ -45,5 +45,5 @@ export const tokenSchema = z.object({
 
 export const socialLoginSchema = z.object({
   idToken: requiredText('idToken'),
-  name: optionalText('name'),
+  name: requiredText('name'),
 });

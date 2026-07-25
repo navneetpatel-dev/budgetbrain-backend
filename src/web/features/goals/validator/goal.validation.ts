@@ -1,20 +1,21 @@
 import { z } from 'zod';
+import { optionalText, requiredText, currencyField } from '../../../../validation';
 
 export const createGoalSchema = z.object({
-  name: z.string(),
+  name: requiredText('entityName'),
   type: z.enum(['emergency_fund', 'vacation', 'car', 'home', 'investments', 'other']),
   targetAmount: z.number().positive(),
-  currency: z.string().length(3).optional(),
-  targetDate: z.string().optional(),
+  currency: currencyField(true),
+  targetDate: z.string().min(1).max(40).optional(),
 });
 
 export const updateGoalSchema = z.object({
-  name: z.string().optional(),
+  name: optionalText('entityName'),
   targetAmount: z.number().positive().optional(),
-  targetDate: z.string().optional(),
+  targetDate: z.string().min(1).max(40).optional(),
 });
 
 export const contributeGoalSchema = z.object({
   amount: z.number().positive(),
-  notes: z.string().optional(),
+  notes: optionalText('notes'),
 });

@@ -1,17 +1,22 @@
 import { z } from 'zod';
+import { optionalText, requiredText, currencyField, FieldLimits } from '../../../../validation';
 
 export const createAccountSchema = z.object({
-  name: z.string(),
+  name: requiredText('entityName'),
   type: z.enum(['bank', 'credit_card', 'cash', 'wallet']),
-  institution: z.string().optional(),
-  accountNumberLast4: z.string().length(4).optional(),
+  institution: optionalText('institution'),
+  accountNumberLast4: z
+    .string()
+    .trim()
+    .length(FieldLimits.accountNumberLast4.max)
+    .optional(),
   balance: z.number(),
   creditLimit: z.number().optional(),
-  currency: z.string().length(3).optional(),
+  currency: currencyField(true),
 });
 
 export const updateAccountSchema = z.object({
-  name: z.string().optional(),
+  name: optionalText('entityName'),
   balance: z.number().optional(),
   creditLimit: z.number().optional(),
   isActive: z.boolean().optional(),

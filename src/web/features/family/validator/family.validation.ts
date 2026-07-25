@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import { requiredText } from '../../../../validation';
 
-export const createGroupSchema = z.object({ name: z.string() });
-export const joinGroupSchema = z.object({ inviteCode: z.string() });
+export const createGroupSchema = z.object({
+  name: requiredText('entityName'),
+});
+
+export const joinGroupSchema = z.object({
+  inviteCode: requiredText('inviteCode'),
+});

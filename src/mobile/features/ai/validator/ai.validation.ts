@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { requiredText } from '../../../../validation';
 
 export const chatSchema = z.object({
-  message: z.string().min(1),
+  message: requiredText('aiMessage'),
   conversationId: z.string().uuid().optional(),
 });

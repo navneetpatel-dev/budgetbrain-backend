@@ -1,15 +1,18 @@
 import { z } from 'zod';
+import { optionalText, requiredText } from '../../../../validation';
 
-export const parseSmsSchema = z.object({ content: z.string().min(10) });
+export const parseSmsSchema = z.object({
+  content: requiredText('smsContent'),
+});
 
 export const parseEmailSchema = z.object({
-  subject: z.string(),
-  body: z.string().min(10),
+  subject: requiredText('emailSubject'),
+  body: requiredText('emailBody'),
 });
 
 export const confirmParsedSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.number().positive().optional(),
-  merchant: z.string().optional(),
-  date: z.string().optional(),
+  merchant: optionalText('merchant'),
+  date: z.string().min(1).max(40).optional(),
 });

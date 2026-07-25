@@ -1,14 +1,15 @@
 import { z } from 'zod';
+import { optionalText, requiredText, currencyField } from '../../../../validation';
 
 export const createInvestmentSchema = z.object({
-  name: z.string(),
+  name: requiredText('entityName'),
   type: z.enum(['stocks', 'mutual_fund', 'fd', 'crypto', 'gold', 'other']),
-  symbol: z.string().optional(),
+  symbol: optionalText('symbol'),
   quantity: z.number().positive(),
   purchasePrice: z.number().positive(),
   currentPrice: z.number().positive().optional(),
-  currency: z.string().length(3).optional(),
-  purchaseDate: z.string(),
+  currency: currencyField(true),
+  purchaseDate: z.string().min(1).max(40),
 });
 
 export const updateInvestmentSchema = z.object({

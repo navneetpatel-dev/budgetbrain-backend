@@ -1,19 +1,34 @@
 import { z } from 'zod';
+import {
+  optionalText,
+  requiredText,
+  currencyField,
+  urlField,
+  FieldLimits,
+} from '../../../../validation';
 
 export const updateProfileSchema = z.object({
-  name: z.string().optional(),
-  country: z.string().optional(),
-  currency: z.string().length(3).optional(),
-  avatarUrl: z.string().url().optional(),
+  name: optionalText('name'),
+  country: optionalText('country'),
+  currency: currencyField(true),
+  avatarUrl: urlField('avatarUrl'),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   accent: z.enum(['indigo', 'emerald', 'ocean', 'rose', 'violet']).optional(),
 });
 
 export const onboardingSchema = z.object({
-  name: z.string(),
-  country: z.string(),
-  currency: z.string().length(3),
-  financialGoals: z.array(z.string()),
-  salaryRange: z.string(),
+  name: requiredText('name'),
+  country: requiredText('country'),
+  currency: currencyField(false),
+  financialGoals: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(FieldLimits.financialGoal.min)
+        .max(FieldLimits.financialGoal.max)
+    )
+    .max(20),
+  salaryRange: requiredText('salaryRange'),
   monthlySavingsTarget: z.number().positive(),
 });

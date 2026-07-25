@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { requiredText, FieldLimits } from '../../../../validation';
 
 export const registerDeviceSchema = z.object({
-  pushToken: z.string(),
-  deviceName: z.string().default('Unknown Device'),
+  pushToken: requiredText('pushToken'),
+  deviceName: z
+    .string()
+    .trim()
+    .max(FieldLimits.deviceName.max)
+    .default('Unknown Device'),
   platform: z.enum(['ios', 'android', 'web']).default('android'),
 });

@@ -1,18 +1,19 @@
 import { z } from 'zod';
+import { optionalText, requiredText } from '../../../../validation';
 
 export const createCategorySchema = z.object({
-  name: z.string(),
-  icon: z.string().optional(),
-  color: z.string().optional(),
+  name: requiredText('categoryName'),
+  icon: optionalText('icon'),
+  color: optionalText('color'),
 });
 
 export const updateCategorySchema = z.object({
-  name: z.string().optional(),
-  icon: z.string().optional(),
-  color: z.string().optional(),
-  sortOrder: z.number().optional(),
+  name: optionalText('categoryName'),
+  icon: optionalText('icon'),
+  color: optionalText('color'),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
 });
 
 export const reorderCategoriesSchema = z.object({
-  orderedIds: z.array(z.string().uuid()),
+  orderedIds: z.array(z.string().uuid()).min(1).max(200),
 });

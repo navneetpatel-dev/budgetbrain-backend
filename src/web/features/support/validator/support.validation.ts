@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { requiredText } from '../../../../validation';
 
 export const createTicketSchema = z.object({
-  subject: z.string().min(3).max(255),
-  message: z.string().min(10),
+  subject: requiredText('subject'),
+  message: requiredText('message'),
   priority: z.enum(['low', 'medium', 'high']).optional(),
 });

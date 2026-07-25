@@ -1,42 +1,49 @@
 import { z } from 'zod';
+import {
+  emailField,
+  passwordField,
+  loginPasswordField,
+  otpField,
+  requiredText,
+  optionalText,
+} from '../../../../validation';
 
 export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().optional(),
+  email: emailField(),
+  password: passwordField(),
+  name: optionalText('name'),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
+  email: emailField(),
+  password: loginPasswordField(),
   deviceId: z.string().uuid().optional(),
 });
 
 export const refreshTokenSchema = z.object({
-  refreshToken: z.string(),
+  refreshToken: requiredText('refreshToken'),
 });
 
 export const emailSchema = z.object({
-  email: z.string().email(),
+  email: emailField(),
 });
 
 export const otpVerifySchema = z.object({
-  email: z.string().email(),
-  otp: z.string().length(6),
+  email: emailField(),
+  otp: otpField(),
   deviceId: z.string().uuid().optional(),
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string(),
-  password: z.string().min(8),
+  token: requiredText('token'),
+  password: passwordField(),
 });
 
 export const tokenSchema = z.object({
-  token: z.string(),
+  token: requiredText('token'),
 });
 
 export const socialLoginSchema = z.object({
-  idToken: z.string(),
-  name: z.string().optional(),
+  idToken: requiredText('idToken'),
+  name: optionalText('name'),
 });
-

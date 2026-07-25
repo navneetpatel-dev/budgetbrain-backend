@@ -1,5 +1,6 @@
 import { z } from 'zod';
+import { optionalText } from '../../../../validation';
 
 export const restoreSubscriptionSchema = z.object({
-  revenueCatId: z.string().optional(),
+  revenueCatId: optionalText('revenueCatId'),
 });

@@ -3,7 +3,7 @@ import {
   optionalText,
   requiredText,
   currencyField,
-  requiredDate,
+  investmentPurchaseDate,
   amountField,
   quantityField,
   enumField,
@@ -17,7 +17,7 @@ export const createInvestmentSchema = z.object({
   purchasePrice: amountField(),
   currentPrice: amountField().optional(),
   currency: currencyField(true),
-  purchaseDate: requiredDate,
+  purchaseDate: investmentPurchaseDate,
 });
 
 export const updateInvestmentSchema = z.object({

@@ -1,6 +1,7 @@
 import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 
-export type BudgetType = 'monthly' | 'weekly' | 'category';
+/** Budget period — category scope is separate via optional `categoryId`. */
+export type BudgetType = 'monthly' | 'weekly' | 'custom';
 
 export interface BudgetAttributes {
   id: string;
@@ -58,7 +59,7 @@ export function initBudgetModel(sequelize: Sequelize): typeof Budget {
         allowNull: false,
       },
       type: {
-        type: DataTypes.ENUM('monthly', 'weekly', 'category'),
+        type: DataTypes.ENUM('monthly', 'weekly', 'custom'),
         allowNull: false,
       },
       amount: {

@@ -1,5 +1,6 @@
 import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
 import { Budget, BudgetAlert, Transaction } from '../../../../shared/models';
+import { getBudgetDateRange } from '../../../../shared/budgets/budgetPeriod';
 import { createNotification } from '../../notifications/service/notification.service';
 
 export async function checkBudgetAlertsAfterExpense(
@@ -13,7 +14,7 @@ export async function checkBudgetAlertsAfterExpense(
     where: {
       userId,
       ...(categoryId
-        ? { [Op.or]: [{ categoryId }, { categoryId: null, type: 'monthly' }] }
+        ? { [Op.or]: [{ categoryId }, { categoryId: null }] }
         : {}),
     },
     ...txOpts,
@@ -24,18 +25,13 @@ export async function checkBudgetAlertsAfterExpense(
       continue;
     }
 
-    const dateFilter: Record<string, unknown> = {
-      [Op.gte as unknown as string]: budget.startDate,
-    };
-    if (budget.endDate) {
-      dateFilter[Op.lte as unknown as string] = budget.endDate;
-    }
+    const { startDate, endDate } = getBudgetDateRange(budget);
 
     const spentResult = await Transaction.findOne({
       where: {
         userId,
         type: 'expense',
-        date: dateFilter,
+        date: { [Op.gte]: startDate, [Op.lte]: endDate },
         ...(budget.categoryId ? { categoryId: budget.categoryId } : {}),
       },
       attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
@@ -57,7 +53,7 @@ export async function checkBudgetAlertsAfterExpense(
         budgetId: budget.id,
         userId,
         threshold,
-        triggeredAt: { [Op.gte]: budget.startDate },
+        triggeredAt: { [Op.gte]: startDate },
       },
       ...txOpts,
     });

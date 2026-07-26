@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   optionalText,
   requiredText,
-  optionalDate,
+  optionalTransactionDate,
   amountField,
   uuidField,
 } from '../../../../shared/validation';
@@ -20,5 +20,5 @@ export const confirmParsedSchema = z.object({
   categoryId: uuidField(),
   amount: amountField().optional(),
   merchant: optionalText('merchant'),
-  date: optionalDate,
+  date: optionalTransactionDate,
 });

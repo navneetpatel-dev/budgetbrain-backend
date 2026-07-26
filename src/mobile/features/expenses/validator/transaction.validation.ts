@@ -1,10 +1,14 @@
 import { z } from 'zod';
-import { dateRangeSchema, paginationSchema } from '../../../shared/validation';
+import {
+  dateRangeObjectSchema,
+  paginationSchema,
+  refineDateRangeOrder,
+} from '../../../shared/validation';
 import {
   optionalText,
   requiredText,
   currencyField,
-  requiredDate,
+  transactionDate,
   amountField,
   uuidField,
   enumField,
@@ -19,7 +23,7 @@ const transactionObjectSchema = z.object({
   incomeSourceId: uuidField().optional(),
   notes: optionalText('notes'),
   merchant: optionalText('merchant'),
-  date: requiredDate,
+  date: transactionDate,
   paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
@@ -42,13 +46,16 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
   }
 });
 
-export const listTransactionsSchema = paginationSchema.merge(dateRangeSchema).extend({
-  type: enumField(['expense', 'income'] as const).optional(),
-  categoryId: uuidField().optional(),
-  incomeSourceId: uuidField().optional(),
-  paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
-  search: optionalText('search'),
-});
+export const listTransactionsSchema = paginationSchema
+  .merge(dateRangeObjectSchema)
+  .extend({
+    type: enumField(['expense', 'income'] as const).optional(),
+    categoryId: uuidField().optional(),
+    incomeSourceId: uuidField().optional(),
+    paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
+    search: optionalText('search'),
+  })
+  .superRefine(refineDateRangeOrder);
 
 export const searchQuerySchema = paginationSchema.extend({
   q: requiredText('search'),

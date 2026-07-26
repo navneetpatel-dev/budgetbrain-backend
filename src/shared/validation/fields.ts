@@ -116,20 +116,111 @@ const isoDateSchema = z
     return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
   }, M.dateInvalid);
 
+function utcTodayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function shiftDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function shiftYearsIso(iso: string, years: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y + years, m - 1, d)).toISOString().slice(0, 10);
+}
+
+type DateBoundOpts = {
+  /** Earliest allowed relative to today (negative = past). */
+  minYearsFromToday?: number;
+  /** Latest allowed relative to today (positive = future). */
+  maxYearsFromToday?: number;
+  /** Disallow dates after today (+1 day UTC grace for timezones). */
+  notFuture?: boolean;
+  /** Disallow dates before today (−1 day UTC grace for timezones). */
+  notPast?: boolean;
+};
+
+function withDateBounds(schema: typeof isoDateSchema, opts: DateBoundOpts) {
+  return schema.superRefine((value, ctx) => {
+    const today = utcTodayIso();
+    if (opts.notFuture && value > shiftDaysIso(today, 1)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: M.dateNotInFuture });
+    }
+    if (opts.notPast && value < shiftDaysIso(today, -1)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: M.dateNotInPast });
+    }
+    if (opts.minYearsFromToday != null && value < shiftYearsIso(today, opts.minYearsFromToday)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: M.dateTooFarInPast });
+    }
+    if (opts.maxYearsFromToday != null && value > shiftYearsIso(today, opts.maxYearsFromToday)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: M.dateTooFarInFuture });
+    }
+  });
+}
+
 export function dateField(optional = false) {
   return optional ? isoDateSchema.optional() : isoDateSchema;
 }
 
-/** Required YYYY-MM-DD date. */
+/** Required YYYY-MM-DD date (format + calendar validity only). */
 export const requiredDate = isoDateSchema;
-/** Optional YYYY-MM-DD date. */
+/** Optional YYYY-MM-DD date (format + calendar validity only). */
 export const optionalDate = isoDateSchema.optional();
 
-/** Optional start/end date query params. */
-export const dateRangeSchema = z.object({
-  startDate: optionalDate,
-  endDate: optionalDate,
+/** Expense / income transaction date. */
+export const transactionDate = withDateBounds(isoDateSchema, { notFuture: true, minYearsFromToday: -10 });
+export const optionalTransactionDate = transactionDate.optional();
+
+/** Investment purchase date. */
+export const investmentPurchaseDate = withDateBounds(isoDateSchema, {
+  notFuture: true,
+  minYearsFromToday: -50,
 });
+
+/** Goal target date. */
+export const goalTargetDate = withDateBounds(isoDateSchema, {
+  notPast: true,
+  maxYearsFromToday: 50,
+});
+export const optionalGoalTargetDate = goalTargetDate.optional();
+
+/** Budget period start. */
+export const budgetStartDate = withDateBounds(isoDateSchema, {
+  minYearsFromToday: -2,
+  maxYearsFromToday: 1,
+});
+
+/** Custom budget end (format only; order/range refined on schema). */
+export const budgetEndDate = withDateBounds(isoDateSchema, {
+  maxYearsFromToday: 6,
+});
+export const optionalBudgetEndDate = budgetEndDate.optional();
+
+const rangeDate = withDateBounds(isoDateSchema, { notFuture: true, minYearsFromToday: -10 });
+
+/** Mergeable start/end date fields (reports / list filters). */
+export const dateRangeObjectSchema = z.object({
+  startDate: rangeDate.optional(),
+  endDate: rangeDate.optional(),
+});
+
+/** Enforce start ≤ end on schemas that include date-range fields. */
+export function refineDateRangeOrder(
+  data: { startDate?: string; endDate?: string },
+  ctx: z.RefinementCtx
+) {
+  if (data.startDate && data.endDate && data.startDate > data.endDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: M.dateRangeOrder,
+    });
+  }
+}
+
+/** Optional start/end date query params with order check. */
+export const dateRangeSchema = dateRangeObjectSchema.superRefine(refineDateRangeOrder);
 
 export const paginationSchema = z.object({
   page: z.coerce.number({ invalid_type_error: M.valueType }).int().min(1, M.pageMin).optional(),

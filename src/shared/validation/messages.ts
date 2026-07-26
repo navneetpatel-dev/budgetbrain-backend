@@ -34,6 +34,13 @@ export const ValidationMessages = {
   dateFormat: 'Date must be YYYY-MM-DD',
   dateInvalid: 'Invalid date',
   timestampInvalid: 'Invalid timestamp',
+  dateNotInFuture: 'Date cannot be in the future',
+  dateNotInPast: 'Date cannot be in the past',
+  dateTooFarInPast: 'Date is too far in the past',
+  dateTooFarInFuture: 'Date is too far in the future',
+  dateRangeOrder: 'Start date must be on or before end date',
+  endDateRequired: 'End date is required for custom budgets',
+  endDateBeforeStart: 'End date must be on or after start date',
 
   amountType: 'Amount must be a number',
   amountFinite: 'Amount must be a finite number',

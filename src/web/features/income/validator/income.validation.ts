@@ -1,26 +1,33 @@
 import { z } from 'zod';
-import { dateRangeSchema, paginationSchema } from '../../../shared/validation';
+import {
+  dateRangeObjectSchema,
+  paginationSchema,
+  refineDateRangeOrder,
+} from '../../../shared/validation';
 import {
   optionalText,
   requiredText,
   currencyField,
-  requiredDate,
-  optionalDate,
+  transactionDate,
+  optionalTransactionDate,
   amountField,
   uuidField,
   enumField,
 } from '../../../../shared/validation';
 
-export const listIncomeSchema = dateRangeSchema.merge(paginationSchema).extend({
-  incomeSourceId: uuidField().optional(),
-});
+export const listIncomeSchema = dateRangeObjectSchema
+  .merge(paginationSchema)
+  .extend({
+    incomeSourceId: uuidField().optional(),
+  })
+  .superRefine(refineDateRangeOrder);
 
 export const createIncomeSchema = z.object({
   amount: amountField(),
   currency: currencyField(true),
   incomeSourceId: uuidField(),
   notes: optionalText('notes'),
-  date: requiredDate,
+  date: transactionDate,
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
 });
@@ -28,7 +35,7 @@ export const createIncomeSchema = z.object({
 export const updateIncomeSchema = z.object({
   amount: amountField().optional(),
   notes: optionalText('notes'),
-  date: optionalDate,
+  date: optionalTransactionDate,
   incomeSourceId: uuidField().optional(),
 });
 

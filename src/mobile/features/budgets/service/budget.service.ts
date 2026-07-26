@@ -1,38 +1,11 @@
 import { Op, fn, col } from 'sequelize';
 import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '../../../../shared/models';
+import { getBudgetDateRange } from '../../../../shared/budgets/budgetPeriod';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
-
-/** Sequelize DATEONLY may come back as a string or Date. */
-function toDateOnly(value: Date | string | null | undefined, fallback: string): string {
-  if (value == null) return fallback;
-  if (typeof value === 'string') return value.slice(0, 10);
-  return value.toISOString().slice(0, 10);
-}
-
-function getBudgetDateRange(budget: Budget): { startDate: string; endDate: string } {
-  const now = new Date();
-  if (budget.type === 'weekly') {
-    const day = now.getDay();
-    const start = new Date(now);
-    start.setDate(now.getDate() - day);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return {
-      startDate: start.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
-    };
-  }
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return {
-    startDate: toDateOnly(budget.startDate, start.toISOString().slice(0, 10)),
-    endDate: toDateOnly(budget.endDate, end.toISOString().slice(0, 10)),
-  };
-}
 
 async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {
   const { startDate, endDate } = getBudgetDateRange(budget);
@@ -41,7 +14,7 @@ async function computeBudgetSpent(userId: string, budget: Budget): Promise<numbe
     type: 'expense',
     date: { [Op.gte]: startDate, [Op.lte]: endDate },
   };
-  if (budget.type === 'category' && budget.categoryId) {
+  if (budget.categoryId) {
     where.categoryId = budget.categoryId;
   }
 

@@ -5,6 +5,7 @@ import {
   loginPasswordField,
   otpField,
   requiredText,
+  optionalText,
   uuidField,
 } from '../../../../shared/validation';
 
@@ -45,5 +46,6 @@ export const tokenSchema = z.object({
 
 export const socialLoginSchema = z.object({
   idToken: requiredText('idToken'),
-  name: requiredText('name'),
+  /** Apple only sends the name on the first authorize. */
+  name: optionalText('name'),
 });

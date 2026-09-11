@@ -29,6 +29,12 @@ router.post(
   asyncHandler(controller.createSplit)
 );
 router.get(
+  '/groups/:groupId/splits',
+  validateParams(groupIdParamSchema),
+  validateQuery(paginationSchema),
+  asyncHandler(controller.listGroupSplits)
+);
+router.get(
   '/groups/:groupId/balances',
   validateParams(groupIdParamSchema),
   asyncHandler(controller.getGroupBalances)

@@ -155,6 +155,23 @@ export async function createSplit(userId: string, groupId: string, data: CreateS
   });
 }
 
+/** Individual unsettled splits for a group, so a client can settle one at a time. */
+export async function listGroupSplits(userId: string, groupId: string, filters: PaginationInput = {}) {
+  await assertMembership(userId, groupId);
+
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await ExpenseSplitParticipant.findAndCountAll({
+    where: { groupId, settled: false },
+    include: [
+      { model: Transaction, as: 'transaction', attributes: ['id', 'userId', 'merchant', 'amount', 'date'] },
+    ],
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset,
+  });
+  return paginatedResult('splits', rows, count, page, limit);
+}
+
 export async function getGroupBalances(userId: string, groupId: string) {
   await assertMembership(userId, groupId);
 

@@ -42,6 +42,16 @@ export async function createSplit(req: Request, res: Response) {
   successResponse(res, result, 201);
 }
 
+export async function listGroupSplits(req: Request, res: Response) {
+  const { groupId } = req.params as { groupId: string };
+  const { page, limit } = req.query as PaginationInput;
+  const data = await familyService.listGroupSplits((req as AuthRequest).userId!, groupId, {
+    page,
+    limit,
+  });
+  successResponse(res, data);
+}
+
 export async function getGroupBalances(req: Request, res: Response) {
   const { groupId } = req.params as { groupId: string };
   const balances = await familyService.getGroupBalances((req as AuthRequest).userId!, groupId);

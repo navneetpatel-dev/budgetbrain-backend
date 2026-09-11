@@ -16,6 +16,8 @@ import netWorthRoutes from './features/net-worth/route';
 import integrationsRoutes from './features/integrations/route';
 import supportRoutes from './features/support/route';
 import expenseAttachmentRoutes from './features/expenses/route/attachments.routes';
+import loansRoutes from './features/loans/route';
+import recurringRoutes from './features/recurring/route';
 import type { Express } from 'express';
 
 export function registerMobileRoutes(app: Express, apiPrefix: string): void {
@@ -37,4 +39,6 @@ export function registerMobileRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/integrations`, integrationsRoutes);
   app.use(`${apiPrefix}/support`, supportRoutes);
   app.use(`${apiPrefix}/expenses`, expenseAttachmentRoutes);
+  app.use(`${apiPrefix}/loans`, loansRoutes);
+  app.use(`${apiPrefix}/recurring-series`, recurringRoutes);
 }

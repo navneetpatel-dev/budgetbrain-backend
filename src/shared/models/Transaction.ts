@@ -17,6 +17,8 @@ export interface TransactionAttributes {
   paymentMethod: PaymentMethod | null;
   isRecurring: boolean;
   recurringRule: string | null;
+  recurringSeriesId: string | null;
+  tags: string[] | null;
   searchVector: string | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -32,6 +34,8 @@ export type TransactionCreationAttributes = Optional<
   | 'paymentMethod'
   | 'isRecurring'
   | 'recurringRule'
+  | 'recurringSeriesId'
+  | 'tags'
   | 'searchVector'
 >;
 
@@ -52,6 +56,8 @@ export class Transaction
   declare paymentMethod: PaymentMethod | null;
   declare isRecurring: boolean;
   declare recurringRule: string | null;
+  declare recurringSeriesId: string | null;
+  declare tags: string[] | null;
   declare searchVector: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -113,6 +119,16 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         allowNull: true,
         field: 'recurring_rule',
       },
+      recurringSeriesId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'recurring_series_id',
+      },
+      tags: {
+        type: DataTypes.ARRAY(DataTypes.STRING(30)),
+        allowNull: true,
+        defaultValue: [],
+      },
       searchVector: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -137,9 +153,13 @@ export function associateTransaction(): void {
   const { Category } = require('./Category') as typeof import('./Category');
   const { IncomeSource } = require('./IncomeSource') as typeof import('./IncomeSource');
   const { TransactionAttachment } = require('./TransactionAttachment') as typeof import('./TransactionAttachment');
+  const { RecurringSeries } = require('./RecurringSeries') as typeof import('./RecurringSeries');
+  const { ExpenseSplitParticipant } = require('./ExpenseSplitParticipant') as typeof import('./ExpenseSplitParticipant');
 
   Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   Transaction.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
   Transaction.belongsTo(IncomeSource, { foreignKey: 'incomeSourceId', as: 'incomeSource' });
   Transaction.hasMany(TransactionAttachment, { foreignKey: 'transactionId', as: 'attachments' });
+  Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
+  Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
 }

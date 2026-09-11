@@ -3,6 +3,7 @@ import { asyncHandler } from '../../../shared/utils/errors';
 import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
+import { uploadCsv } from '../../../shared/middleware/upload';
 import * as controller from '../controller/integrations.controller';
 import {
   confirmParsedSchema,
@@ -15,6 +16,7 @@ router.use(authenticate);
 
 router.post('/sms', validateBody(parseSmsSchema), asyncHandler(controller.parseSms));
 router.post('/email', validateBody(parseEmailSchema), asyncHandler(controller.parseEmail));
+router.post('/csv', uploadCsv.single('file'), asyncHandler(controller.importCsv));
 router.get('/pending', validateQuery(paginationSchema), asyncHandler(controller.listPending));
 router.post(
   '/:id/confirm',

@@ -30,3 +30,7 @@ export const reorderCategoriesSchema = z.object({
     .min(1, M.reorderMin)
     .max(200, M.reorderMax),
 });
+
+export const suggestCategorySchema = z.object({
+  merchant: requiredText('merchant'),
+});

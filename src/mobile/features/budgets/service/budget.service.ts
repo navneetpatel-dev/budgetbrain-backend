@@ -1,21 +1,25 @@
 import { Op, fn, col } from 'sequelize';
 import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '../../../../shared/models';
-import { getBudgetDateRange } from '../../../../shared/budgets/budgetPeriod';
+import { getBudgetDateRange, getPreviousBudgetDateRange } from '../../../../shared/budgets/budgetPeriod';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { paginatedResult, resolvePagination } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
 
-async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {
-  const { startDate, endDate } = getBudgetDateRange(budget);
+async function sumExpensesInRange(
+  userId: string,
+  categoryId: string | null,
+  startDate: string,
+  endDate: string
+): Promise<number> {
   const where: Record<string, unknown> = {
     userId,
     type: 'expense',
     date: { [Op.gte]: startDate, [Op.lte]: endDate },
   };
-  if (budget.categoryId) {
-    where.categoryId = budget.categoryId;
+  if (categoryId) {
+    where.categoryId = categoryId;
   }
 
   const result = await Transaction.findOne({
@@ -26,11 +30,36 @@ async function computeBudgetSpent(userId: string, budget: Budget): Promise<numbe
   return Number((result as unknown as { total: string })?.total ?? 0);
 }
 
+async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {
+  const { startDate, endDate } = getBudgetDateRange(budget);
+  return sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+}
+
+/**
+ * Single-period rollover: leftover (or deficit) from the immediately preceding period,
+ * measured against the budget's nominal amount (not compounded across multiple periods).
+ * Not supported for `custom` budgets, which have a fixed one-off date range.
+ */
+async function computeRolloverAmount(userId: string, budget: Budget): Promise<number> {
+  if (!budget.rollover || budget.type === 'custom') return 0;
+  const { startDate, endDate } = getPreviousBudgetDateRange(budget);
+  const previousSpent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+  return Number(budget.amount) - previousSpent;
+}
+
 async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpent[]> {
   return Promise.all(
     budgets.map(async (budget) => {
-      const spent = await computeBudgetSpent(budget.userId, budget);
-      return { ...budget.toJSON(), spent } as BudgetWithSpent;
+      const [spent, rolloverAmount] = await Promise.all([
+        computeBudgetSpent(budget.userId, budget),
+        computeRolloverAmount(budget.userId, budget),
+      ]);
+      return {
+        ...budget.toJSON(),
+        spent,
+        rolloverAmount,
+        effectiveAmount: Number(budget.amount) + rolloverAmount,
+      } as BudgetWithSpent;
     })
   );
 }
@@ -49,6 +78,7 @@ export async function createBudget(userId: string, data: CreateBudgetInput) {
     startDate: new Date(data.startDate),
     endDate: data.endDate ? new Date(data.endDate) : null,
     alertThreshold: data.alertThreshold ?? 80,
+    rollover: data.rollover ?? false,
   });
 
   await writeAuditLog({
@@ -68,8 +98,16 @@ export async function getBudget(userId: string, id: string): Promise<BudgetWithS
     include: [{ model: Category, as: 'category' }],
   });
   if (!budget) throw new AppError(404, 'Budget not found');
-  const spent = await computeBudgetSpent(userId, budget);
-  return { ...budget.toJSON(), spent } as BudgetWithSpent;
+  const [spent, rolloverAmount] = await Promise.all([
+    computeBudgetSpent(userId, budget),
+    computeRolloverAmount(userId, budget),
+  ]);
+  return {
+    ...budget.toJSON(),
+    spent,
+    rolloverAmount,
+    effectiveAmount: Number(budget.amount) + rolloverAmount,
+  } as BudgetWithSpent;
 }
 
 export async function listBudgets(userId: string, filters: PaginationInput = {}) {
@@ -99,6 +137,7 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
     amount: budget.amount,
     alertThreshold: budget.alertThreshold,
     endDate: budget.endDate,
+    rollover: budget.rollover,
   };
 
   await budget.update({
@@ -106,6 +145,7 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
     ...(data.amount !== undefined && { amount: data.amount }),
     ...(data.alertThreshold !== undefined && { alertThreshold: data.alertThreshold }),
     ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
+    ...(data.rollover !== undefined && { rollover: data.rollover }),
   });
 
   await writeAuditLog({
@@ -119,6 +159,7 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
       amount: budget.amount,
       alertThreshold: budget.alertThreshold,
       endDate: budget.endDate,
+      rollover: budget.rollover,
     },
   });
 

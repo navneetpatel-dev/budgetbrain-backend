@@ -14,13 +14,14 @@ export interface BudgetAttributes {
   startDate: Date;
   endDate: Date | null;
   alertThreshold: number;
+  rollover: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type BudgetCreationAttributes = Optional<
   BudgetAttributes,
-  'id' | 'categoryId' | 'endDate' | 'alertThreshold'
+  'id' | 'categoryId' | 'endDate' | 'alertThreshold' | 'rollover'
 >;
 
 export class Budget
@@ -37,6 +38,7 @@ export class Budget
   declare startDate: Date;
   declare endDate: Date | null;
   declare alertThreshold: number;
+  declare rollover: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -89,6 +91,10 @@ export function initBudgetModel(sequelize: Sequelize): typeof Budget {
         type: DataTypes.INTEGER,
         defaultValue: 80,
         field: 'alert_threshold',
+      },
+      rollover: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
       },
     },
     { sequelize, tableName: 'budgets' }

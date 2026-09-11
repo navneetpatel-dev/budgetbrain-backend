@@ -9,4 +9,6 @@ import type { Budget, Category } from '../../../../shared/models';
 export type BudgetWithSpent = ReturnType<Budget['toJSON']> & {
   category?: Category | null;
   spent: number;
+  rolloverAmount: number;
+  effectiveAmount: number;
 };

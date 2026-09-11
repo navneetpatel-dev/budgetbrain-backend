@@ -66,6 +66,34 @@ async function migrateBudgetTypeEnum(sequelize: Awaited<typeof import('../shared
   console.log(`Budget type enum ${enumName} migrated.`);
 }
 
+/**
+ * Additive columns/enum values for the tags, merchant-memory, budget-rollover,
+ * weekly-digest, subscription-tracker, and CSV-import features. `sequelize.sync({ alter: false })`
+ * only creates missing tables — it never alters existing ones — so these run as raw SQL first.
+ * Every statement is idempotent (`IF NOT EXISTS`) so re-running this script is always safe.
+ */
+async function migrateAdditiveColumnsAndEnums(sequelize: Awaited<typeof import('../shared/models')>['sequelize']) {
+  const dialect = sequelize.getDialect();
+  if (dialect !== 'postgres') {
+    console.log(`Skipping additive column/enum migration (dialect=${dialect}).`);
+    return;
+  }
+
+  console.log('Applying additive column/enum migrations…');
+
+  await sequelize.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'`);
+  await sequelize.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurring_series_id UUID`);
+  await sequelize.query(`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS rollover BOOLEAN DEFAULT false`);
+  await sequelize.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN DEFAULT true`);
+
+  // ALTER TYPE ... ADD VALUE must run as its own statement (not combined with other DDL).
+  await sequelize.query(`ALTER TYPE enum_parsed_transactions_source ADD VALUE IF NOT EXISTS 'csv'`);
+  await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'bill_due'`);
+  await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'weekly_digest'`);
+
+  console.log('Additive column/enum migrations complete.');
+}
+
 async function migrate(): Promise<number> {
   const { connectDatabase } = await import('../shared/db/database');
   const connected = await connectDatabase();
@@ -80,6 +108,7 @@ async function migrate(): Promise<number> {
 
   // Enum remap must run before sync so model ENUM matches DB
   await migrateBudgetTypeEnum(sequelize);
+  await migrateAdditiveColumnsAndEnums(sequelize);
 
   await sequelize.sync({ alter: false });
   console.log('Database migration complete (schema synced).');

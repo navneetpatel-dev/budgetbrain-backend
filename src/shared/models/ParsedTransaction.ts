@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 
-export type ParseSource = 'sms' | 'email';
+export type ParseSource = 'sms' | 'email' | 'csv';
 
 export interface ParsedTransactionAttributes {
   id: string;
@@ -45,7 +45,7 @@ export function initParsedTransactionModel(sequelize: Sequelize): typeof ParsedT
     {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
       userId: { type: DataTypes.UUID, allowNull: false, field: 'user_id' },
-      source: { type: DataTypes.ENUM('sms', 'email'), allowNull: false },
+      source: { type: DataTypes.ENUM('sms', 'email', 'csv'), allowNull: false },
       rawContent: { type: DataTypes.TEXT, allowNull: false, field: 'raw_content' },
       parsedAmount: { type: DataTypes.DECIMAL(15, 2), allowNull: true, field: 'parsed_amount' },
       parsedMerchant: { type: DataTypes.STRING(255), allowNull: true, field: 'parsed_merchant' },

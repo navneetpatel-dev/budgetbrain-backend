@@ -1,4 +1,4 @@
-import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
+import { Op, fn, col, QueryTypes, Transaction as DbTransaction } from 'sequelize';
 import {
   Transaction,
   TransactionAttributes,
@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/models';
 import { AppError } from '../../../shared/utils/errors';
 import { checkBudgetAlertsAfterExpense } from '../../budgets/service/budgetAlert.service';
+import { upsertMerchantCategoryRule } from '../../categories/service/merchantMemory.service';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { resolvePagination, paginatedResult } from '../../../shared/pagination';
 import type { PaginationInput } from '../../../shared/types';
@@ -75,6 +76,7 @@ export async function listTransactions(
     startDate?: string;
     endDate?: string;
     search?: string;
+    tag?: string;
     page?: number;
     limit?: number;
   }
@@ -86,6 +88,7 @@ export async function listTransactions(
   if (filters.categoryId) where.categoryId = filters.categoryId;
   if (filters.incomeSourceId) where.incomeSourceId = filters.incomeSourceId;
   if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
+  if (filters.tag) where.tags = { [Op.contains]: [filters.tag] };
 
   if (filters.startDate || filters.endDate) {
     where.date = {};
@@ -134,6 +137,7 @@ export async function createTransaction(
         paymentMethod: (data.paymentMethod as Transaction['paymentMethod']) ?? null,
         isRecurring: data.isRecurring ?? false,
         recurringRule: data.recurringRule ?? null,
+        tags: data.tags ?? [],
         searchVector: buildSearchVector(data),
       },
       { transaction: t }
@@ -141,6 +145,10 @@ export async function createTransaction(
 
     if (data.type === 'expense') {
       await checkBudgetAlertsAfterExpense(userId, data.categoryId, t);
+    }
+
+    if (data.type === 'expense' && data.categoryId && data.merchant) {
+      await upsertMerchantCategoryRule(userId, data.merchant, data.categoryId, t);
     }
 
     const result = await Transaction.findByPk(transaction.id, {
@@ -202,6 +210,7 @@ export async function updateTransaction(
     if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod;
     if (data.incomeSourceId !== undefined) updateData.incomeSourceId = data.incomeSourceId;
     if (data.date) updateData.date = new Date(data.date);
+    if (data.tags !== undefined) updateData.tags = data.tags;
 
     await transaction.update(
       {
@@ -210,6 +219,12 @@ export async function updateTransaction(
       },
       { transaction: t }
     );
+
+    const effectiveCategoryId = data.categoryId ?? transaction.categoryId;
+    const effectiveMerchant = data.merchant ?? transaction.merchant;
+    if (transaction.type === 'expense' && effectiveCategoryId && effectiveMerchant) {
+      await upsertMerchantCategoryRule(userId, effectiveMerchant, effectiveCategoryId, t);
+    }
 
     await writeAuditLog({
       action: AuditAction.TRANSACTION_UPDATE,
@@ -306,4 +321,83 @@ export async function globalSearch(userId: string, query: string, filters: Pagin
   });
 
   return paginatedResult('transactions', rows, count, page, limit);
+}
+
+/** Distinct tags the user has used before, for autocomplete. */
+export async function getTagSuggestions(userId: string, limit = 20): Promise<string[]> {
+  const rows = await sequelize.query<{ tag: string }>(
+    `SELECT DISTINCT unnest(tags) AS tag
+     FROM transactions
+     WHERE user_id = :userId AND tags IS NOT NULL
+     ORDER BY tag ASC
+     LIMIT :limit`,
+    { replacements: { userId, limit }, type: QueryTypes.SELECT }
+  );
+  return rows.map((r) => r.tag);
+}
+
+/**
+ * Consecutive days (ending yesterday) with zero expense transactions, capped at 90 days lookback.
+ * Today is excluded since it isn't over yet.
+ */
+export async function getNoSpendStreak(userId: string, maxLookbackDays = 90): Promise<number> {
+  const spendDays = await Transaction.findAll({
+    where: {
+      userId,
+      type: 'expense',
+      date: { [Op.gte]: shiftDaysIso(todayIso(), -maxLookbackDays) },
+    },
+    attributes: [[fn('DISTINCT', col('date')), 'date']],
+    raw: true,
+  });
+  const spentOn = new Set(spendDays.map((r) => String((r as unknown as { date: string }).date)));
+
+  let streak = 0;
+  for (let i = 1; i <= maxLookbackDays; i += 1) {
+    const day = shiftDaysIso(todayIso(), -i);
+    if (spentOn.has(day)) break;
+    streak += 1;
+  }
+  return streak;
+}
+
+/** This-week vs last-week expense totals (Sun–Sat), for the weekly digest notification. */
+export async function getWeeklySpendComparison(
+  userId: string
+): Promise<{ thisWeek: number; lastWeek: number }> {
+  const now = new Date();
+  const day = now.getDay();
+  const thisWeekStart = new Date(now);
+  thisWeekStart.setDate(now.getDate() - day);
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  const [thisWeek, lastWeek] = await Promise.all([
+    sumExpensesBetween(userId, iso(thisWeekStart), iso(now)),
+    sumExpensesBetween(userId, iso(lastWeekStart), iso(lastWeekEnd)),
+  ]);
+
+  return { thisWeek, lastWeek };
+}
+
+async function sumExpensesBetween(userId: string, startDate: string, endDate: string): Promise<number> {
+  const result = await Transaction.findOne({
+    where: { userId, type: 'expense', date: { [Op.gte]: startDate, [Op.lte]: endDate } },
+    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+    raw: true,
+  });
+  return Number((result as unknown as { total: string })?.total ?? 0);
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function shiftDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }

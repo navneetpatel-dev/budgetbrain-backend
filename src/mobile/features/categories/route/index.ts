@@ -7,6 +7,7 @@ import * as controller from '../controller/categories.controller';
 import {
   createCategorySchema,
   reorderCategoriesSchema,
+  suggestCategorySchema,
   updateCategorySchema,
 } from '../validator/category.validation';
 
@@ -15,6 +16,7 @@ router.use(authenticate);
 
 router.get('/', validateQuery(paginationSchema), asyncHandler(controller.listCategories));
 router.post('/', validateBody(createCategorySchema), asyncHandler(controller.createCategory));
+router.get('/suggest', validateQuery(suggestCategorySchema), asyncHandler(controller.suggestCategory));
 router.post('/reorder', validateBody(reorderCategoriesSchema), asyncHandler(controller.reorderCategories));
 router.patch(
   '/:id',

@@ -30,6 +30,7 @@ export interface UserAttributes {
   accent: string | null;
   lastLoginAt: Date | null;
   isSuspended: boolean;
+  weeklyDigestOptIn: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -53,6 +54,7 @@ export type UserCreationAttributes = Optional<
   | 'avatarUrl'
   | 'lastLoginAt'
   | 'isSuspended'
+  | 'weeklyDigestOptIn'
 >;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -76,6 +78,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare accent: string | null;
   declare lastLoginAt: Date | null;
   declare isSuspended: boolean;
+  declare weeklyDigestOptIn: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -175,6 +178,11 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         defaultValue: false,
         field: 'is_suspended',
       },
+      weeklyDigestOptIn: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
+        field: 'weekly_digest_opt_in',
+      },
     },
     {
       sequelize,
@@ -202,6 +210,9 @@ export function associateUser(): void {
   const { ParsedTransaction } = require('./ParsedTransaction') as typeof import('./ParsedTransaction');
   const { SupportTicket } = require('./SupportTicket') as typeof import('./SupportTicket');
   const { VerificationToken } = require('./VerificationToken') as typeof import('./VerificationToken');
+  const { MerchantCategoryRule } = require('./MerchantCategoryRule') as typeof import('./MerchantCategoryRule');
+  const { Loan } = require('./Loan') as typeof import('./Loan');
+  const { RecurringSeries } = require('./RecurringSeries') as typeof import('./RecurringSeries');
 
   User.hasMany(RefreshToken, { foreignKey: 'userId', as: 'refreshTokens' });
   User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
@@ -219,4 +230,7 @@ export function associateUser(): void {
   User.hasMany(ParsedTransaction, { foreignKey: 'userId', as: 'parsedTransactions' });
   User.hasMany(SupportTicket, { foreignKey: 'userId', as: 'supportTickets' });
   User.hasMany(VerificationToken, { foreignKey: 'userId', as: 'verificationTokens' });
+  User.hasMany(MerchantCategoryRule, { foreignKey: 'userId', as: 'merchantCategoryRules' });
+  User.hasMany(Loan, { foreignKey: 'userId', as: 'loans' });
+  User.hasMany(RecurringSeries, { foreignKey: 'userId', as: 'recurringSeries' });
 }

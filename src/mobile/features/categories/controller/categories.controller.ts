@@ -2,9 +2,11 @@ import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
 import { AuthRequest } from '../../../shared/types';
 import * as categoryService from '../service/category.service';
+import { suggestCategoryForMerchant } from '../service/merchantMemory.service';
 import type {
   CreateCategoryInput,
   ReorderCategoriesInput,
+  SuggestCategoryInput,
   UpdateCategoryInput,
 } from '../types';
 import type { PaginationInput } from '../../../shared/types';
@@ -37,6 +39,12 @@ export async function archiveCategory(req: Request, res: Response) {
   const { id } = req.params as { id: string };
   const category = await categoryService.archiveCategory((req as AuthRequest).userId!, id);
   successResponse(res, category);
+}
+
+export async function suggestCategory(req: Request, res: Response) {
+  const { merchant } = req.query as unknown as SuggestCategoryInput;
+  const categoryId = await suggestCategoryForMerchant((req as AuthRequest).userId!, merchant);
+  successResponse(res, { categoryId });
 }
 
 export async function reorderCategories(req: Request, res: Response) {

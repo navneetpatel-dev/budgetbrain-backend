@@ -327,4 +327,9 @@ export function financialGoalsField() {
     .max(20, M.financialGoalsMax);
 }
 
+/** Free-form transaction tags — up to 8 short labels. */
+export function tagsField() {
+  return z.array(requiredText('tag')).max(8, M.tagsMax).optional();
+}
+
 export { FieldLimits, MAX_MONEY_AMOUNT, MAX_QUANTITY, ALERT_THRESHOLD, SUPPORTED_CURRENCIES, ValidationMessages };

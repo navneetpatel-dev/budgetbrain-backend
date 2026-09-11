@@ -18,6 +18,7 @@ router.get('/dashboard', asyncHandler(controller.getDashboard));
 router.get('/', validateQuery(listTransactionsSchema), asyncHandler(controller.listTransactions));
 router.post('/', validateBody(transactionSchema), asyncHandler(controller.createTransaction));
 router.get('/search', validateQuery(searchQuerySchema), asyncHandler(controller.searchTransactions));
+router.get('/tags/suggestions', asyncHandler(controller.getTagSuggestions));
 router.get('/:id', validateParams(uuidParamSchema), asyncHandler(controller.getTransaction));
 router.post(
   '/:id/duplicate',

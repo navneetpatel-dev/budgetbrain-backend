@@ -29,6 +29,11 @@ export async function createTransaction(req: Request, res: Response) {
   successResponse(res, transaction, 201);
 }
 
+export async function getTagSuggestions(req: Request, res: Response) {
+  const tags = await transactionService.getTagSuggestions((req as AuthRequest).userId!);
+  successResponse(res, { tags });
+}
+
 export async function searchTransactions(req: Request, res: Response) {
   const { q, page, limit } = req.query as unknown as SearchQueryInput;
   const data = await transactionService.globalSearch((req as AuthRequest).userId!, q, {

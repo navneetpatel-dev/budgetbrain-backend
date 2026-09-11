@@ -1,8 +1,14 @@
 import { Request, Response } from 'express';
+import { successResponse } from '../../../shared/utils/errors';
 import { AuthRequest } from '../../../shared/types';
 import * as reportService from '../service/report.service';
 import { generatePdfReport } from '../service/pdf.service';
 import type { DateRangeInput } from '../../../shared/types';
+
+export async function getRecap(req: Request, res: Response) {
+  const recap = await reportService.getMonthlyRecap((req as AuthRequest).userId!);
+  successResponse(res, recap);
+}
 
 export async function exportCsv(req: Request, res: Response) {
   const { startDate, endDate } = req.query as DateRangeInput;

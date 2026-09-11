@@ -16,6 +16,7 @@ export const updateProfileSchema = z.object({
   avatarUrl: urlField('avatarUrl'),
   theme: enumField(['light', 'dark', 'system'] as const).optional(),
   accent: enumField(['indigo', 'emerald', 'ocean', 'rose', 'violet'] as const).optional(),
+  weeklyDigestOptIn: z.boolean().optional(),
 });
 
 export const onboardingSchema = z.object({

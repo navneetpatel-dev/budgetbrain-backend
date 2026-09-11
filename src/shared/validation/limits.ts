@@ -20,6 +20,7 @@ export const FieldLimits = {
   merchant: { min: 1, max: 255 },
   notes: { min: 1, max: 2000 },
   recurringRule: { min: 1, max: 100 },
+  tag: { min: 1, max: 30 },
   /** Search query — FE enables at min; BE enforces same floor. */
   search: { min: 2, max: 100 },
 

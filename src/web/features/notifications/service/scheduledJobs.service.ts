@@ -2,6 +2,8 @@ import cron from 'node-cron';
 import { Op } from 'sequelize';
 import { User, Transaction, Notification } from '../../../../shared/models';
 import { createNotification } from './notification.service';
+import { getWeeklySpendComparison } from '../../expenses/service/transaction.service';
+import { sendBillDueReminders } from '../../recurring/service/recurringSeries.service';
 
 export function startScheduledJobs(): void {
   // Daily reminder at 9:00 AM server time
@@ -59,6 +61,41 @@ export function startScheduledJobs(): void {
       }
     } catch (err) {
       console.error('[cron] recurring_expense failed:', err);
+    }
+  });
+
+  // Weekly spending digest — Monday 9:00 AM server time
+  cron.schedule('0 9 * * 1', async () => {
+    try {
+      const users = await User.findAll({ where: { weeklyDigestOptIn: true }, attributes: ['id'] });
+      for (const user of users) {
+        const { thisWeek, lastWeek } = await getWeeklySpendComparison(user.id);
+        const changeText =
+          lastWeek > 0
+            ? `${thisWeek >= lastWeek ? 'up' : 'down'} ${Math.round(
+                (Math.abs(thisWeek - lastWeek) / lastWeek) * 100
+              )}% vs last week`
+            : 'no spending logged last week';
+
+        await createNotification(
+          user.id,
+          'weekly_digest',
+          'Your weekly spending recap',
+          `You spent ₹${thisWeek.toFixed(2)} this week (${changeText}).`,
+          { thisWeek, lastWeek }
+        );
+      }
+    } catch (err) {
+      console.error('[cron] weekly_digest failed:', err);
+    }
+  });
+
+  // Upcoming bill reminders — daily 9:30 AM server time
+  cron.schedule('30 9 * * *', async () => {
+    try {
+      await sendBillDueReminders();
+    } catch (err) {
+      console.error('[cron] bill_due failed:', err);
     }
   });
 

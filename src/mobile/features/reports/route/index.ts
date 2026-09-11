@@ -10,5 +10,6 @@ router.use(authenticate);
 
 router.get('/csv', validateQuery(dateRangeSchema), asyncHandler(controller.exportCsv));
 router.get('/pdf', validateQuery(dateRangeSchema), asyncHandler(controller.exportPdf));
+router.get('/recap', asyncHandler(controller.getRecap));
 
 export default router;

@@ -21,6 +21,19 @@ import { initInvestmentModel, Investment, associateInvestment } from './Investme
 import { initParsedTransactionModel, ParsedTransaction, associateParsedTransaction } from './ParsedTransaction';
 import { initSupportTicketModel, SupportTicket, associateSupportTicket } from './SupportTicket';
 import { initVerificationTokenModel, VerificationToken, TokenType, associateVerificationToken } from './VerificationToken';
+import {
+  initMerchantCategoryRuleModel,
+  MerchantCategoryRule,
+  associateMerchantCategoryRule,
+} from './MerchantCategoryRule';
+import {
+  initExpenseSplitParticipantModel,
+  ExpenseSplitParticipant,
+  associateExpenseSplitParticipant,
+} from './ExpenseSplitParticipant';
+import { initLoanModel, Loan, associateLoan } from './Loan';
+import { initLoanPaymentModel, LoanPayment, associateLoanPayment } from './LoanPayment';
+import { initRecurringSeriesModel, RecurringSeries, associateRecurringSeries } from './RecurringSeries';
 
 export function initModels(db: Sequelize = sequelize): void {
   initUserModel(db);
@@ -44,6 +57,11 @@ export function initModels(db: Sequelize = sequelize): void {
   initParsedTransactionModel(db);
   initSupportTicketModel(db);
   initVerificationTokenModel(db);
+  initMerchantCategoryRuleModel(db);
+  initExpenseSplitParticipantModel(db);
+  initLoanModel(db);
+  initLoanPaymentModel(db);
+  initRecurringSeriesModel(db);
 
   associateUser();
   associateRefreshToken();
@@ -66,6 +84,11 @@ export function initModels(db: Sequelize = sequelize): void {
   associateParsedTransaction();
   associateSupportTicket();
   associateVerificationToken();
+  associateMerchantCategoryRule();
+  associateExpenseSplitParticipant();
+  associateLoan();
+  associateLoanPayment();
+  associateRecurringSeries();
 }
 
 export {
@@ -93,5 +116,13 @@ export {
   ParsedTransaction,
   SupportTicket,
   VerificationToken,
+  MerchantCategoryRule,
+  ExpenseSplitParticipant,
+  Loan,
+  LoanPayment,
+  RecurringSeries,
 };
 export type { TokenType, NotificationType };
+export type { LoanType } from './Loan';
+export type { RecurringCadence, RecurringSeriesSource } from './RecurringSeries';
+

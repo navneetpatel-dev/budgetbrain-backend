@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../shared/utils/errors';
+import { successResponse, AppError } from '../../../shared/utils/errors';
 import { AuthRequest } from '../../../shared/types';
 import * as integrationsService from '../service/integrations.service';
 import type {
@@ -22,6 +22,12 @@ export async function parseEmail(req: Request, res: Response) {
     subject,
     body
   );
+  successResponse(res, result, 201);
+}
+
+export async function importCsv(req: Request, res: Response) {
+  if (!req.file) throw new AppError(400, 'CSV file is required');
+  const result = await integrationsService.importCsv((req as AuthRequest).userId!, req.file.buffer);
   successResponse(res, result, 201);
 }
 

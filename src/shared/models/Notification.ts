@@ -6,6 +6,8 @@ export type NotificationType =
   | 'subscription_renewal'
   | 'daily_reminder'
   | 'recurring_expense'
+  | 'weekly_digest'
+  | 'bill_due'
   | 'general';
 
 export interface NotificationAttributes {
@@ -62,6 +64,8 @@ export function initNotificationModel(sequelize: Sequelize): typeof Notification
           'subscription_renewal',
           'daily_reminder',
           'recurring_expense',
+          'weekly_digest',
+          'bill_due',
           'general'
         ),
         allowNull: false,

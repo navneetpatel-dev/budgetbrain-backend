@@ -42,4 +42,5 @@ export {
   urlField,
   timestampField,
   financialGoalsField,
+  tagsField,
 } from './fields';

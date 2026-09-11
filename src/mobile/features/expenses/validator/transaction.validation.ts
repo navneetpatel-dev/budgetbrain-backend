@@ -12,6 +12,7 @@ import {
   amountField,
   uuidField,
   enumField,
+  tagsField,
   ValidationMessages as M,
 } from '../../../../shared/validation';
 
@@ -27,6 +28,7 @@ const transactionObjectSchema = z.object({
   paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
+  tags: tagsField(),
 });
 
 export const transactionSchema = transactionObjectSchema.superRefine((data, ctx) => {
@@ -54,6 +56,7 @@ export const listTransactionsSchema = paginationSchema
     incomeSourceId: uuidField().optional(),
     paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
     search: optionalText('search'),
+    tag: optionalText('tag'),
   })
   .superRefine(refineDateRangeOrder);
 

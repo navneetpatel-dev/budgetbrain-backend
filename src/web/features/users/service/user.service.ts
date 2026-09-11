@@ -22,6 +22,11 @@ import {
   ParsedTransaction,
   SupportTicket,
   VerificationToken,
+  MerchantCategoryRule,
+  ExpenseSplitParticipant,
+  Loan,
+  LoanPayment,
+  RecurringSeries,
 } from '../../../../shared/models';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import type { OnboardingInput, UpdateProfileInput } from '../types';
@@ -91,7 +96,18 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     const txIds = transactions.map((x) => x.id);
     if (txIds.length) {
       await TransactionAttachment.destroy({ where: { transactionId: txIds }, ...txOpts });
+      await ExpenseSplitParticipant.destroy({ where: { transactionId: txIds }, ...txOpts });
     }
+    await ExpenseSplitParticipant.destroy({ where: { userId }, ...txOpts });
+    await MerchantCategoryRule.destroy({ where: { userId }, ...txOpts });
+    await RecurringSeries.destroy({ where: { userId }, ...txOpts });
+
+    const loans = await Loan.findAll({ where: { userId }, attributes: ['id'], ...txOpts });
+    const loanIds = loans.map((l) => l.id);
+    if (loanIds.length) {
+      await LoanPayment.destroy({ where: { loanId: loanIds }, ...txOpts });
+    }
+    await Loan.destroy({ where: { userId }, ...txOpts });
 
     await BudgetAlert.destroy({ where: { userId }, ...txOpts });
 

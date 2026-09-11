@@ -31,11 +31,23 @@ export const AuditAction = {
 
   FAMILY_GROUP_CREATE: 'family.group_create',
   FAMILY_GROUP_JOIN: 'family.group_join',
+  FAMILY_SPLIT_CREATE: 'family.split_create',
+  FAMILY_SPLIT_SETTLE: 'family.split_settle',
 
   SUPPORT_TICKET_UPDATE: 'support_ticket.update',
 
   INTEGRATION_CONFIRM: 'integration.confirm_parsed',
   INTEGRATION_REJECT: 'integration.reject_parsed',
+  INTEGRATION_CSV_IMPORT: 'integration.csv_import',
+
+  LOAN_CREATE: 'loan.create',
+  LOAN_UPDATE: 'loan.update',
+  LOAN_DELETE: 'loan.delete',
+  LOAN_PAY: 'loan.pay',
+
+  RECURRING_SERIES_CREATE: 'recurring_series.create',
+  RECURRING_SERIES_UPDATE: 'recurring_series.update',
+  RECURRING_SERIES_DELETE: 'recurring_series.delete',
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];
@@ -47,8 +59,11 @@ export const AuditResource = {
   BUDGET: 'budget',
   FAMILY_GROUP: 'family_group',
   FAMILY_MEMBER: 'family_member',
+  FAMILY_SPLIT: 'family_split',
   SUPPORT_TICKET: 'support_ticket',
   PARSED_TRANSACTION: 'parsed_transaction',
+  LOAN: 'loan',
+  RECURRING_SERIES: 'recurring_series',
   AUTH: 'auth',
 } as const;
 

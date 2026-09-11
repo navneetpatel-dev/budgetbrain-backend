@@ -83,5 +83,10 @@ export const ValidationMessages = {
   syncBatchMin: 'Must include at least 1 sync item',
   syncBatchMax: 'Must be at most 100 sync items',
 
+  tagsMax: 'Must be at most 8 tags',
+  splitParticipantsMin: 'Add at least 1 participant',
+  splitParticipantsMax: 'Must be at most 20 participants',
+  splitAmountExceedsTotal: 'Split amounts cannot exceed the transaction amount',
+
   validationFailed: 'Validation failed',
 } as const;

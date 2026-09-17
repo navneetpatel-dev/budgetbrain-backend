@@ -9,6 +9,9 @@ concurrency:
   group: deploy-ec2-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: Build
@@ -34,8 +37,25 @@ jobs:
     name: Deploy
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
+      - name: Require deploy secrets
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [ -n "${EC2_HOST:-}" ] || { echo "Missing secret EC2_HOST"; missing=1; }
+          [ -n "${EC2_USER:-}" ] || { echo "Missing secret EC2_USER"; missing=1; }
+          [ -n "${EC2_SSH_KEY:-}" ] || { echo "Missing secret EC2_SSH_KEY"; missing=1; }
+          if [ "$missing" -ne 0 ]; then
+            echo "Add these in GitHub → Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -50,7 +70,14 @@ jobs:
           PORT="${EC2_PORT:-22}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -p "$PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          for i in 1 2 3; do
+            if ssh-keyscan -p "$PORT" -H -T 10 "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ssh-keyscan failed for ${EC2_HOST}:${PORT}. Open SG port 22 to GitHub Actions."
+          exit 1
 
       - name: Deploy over SSH
         env:
@@ -66,6 +93,7 @@ jobs:
 
           ssh -p "$PORT" \
             -o StrictHostKeyChecking=yes \
+            -o IdentitiesOnly=yes \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
             "$USER_HOST" \

@@ -267,7 +267,10 @@ export async function logout(refreshToken: string) {
 export async function requestOtp(email: string) {
   const user = await User.findOne({ where: { email } });
   if (!user) {
-    return;
+    throw new AppError(404, 'No account found with this email. Please sign up first.', 'USER_NOT_FOUND');
+  }
+  if (user.isSuspended) {
+    throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
 
   const otp = generateOtp();
@@ -299,6 +302,9 @@ export async function verifyOtp(email: string, otp: string, deviceId?: string) {
     const user = await User.findOne({ where: { email }, transaction: t });
     if (!user) {
       throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+    }
+    if (user.isSuspended) {
+      throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
     }
 
     const tokens = await issueTokens(user, deviceId, t);

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { successResponse } from '../../../shared/utils/errors';
+import { AppError, successResponse } from '../../../shared/utils/errors';
 import type { AuthRequest } from '../../../shared/types';
 import * as authService from '../service/auth.service';
 import type {
@@ -73,13 +73,17 @@ export async function verifyEmail(req: Request, res: Response) {
 }
 
 export async function googleLogin(req: Request, res: Response) {
-  const { idToken, name } = req.body as SocialLoginInput;
-  const result = await authService.socialLoginWithGoogle(idToken, name);
+  const input = req.body as SocialLoginInput;
+  const result = await authService.socialLoginWithGoogle(input, input.name);
   successResponse(res, result);
 }
 
 export async function appleLogin(req: Request, res: Response) {
-  const { idToken, name } = req.body as SocialLoginInput;
-  const result = await authService.socialLoginWithApple(idToken, name);
+  const { idToken, token, name } = req.body as SocialLoginInput;
+  const tokenToVerify = idToken || token;
+  if (!tokenToVerify) {
+    throw new AppError(400, 'idToken is required for Apple login', 'MISSING_APPLE_TOKEN');
+  }
+  const result = await authService.socialLoginWithApple(tokenToVerify, name);
   successResponse(res, result);
 }

@@ -18,27 +18,32 @@ import supportRoutes from './features/support/route';
 import expenseAttachmentRoutes from './features/expenses/route/attachments.routes';
 import loansRoutes from './features/loans/route';
 import recurringRoutes from './features/recurring/route';
+import { authenticate, requireOnboarding } from './shared/middleware/auth';
 import type { Express } from 'express';
 
 export function registerMobileRoutes(app: Express, apiPrefix: string): void {
+  // Public & self-authenticating routes
   app.use(`${apiPrefix}/auth`, authRoutes);
   app.use(`${apiPrefix}/users`, usersRoutes);
-  app.use(`${apiPrefix}/expenses`, expensesRoutes);
-  app.use(`${apiPrefix}/income`, incomeRoutes);
-  app.use(`${apiPrefix}/categories`, categoriesRoutes);
-  app.use(`${apiPrefix}/budgets`, budgetsRoutes);
-  app.use(`${apiPrefix}/goals`, goalsRoutes);
-  app.use(`${apiPrefix}/reports`, reportsRoutes);
-  app.use(`${apiPrefix}/notifications`, notificationsRoutes);
-  app.use(`${apiPrefix}/family`, familyRoutes);
-  app.use(`${apiPrefix}/ai`, aiRoutes);
-  app.use(`${apiPrefix}/sync`, syncRoutes);
-  app.use(`${apiPrefix}/accounts`, accountsRoutes);
-  app.use(`${apiPrefix}/investments`, investmentsRoutes);
-  app.use(`${apiPrefix}/net-worth`, netWorthRoutes);
-  app.use(`${apiPrefix}/integrations`, integrationsRoutes);
-  app.use(`${apiPrefix}/support`, supportRoutes);
-  app.use(`${apiPrefix}/expenses`, expenseAttachmentRoutes);
-  app.use(`${apiPrefix}/loans`, loansRoutes);
-  app.use(`${apiPrefix}/recurring-series`, recurringRoutes);
+
+  // Protected feature routes requiring both authentication & onboarding completion
+  const protectedFeature = [authenticate, requireOnboarding];
+  app.use(`${apiPrefix}/expenses`, protectedFeature, expensesRoutes);
+  app.use(`${apiPrefix}/income`, protectedFeature, incomeRoutes);
+  app.use(`${apiPrefix}/categories`, protectedFeature, categoriesRoutes);
+  app.use(`${apiPrefix}/budgets`, protectedFeature, budgetsRoutes);
+  app.use(`${apiPrefix}/goals`, protectedFeature, goalsRoutes);
+  app.use(`${apiPrefix}/reports`, protectedFeature, reportsRoutes);
+  app.use(`${apiPrefix}/notifications`, protectedFeature, notificationsRoutes);
+  app.use(`${apiPrefix}/family`, protectedFeature, familyRoutes);
+  app.use(`${apiPrefix}/ai`, protectedFeature, aiRoutes);
+  app.use(`${apiPrefix}/sync`, protectedFeature, syncRoutes);
+  app.use(`${apiPrefix}/accounts`, protectedFeature, accountsRoutes);
+  app.use(`${apiPrefix}/investments`, protectedFeature, investmentsRoutes);
+  app.use(`${apiPrefix}/net-worth`, protectedFeature, netWorthRoutes);
+  app.use(`${apiPrefix}/integrations`, protectedFeature, integrationsRoutes);
+  app.use(`${apiPrefix}/support`, protectedFeature, supportRoutes);
+  app.use(`${apiPrefix}/expenses`, protectedFeature, expenseAttachmentRoutes);
+  app.use(`${apiPrefix}/loans`, protectedFeature, loansRoutes);
+  app.use(`${apiPrefix}/recurring-series`, protectedFeature, recurringRoutes);
 }

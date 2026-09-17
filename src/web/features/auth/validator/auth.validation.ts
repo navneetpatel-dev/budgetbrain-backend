@@ -44,8 +44,16 @@ export const tokenSchema = z.object({
   token: requiredText('token'),
 });
 
-export const socialLoginSchema = z.object({
-  idToken: requiredText('idToken'),
-  /** Apple only sends the name on the first authorize. */
-  name: optionalText('name'),
-});
+export const socialLoginSchema = z
+  .object({
+    idToken: optionalText('idToken'),
+    token: z.string().trim().optional(),
+    accessToken: z.string().trim().optional(),
+    code: z.string().trim().optional(),
+    redirectUri: z.string().trim().optional(),
+    /** Apple only sends the name on the first authorize. */
+    name: optionalText('name'),
+  })
+  .refine((data) => Boolean(data.idToken || data.token || data.accessToken || data.code), {
+    message: 'idToken, token, accessToken, or code is required',
+  });

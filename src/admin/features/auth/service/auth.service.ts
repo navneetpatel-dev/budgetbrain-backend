@@ -20,7 +20,7 @@ import {
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { AppError } from '../../../shared/utils/errors';
 import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
-import { verifyGoogleIdToken, verifyAppleIdToken } from './socialAuth.service';
+import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user.toJSON();
@@ -380,9 +380,10 @@ export async function verifyEmail(token: string) {
   });
 }
 
-export async function socialLoginWithGoogle(idToken: string, name?: string) {
-  const { googleId, email, name: tokenName } = await verifyGoogleIdToken(idToken);
-  return socialLogin('google', googleId, email, name ?? tokenName);
+export async function socialLoginWithGoogle(input: GoogleTokenInput, name?: string) {
+  const { googleId, email, name: tokenName } = await verifyGoogleIdToken(input);
+  const resolvedName = (typeof input === 'object' && input ? input.name : undefined) ?? name ?? tokenName;
+  return socialLogin('google', googleId, email, resolvedName);
 }
 
 export async function socialLoginWithApple(idToken: string, name?: string) {
@@ -408,7 +409,14 @@ export async function socialLogin(
     if (!user) {
       user = await User.findOne({ where: { email }, transaction: t });
       if (user) {
-        await user.update({ [idField]: providerId, authProvider: provider }, { transaction: t });
+        await user.update(
+          {
+            [idField]: providerId,
+            emailVerified: true,
+            ...(name && !user.name ? { name } : {}),
+          },
+          { transaction: t }
+        );
       } else {
         user = await User.create(
           {

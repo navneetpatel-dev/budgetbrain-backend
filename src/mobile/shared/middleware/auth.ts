@@ -11,6 +11,11 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   try {
+    if (req.user && req.userId) {
+      next();
+      return;
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       throw new AppError(401, 'Authentication required', 'UNAUTHORIZED');
@@ -38,6 +43,22 @@ export async function authenticate(
   } catch (err) {
     next(err);
   }
+}
+
+export function requireOnboarding(req: AuthRequest, _res: Response, next: NextFunction): void {
+  if (!req.user) {
+    next(new AppError(401, 'Authentication required', 'UNAUTHORIZED'));
+    return;
+  }
+  if (req.user.role === 'admin') {
+    next();
+    return;
+  }
+  if (!req.user.onboardingCompleted) {
+    next(new AppError(403, 'Please complete your profile to access this feature', 'ONBOARDING_REQUIRED'));
+    return;
+  }
+  next();
 }
 
 export function requireAdmin(req: AuthRequest, _res: Response, next: NextFunction): void {

@@ -36,6 +36,7 @@ const envSchema = z.object({
   S3_BUCKET: z.string().default('budgetbrain-receipts'),
   OPENAI_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   APPLE_CLIENT_ID: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   EXPO_ACCESS_TOKEN: z.string().optional(),

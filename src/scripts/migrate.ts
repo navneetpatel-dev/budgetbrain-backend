@@ -72,6 +72,23 @@ async function migrateBudgetTypeEnum(sequelize: Awaited<typeof import('../shared
  * only creates missing tables — it never alters existing ones — so these run as raw SQL first.
  * Every statement is idempotent (`IF NOT EXISTS`) so re-running this script is always safe.
  */
+async function addColumnIfTableExists(
+  sequelize: Awaited<typeof import('../shared/models')>['sequelize'],
+  tableName: string,
+  columnDef: string
+) {
+  const [rows] = await sequelize.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = :tableName
+     ) AS exists`,
+    { replacements: { tableName }, type: QueryTypes.SELECT }
+  );
+  if ((rows as any)?.exists || (rows as any)?.[0]?.exists) {
+    await sequelize.query(`ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS ${columnDef}`);
+  }
+}
+
 async function migrateAdditiveColumnsAndEnums(sequelize: Awaited<typeof import('../shared/models')>['sequelize']) {
   const dialect = sequelize.getDialect();
   if (dialect !== 'postgres') {
@@ -81,15 +98,29 @@ async function migrateAdditiveColumnsAndEnums(sequelize: Awaited<typeof import('
 
   console.log('Applying additive column/enum migrations…');
 
-  await sequelize.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'`);
-  await sequelize.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurring_series_id UUID`);
-  await sequelize.query(`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS rollover BOOLEAN DEFAULT false`);
-  await sequelize.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN DEFAULT true`);
+  await addColumnIfTableExists(sequelize, 'transactions', `tags TEXT[] DEFAULT '{}'`);
+  await addColumnIfTableExists(sequelize, 'transactions', `recurring_series_id UUID`);
+  await addColumnIfTableExists(sequelize, 'budgets', `rollover BOOLEAN DEFAULT false`);
+  await addColumnIfTableExists(sequelize, 'users', `weekly_digest_opt_in BOOLEAN DEFAULT true`);
+
+  await addColumnIfTableExists(sequelize, 'audit_logs', `actor_type VARCHAR(20) DEFAULT 'user'`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `outcome VARCHAR(20) DEFAULT 'success'`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `severity VARCHAR(20) DEFAULT 'info'`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `source VARCHAR(20) DEFAULT 'system'`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `request_id VARCHAR(64)`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `before_state JSONB`);
+  await addColumnIfTableExists(sequelize, 'audit_logs', `after_state JSONB`);
 
   // ALTER TYPE ... ADD VALUE must run as its own statement (not combined with other DDL).
-  await sequelize.query(`ALTER TYPE enum_parsed_transactions_source ADD VALUE IF NOT EXISTS 'csv'`);
-  await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'bill_due'`);
-  await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'weekly_digest'`);
+  try {
+    await sequelize.query(`ALTER TYPE enum_parsed_transactions_source ADD VALUE IF NOT EXISTS 'csv'`);
+  } catch {}
+  try {
+    await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'bill_due'`);
+  } catch {}
+  try {
+    await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'weekly_digest'`);
+  } catch {}
 
   console.log('Additive column/enum migrations complete.');
 }
@@ -109,8 +140,8 @@ async function migrate(): Promise<number> {
   // Enum remap must run before sync so model ENUM matches DB
   await migrateBudgetTypeEnum(sequelize);
   await migrateAdditiveColumnsAndEnums(sequelize);
-
   await sequelize.sync({ alter: false });
+
   console.log('Database migration complete (schema synced).');
   await sequelize.close();
   return 0;

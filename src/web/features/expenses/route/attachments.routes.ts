@@ -21,6 +21,11 @@ router.get(
   validateParams(uuidParamSchema),
   asyncHandler(controller.listAttachments)
 );
+router.get(
+  '/:id/attachments/:attachmentId',
+  validateParams(attachmentParamsSchema),
+  asyncHandler(controller.getAttachment)
+);
 router.delete(
   '/:id/attachments/:attachmentId',
   validateParams(attachmentParamsSchema),

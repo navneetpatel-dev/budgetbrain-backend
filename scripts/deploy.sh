@@ -8,6 +8,9 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-15}"
 HEALTH_SLEEP="${HEALTH_SLEEP:-2}"
 
+# Ensure standard system and global npm bins are in PATH for non-interactive SSH shells
+export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+
 cd "$APP_DIR"
 
 echo "==> Deploy started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"

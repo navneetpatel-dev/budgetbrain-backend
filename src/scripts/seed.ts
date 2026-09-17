@@ -111,6 +111,30 @@ async function seed() {
     });
   }
 
+  const navneetPasswordHash = await hashPassword('Test@123');
+  let navneet = await User.findOne({ where: { email: 'navneetp22875@gmail.com' } });
+  if (navneet) {
+    await navneet.update({
+      passwordHash: navneetPasswordHash,
+      name: 'Navneet',
+      emailVerified: true,
+      onboardingCompleted: true,
+      country: 'India',
+      currency: 'INR',
+    });
+  } else {
+    navneet = await User.create({
+      email: 'navneetp22875@gmail.com',
+      passwordHash: navneetPasswordHash,
+      name: 'Navneet',
+      role: 'free',
+      emailVerified: true,
+      onboardingCompleted: true,
+      country: 'India',
+      currency: 'INR',
+    });
+  }
+
   const adminId = admin.id;
 
   // 2. Categories

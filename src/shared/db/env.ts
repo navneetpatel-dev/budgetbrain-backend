@@ -10,7 +10,9 @@ const envFileByEnvironment: Record<string, string> = {
 };
 
 dotenv.config({ path: envFileByEnvironment[nodeEnv] ?? '.env.local' });
-dotenv.config({ path: '.env.local' });
+if (nodeEnv !== 'production') {
+  dotenv.config({ path: '.env.local' });
+}
 
 const dbEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),

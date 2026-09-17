@@ -14,7 +14,7 @@ function ensureUploadDir(): void {
 
 export async function uploadFile(
   file: Express.Multer.File,
-  folder = 'receipts'
+  folder = 'budgetbrain/receipts'
 ): Promise<UploadResult> {
   const ext = path.extname(file.originalname) || '.bin';
   const key = `${folder}/${uuidv4()}${ext}`;

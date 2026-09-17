@@ -1,11 +1,15 @@
 import { existsSync } from 'fs';
+import dotenv from 'dotenv';
 import { QueryTypes } from 'sequelize';
 
-const envFile = `.env.${process.env.NODE_ENV ?? 'production'}`;
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const envFile = `.env.${nodeEnv}`;
 if (!existsSync(envFile)) {
   console.error(`Missing ${envFile}. Create it on the server with required secrets (see .env.example).`);
   process.exit(1);
 }
+
+dotenv.config({ path: envFile });
 
 /**
  * Remap legacy `category` period → `monthly` + keep category_id,
@@ -127,11 +131,14 @@ async function migrateAdditiveColumnsAndEnums(sequelize: Awaited<typeof import('
 
 async function migrate(): Promise<number> {
   const { connectDatabase } = await import('../shared/db/database');
+  const { dbEnv } = await import('../shared/db/env');
+  console.log(`Migrating ${dbEnv.DB_NAME} on ${dbEnv.DB_HOST}:${dbEnv.DB_PORT} (NODE_ENV=${dbEnv.NODE_ENV})`);
+
   const connected = await connectDatabase();
 
   if (!connected) {
-    console.log('Skipping migration — database unavailable');
-    return 0;
+    console.error(`Migration aborted — could not connect to ${dbEnv.DB_HOST}/${dbEnv.DB_NAME}`);
+    return 1;
   }
 
   const { initModels, sequelize } = await import('../shared/models');

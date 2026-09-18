@@ -12,13 +12,19 @@ export interface GoalAttributes {
   currency: string;
   targetDate: Date | null;
   completedAt: Date | null;
+  /**
+   * Server-computed completion percentage (0-100, capped). Per mobile/web convention
+   * (money/derived values stay server-side), clients must render this field rather than
+   * dividing currentAmount/targetAmount themselves.
+   */
+  progressPercentage: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type GoalCreationAttributes = Optional<
   GoalAttributes,
-  'id' | 'currentAmount' | 'targetDate' | 'completedAt'
+  'id' | 'currentAmount' | 'targetDate' | 'completedAt' | 'progressPercentage'
 >;
 
 export class Goal
@@ -34,6 +40,7 @@ export class Goal
   declare currency: string;
   declare targetDate: Date | null;
   declare completedAt: Date | null;
+  declare progressPercentage: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -82,6 +89,15 @@ export function initGoalModel(sequelize: Sequelize): typeof Goal {
         type: DataTypes.DATE,
         allowNull: true,
         field: 'completed_at',
+      },
+      progressPercentage: {
+        type: DataTypes.VIRTUAL,
+        get(this: Goal): number {
+          const target = Number(this.getDataValue('targetAmount'));
+          const current = Number(this.getDataValue('currentAmount'));
+          if (!Number.isFinite(target) || target <= 0) return 0;
+          return Math.min(100, Math.round((current / target) * 100));
+        },
       },
     },
     { sequelize, tableName: 'goals' }

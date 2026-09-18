@@ -56,30 +56,54 @@ jobs:
             exit 1
           fi
 
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: Add EC2 host to known_hosts
+      - name: Write SSH key
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_PORT: ${{ secrets.EC2_PORT }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           set -euo pipefail
-          PORT="${EC2_PORT:-22}"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
           case "${EC2_HOST}" in
             10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
               echo "EC2_HOST looks like a private VPC IP. Set the secret to the public IP 40.192.65.184"
               exit 1
               ;;
           esac
-          ssh-keyscan -4 -p "$PORT" -T 15 "$EC2_HOST" >> ~/.ssh/known_hosts || true
-          if ! grep -q . ~/.ssh/known_hosts; then
-            echo "Could not scan host keys (will use accept-new on SSH)."
-          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          python3 <<'PY'
+          import os, re, pathlib, sys
+
+          raw = os.environ.get("EC2_SSH_KEY", "")
+          raw = raw.strip().strip('"').strip("'")
+          raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+          if raw.count("\n") < 2:
+              raw = raw.replace("\\n", "\n")
+          if raw.count("\n") < 2:
+              match = re.match(
+                  r"-----BEGIN ([^-]+)-----\s+(.+?)\s+-----END \1-----",
+                  raw,
+                  re.S,
+              )
+              if not match:
+                  print("EC2_SSH_KEY is not a PEM private key.")
+                  print("Paste the full budgetbrain.pem, including BEGIN and END lines.")
+                  sys.exit(1)
+              kind, body = match.group(1), match.group(2)
+              body = re.sub(r"\s+", "", body)
+              wrapped = "\n".join(body[i : i + 70] for i in range(0, len(body), 70))
+              raw = f"-----BEGIN {kind}-----\n{wrapped}\n-----END {kind}-----"
+          if not raw.endswith("\n"):
+              raw += "\n"
+
+          path = pathlib.Path.home() / ".ssh" / "budgetbrain.pem"
+          path.write_text(raw)
+          path.chmod(0o600)
+          lines = raw.splitlines()
+          print(f"Wrote key ({len(raw)} bytes, {len(lines)} lines)")
+          print("Header:", lines[0])
+          print("Footer:", lines[-1])
+          PY
+          ssh-keygen -y -f ~/.ssh/budgetbrain.pem >/dev/null
 
       - name: Deploy over SSH
         env:
@@ -94,7 +118,8 @@ jobs:
           USER="${EC2_USER:-ec2-user}"
           USER_HOST="${USER}@${EC2_HOST}"
 
-          ssh -4 -p "$PORT" \
+          ssh -4 -i ~/.ssh/budgetbrain.pem -p "$PORT" \
+            -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \

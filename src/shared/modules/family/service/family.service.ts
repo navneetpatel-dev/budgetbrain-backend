@@ -336,6 +336,13 @@ export async function updateMemberRole(
     const targetMembership = await FamilyMember.findOne({ where: { groupId, userId: targetUserId }, transaction: t });
     if (!targetMembership) throw new AppError(404, 'Member not found');
 
+    if (targetMembership.role === 'owner' && newRole !== 'owner') {
+      throw new AppError(
+        400,
+        'Transfer ownership to another member before changing your own role.'
+      );
+    }
+
     if (newRole === 'owner') {
       await actorMembership.update({ role: 'admin' }, { transaction: t });
       await FamilyGroup.update({ ownerId: targetUserId }, { where: { id: groupId }, transaction: t });

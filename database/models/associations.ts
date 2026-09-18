@@ -79,9 +79,13 @@ export function initAssociations(): void {
   GoalContribution.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
   // Family
+  // FamilyGroup<->FamilyMember association is already declared inline in
+  // familyMember.model.ts (foreignKey: 'groupId', matching the real `group_id`
+  // column). A duplicate association here using a mismatched 'familyGroupId'
+  // foreign key previously caused Sequelize to auto-inject a phantom
+  // `family_group_id` attribute/column that was never migrated, breaking any
+  // plain FamilyMember.create() call outright. Do not redeclare it here.
   FamilyGroup.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
-  FamilyGroup.hasMany(FamilyMember, { foreignKey: 'familyGroupId', as: 'members' });
-  FamilyMember.belongsTo(FamilyGroup, { foreignKey: 'familyGroupId', as: 'familyGroup' });
   FamilyMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
   // FinancialAccount

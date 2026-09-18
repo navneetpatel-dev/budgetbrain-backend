@@ -28,8 +28,10 @@ export async function createNotification(
   );
 
   // Never send push inside an open DB transaction (external side-effect).
+  // Include `type` in the push payload so clients can deep-link by trigger type
+  // without having to infer it from which entity-id key happens to be present.
   if (sendPush && !dbTx) {
-    await sendPushToUser(userId, title, body, data);
+    await sendPushToUser(userId, title, body, { ...data, type });
   }
 
   return notification;

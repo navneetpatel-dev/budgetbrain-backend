@@ -31,6 +31,7 @@ async function health(_req: express.Request, res: express.Response) {
   try {
     await sequelize.authenticate();
     res.json({
+      changes: 'auto deployment changes testing',
       status: 'ok',
       service: 'budgetbrain-web-api',
       version: env.API_VERSION,

@@ -16,13 +16,25 @@ export interface LoanAttributes {
   dueDayOfMonth: number | null;
   notes: string | null;
   closed: boolean;
+  /** Server-computed (principal - remainingBalance). Clients must render this, not re-derive it. */
+  amountPaid: number;
+  /** Server-computed, capped 0-100. Mirrors Goal.progressPercentage's convention. */
+  paidPercentage: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type LoanCreationAttributes = Optional<
   LoanAttributes,
-  'id' | 'interestRate' | 'emiAmount' | 'currency' | 'dueDayOfMonth' | 'notes' | 'closed'
+  | 'id'
+  | 'interestRate'
+  | 'emiAmount'
+  | 'currency'
+  | 'dueDayOfMonth'
+  | 'notes'
+  | 'closed'
+  | 'amountPaid'
+  | 'paidPercentage'
 >;
 
 export class Loan extends Model<LoanAttributes, LoanCreationAttributes> implements LoanAttributes {
@@ -39,6 +51,8 @@ export class Loan extends Model<LoanAttributes, LoanCreationAttributes> implemen
   declare dueDayOfMonth: number | null;
   declare notes: string | null;
   declare closed: boolean;
+  declare amountPaid: number;
+  declare paidPercentage: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -101,6 +115,23 @@ export function initLoanModel(sequelize: Sequelize): typeof Loan {
       closed: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
+      },
+      amountPaid: {
+        type: DataTypes.VIRTUAL,
+        get(this: Loan): number {
+          const principal = Number(this.getDataValue('principal'));
+          const remaining = Number(this.getDataValue('remainingBalance'));
+          if (!Number.isFinite(principal) || !Number.isFinite(remaining)) return 0;
+          return Math.max(0, principal - remaining);
+        },
+      },
+      paidPercentage: {
+        type: DataTypes.VIRTUAL,
+        get(this: Loan): number {
+          const principal = Number(this.getDataValue('principal'));
+          if (!Number.isFinite(principal) || principal <= 0) return 0;
+          return Math.min(100, Math.round((this.amountPaid / principal) * 100));
+        },
       },
     },
     { sequelize, tableName: 'loans' }

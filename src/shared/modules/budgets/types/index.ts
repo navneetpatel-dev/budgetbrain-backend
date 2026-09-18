@@ -11,4 +11,6 @@ export type BudgetWithSpent = ReturnType<Budget['toJSON']> & {
   spent: number;
   rolloverAmount: number;
   effectiveAmount: number;
+  /** Server-computed, capped 0-100. Clients must render this, not divide spent/effectiveAmount themselves. */
+  spentPercentage: number;
 };

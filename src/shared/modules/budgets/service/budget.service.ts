@@ -47,6 +47,12 @@ async function computeRolloverAmount(userId: string, budget: Budget): Promise<nu
   return Number(budget.amount) - previousSpent;
 }
 
+/** Mirrors Goal.progressPercentage's capping formula (database/models/goal.model.ts). */
+function computeSpentPercentage(spent: number, effectiveAmount: number): number {
+  if (!Number.isFinite(effectiveAmount) || effectiveAmount <= 0) return 0;
+  return Math.min(100, Math.round((spent / effectiveAmount) * 100));
+}
+
 async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpent[]> {
   return Promise.all(
     budgets.map(async (budget) => {
@@ -54,11 +60,13 @@ async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpen
         computeBudgetSpent(budget.userId, budget),
         computeRolloverAmount(budget.userId, budget),
       ]);
+      const effectiveAmount = Number(budget.amount) + rolloverAmount;
       return {
         ...budget.toJSON(),
         spent,
         rolloverAmount,
-        effectiveAmount: Number(budget.amount) + rolloverAmount,
+        effectiveAmount,
+        spentPercentage: computeSpentPercentage(spent, effectiveAmount),
       } as BudgetWithSpent;
     })
   );
@@ -102,11 +110,13 @@ export async function getBudget(userId: string, id: string): Promise<BudgetWithS
     computeBudgetSpent(userId, budget),
     computeRolloverAmount(userId, budget),
   ]);
+  const effectiveAmount = Number(budget.amount) + rolloverAmount;
   return {
     ...budget.toJSON(),
     spent,
     rolloverAmount,
-    effectiveAmount: Number(budget.amount) + rolloverAmount,
+    effectiveAmount,
+    spentPercentage: computeSpentPercentage(spent, effectiveAmount),
   } as BudgetWithSpent;
 }
 

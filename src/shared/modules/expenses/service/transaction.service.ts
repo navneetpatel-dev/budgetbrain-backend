@@ -66,23 +66,25 @@ export async function getCategoryBreakdown(userId: string, _user: User, limit = 
   });
 }
 
-export async function listTransactions(
-  userId: string,
-  filters: {
-    type?: 'expense' | 'income';
-    categoryId?: string;
-    incomeSourceId?: string;
-    paymentMethod?: string;
-    startDate?: string;
-    endDate?: string;
-    search?: string;
-    tag?: string;
-    page?: number;
-    limit?: number;
-  }
-) {
-  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+export interface TransactionFilters {
+  type?: 'expense' | 'income';
+  categoryId?: string;
+  incomeSourceId?: string;
+  paymentMethod?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  tag?: string;
+  page?: number;
+  limit?: number;
+}
 
+/**
+ * Shared filter->WHERE builder for `listTransactions` and `getTransactionsSummary`, so the
+ * summary's SQL SUM is always computed over exactly the same row set the list endpoint
+ * returns (never a re-derivation with independently-maintained filter logic).
+ */
+function buildTransactionWhere(userId: string, filters: TransactionFilters): Record<string, unknown> {
   const where: Record<string, unknown> = { userId };
   if (filters.type) where.type = filters.type;
   if (filters.categoryId) where.categoryId = filters.categoryId;
@@ -100,6 +102,13 @@ export async function listTransactions(
     where.searchVector = { [Op.iLike]: `%${filters.search}%` };
   }
 
+  return where;
+}
+
+export async function listTransactions(userId: string, filters: TransactionFilters) {
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const where = buildTransactionWhere(userId, filters);
+
   const { rows, count } = await Transaction.findAndCountAll({
     where,
     include: [
@@ -111,7 +120,40 @@ export async function listTransactions(
     offset,
   });
 
-  return { transactions: rows, total: count, page, limit };
+  const summary = await getTransactionsSummary(userId, filters);
+
+  return { transactions: rows, total: count, page, limit, summary };
+}
+
+/**
+ * True SUM(amount) for the given filter set, computed entirely in SQL (never by fetching
+ * matching rows into memory and reducing client- or server-side) — the fix for the
+ * paginated-list "total silently undercounts past page 1" bug (see
+ * implementation-plan/backend/14-loan-budget-fields-and-expense-summary.md). `type` is
+ * intentionally excluded from the WHERE clause used here (even if present in `filters`) so a
+ * single call always returns both totals; every other filter (category, date range, search,
+ * tag, payment method) is honored identically to `listTransactions`.
+ */
+export async function getTransactionsSummary(
+  userId: string,
+  filters: TransactionFilters
+): Promise<{ totalExpense: number; totalIncome: number }> {
+  const rest = { ...filters };
+  delete rest.type;
+  const where = buildTransactionWhere(userId, rest);
+
+  const rows = await Transaction.findAll({
+    where,
+    attributes: ['type', [fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+    group: ['type'],
+    raw: true,
+  });
+
+  const byType = new Map((rows as unknown as { type: string; total: string }[]).map((r) => [r.type, Number(r.total)]));
+  return {
+    totalExpense: byType.get('expense') ?? 0,
+    totalIncome: byType.get('income') ?? 0,
+  };
 }
 
 export async function createTransaction(

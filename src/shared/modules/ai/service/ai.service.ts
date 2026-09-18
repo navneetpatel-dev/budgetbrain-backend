@@ -15,12 +15,55 @@ import { runAnomalyDetection } from '@shared/ai/anomalyDetection.engine';
 
 
 export interface StructuredInsight {
-  kind: 'monthly_comparison' | 'top_category' | 'saving_opportunity';
+  kind: 'monthly_comparison' | 'top_category' | 'saving_opportunity' | 'budget_recommendation';
   title: string;
   message: string;
   amount?: number;
   category?: string;
   changePercent?: number;
+}
+
+/**
+ * Pure decision logic for a single category's budget recommendation, kept separate from
+ * `getSpendingInsights`'s DB fetches so it's unit-testable with fixed fixtures (mirrors
+ * `anomalyDetection.engine.ts`'s pure-function-over-black-box approach).
+ */
+export function buildBudgetRecommendation(input: {
+  catName: string;
+  budgetAmount: number;
+  catSpent: number;
+  daysPassed: number;
+  daysRemaining: number;
+  daysInMonth: number;
+}): StructuredInsight | null {
+  const { catName, budgetAmount, catSpent, daysPassed, daysRemaining, daysInMonth } = input;
+  if (budgetAmount <= 0) return null;
+  const percentUsed = (catSpent / budgetAmount) * 100;
+
+  if (percentUsed > 100) {
+    const projectedMonthly = daysPassed > 0 ? (catSpent / daysPassed) * daysInMonth : catSpent;
+    const suggested = Math.ceil(projectedMonthly / 100) * 100;
+    return {
+      kind: 'budget_recommendation',
+      title: `Raise ${catName} Budget`,
+      message: `Your ${catName} budget is already ${Math.round(percentUsed)}% used this month. Based on your pace, consider raising it to about ₹${suggested.toFixed(0)} next month.`,
+      category: catName,
+      amount: suggested,
+    };
+  }
+
+  if (percentUsed < 40 && daysRemaining <= 3) {
+    const suggested = Math.max(0, Math.floor((catSpent * 1.15) / 100) * 100);
+    return {
+      kind: 'budget_recommendation',
+      title: `Reallocate ${catName} Budget`,
+      message: `You have only used ${Math.round(percentUsed)}% of your ${catName} budget with the month almost over. Consider lowering it to about ₹${suggested.toFixed(0)} and reallocating the difference toward savings.`,
+      category: catName,
+      amount: suggested,
+    };
+  }
+
+  return null;
 }
 
 export async function getSpendingInsights(userId: string) {
@@ -167,6 +210,32 @@ export async function getSpendingInsights(userId: string) {
       title: 'Build Budget Goals',
       message: msg,
     });
+  }
+
+  // 4. Budget recommendations — distinct from saving opportunities: suggests a concrete
+  // budget-amount adjustment for next month based on this month's actual pace, reusing the
+  // same budgets/byCategory data already fetched above (no re-summing).
+  for (const b of budgets) {
+    const catSpendItem = byCategory.find(
+      (c: any) => c.categoryId === b.categoryId
+    ) as unknown as { total?: string } | undefined;
+    const catSpent = catSpendItem?.total ? Number(catSpendItem.total) : 0;
+    const catName = (b as any).category?.name || b.name;
+
+    const recommendation = buildBudgetRecommendation({
+      catName,
+      budgetAmount: Number(b.amount),
+      catSpent,
+      daysPassed,
+      daysRemaining,
+      daysInMonth,
+    });
+
+    if (recommendation) {
+      insights.push(recommendation.message);
+      structuredInsights.push(recommendation);
+      break;
+    }
   }
 
   return {

@@ -7,6 +7,7 @@ import { errorHandler } from './shared/utils/errors';
 import { globalRateLimiter } from './shared/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
 import { createCorsOptions, stripNginxAppPrefix } from '../shared/http/cors';
+import { jsonNotFound, registerApiAliases } from '../shared/http/routes';
 import { sequelize } from '../shared/models';
 import { registerWebRoutes } from './routes';
 
@@ -25,8 +26,9 @@ app.use(createRequestContextMiddleware('web'));
 app.use(globalRateLimiter);
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/web/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-app.get('/health', async (_req, res) => {
+async function health(_req: express.Request, res: express.Response) {
   try {
     await sequelize.authenticate();
     res.json({
@@ -42,11 +44,13 @@ app.get('/health', async (_req, res) => {
       database: 'disconnected',
     });
   }
-});
+}
 
-const apiPrefix = `/api/${env.API_VERSION}`;
-registerWebRoutes(app, apiPrefix);
+app.get(['/health', '/web/health'], health);
 
+registerApiAliases(app, 'web', env.API_VERSION, registerWebRoutes);
+
+app.use(jsonNotFound);
 app.use(errorHandler);
 
 export default app;

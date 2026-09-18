@@ -44,6 +44,11 @@ export const envSchema = z.object({
   CLOUDFRONT_DOMAIN: z.string().optional(),
   REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
   EXCHANGE_RATE_API_KEY: z.string().optional(),
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_PLAN_ID_MONTHLY: z.string().optional(),
+  RAZORPAY_PLAN_ID_YEARLY: z.string().optional(),
   APP_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('*'),
 });

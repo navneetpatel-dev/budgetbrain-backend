@@ -8,12 +8,12 @@ export type SubscriptionStatus =
   | 'in_billing_retry';
 
 export type SubscriptionPlan = 'monthly' | 'yearly' | 'lifetime';
-export type SubscriptionStore = 'app_store' | 'play_store' | 'stripe' | 'promotional';
+export type SubscriptionStore = 'app_store' | 'play_store' | 'stripe' | 'razorpay' | 'promotional';
 
 export interface SubscriptionAttributes {
   id: string;
   userId: string;
-  revenuecatAppUserId: string;
+  revenuecatAppUserId: string | null;
   productId: string;
   entitlementId: string;
   status: SubscriptionStatus;
@@ -25,6 +25,9 @@ export interface SubscriptionAttributes {
   originalPurchaseDate: Date | null;
   unsubscribeDetectedAt: Date | null;
   billingIssuesDetectedAt: Date | null;
+  razorpayOrderId: string | null;
+  razorpaySubscriptionId: string | null;
+  razorpayPaymentId: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -32,6 +35,7 @@ export interface SubscriptionAttributes {
 export type SubscriptionCreationAttributes = Optional<
   SubscriptionAttributes,
   | 'id'
+  | 'revenuecatAppUserId'
   | 'entitlementId'
   | 'status'
   | 'currentPeriodStart'
@@ -41,6 +45,9 @@ export type SubscriptionCreationAttributes = Optional<
   | 'originalPurchaseDate'
   | 'unsubscribeDetectedAt'
   | 'billingIssuesDetectedAt'
+  | 'razorpayOrderId'
+  | 'razorpaySubscriptionId'
+  | 'razorpayPaymentId'
 >;
 
 export class Subscription
@@ -49,7 +56,7 @@ export class Subscription
 {
   declare id: string;
   declare userId: string;
-  declare revenuecatAppUserId: string;
+  declare revenuecatAppUserId: string | null;
   declare productId: string;
   declare entitlementId: string;
   declare status: SubscriptionStatus;
@@ -61,6 +68,9 @@ export class Subscription
   declare originalPurchaseDate: Date | null;
   declare unsubscribeDetectedAt: Date | null;
   declare billingIssuesDetectedAt: Date | null;
+  declare razorpayOrderId: string | null;
+  declare razorpaySubscriptionId: string | null;
+  declare razorpayPaymentId: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -80,7 +90,7 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
       },
       revenuecatAppUserId: {
         type: DataTypes.STRING(255),
-        allowNull: false,
+        allowNull: true,
         field: 'revenuecat_app_user_id',
       },
       productId: {
@@ -138,6 +148,21 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
         type: DataTypes.DATE,
         allowNull: true,
         field: 'billing_issues_detected_at',
+      },
+      razorpayOrderId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'razorpay_order_id',
+      },
+      razorpaySubscriptionId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'razorpay_subscription_id',
+      },
+      razorpayPaymentId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'razorpay_payment_id',
       },
     },
     {

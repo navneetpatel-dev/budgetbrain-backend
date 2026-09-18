@@ -207,7 +207,41 @@ pm2 status
 
 ## 5. Client base URLs
 
-Point each client at its API host (HTTPS):
+On EC2, print the public IP:
+
+```bash
+curl -s http://checkip.amazonaws.com
+```
+
+Until you have DNS, use path-based Nginx URLs (`deploy/nginx/budgetbrain-api.conf`):
+
+| App | Env var | Value |
+|-----|---------|-------|
+| Mobile | `EXPO_PUBLIC_API_URL` | `http://<EC2_PUBLIC_IP>/mobile/api/v1` |
+| Web | `VITE_API_URL` | `http://<EC2_PUBLIC_IP>/web/api/v1` |
+| Admin | `VITE_API_URL` | `http://<EC2_PUBLIC_IP>/admin/api/v1` |
+
+Health checks:
+
+- `http://<EC2_PUBLIC_IP>/mobile/health`
+- `http://<EC2_PUBLIC_IP>/web/health`
+- `http://<EC2_PUBLIC_IP>/admin/health`
+
+Files:
+
+- `mobile/.env` → `EXPO_PUBLIC_API_URL=...`
+- `web/.env` → `VITE_API_URL=...`
+- `admin/.env` → `VITE_API_URL=...`
+
+Restart Expo / Vite after changing those files.
+
+On the server, allow those frontends in `.env.production`:
+
+```env
+CORS_ORIGIN=https://expenseflow.app,http://localhost:5173
+```
+
+After DNS + certbot, switch clients to:
 
 - Mobile → `https://api-mobile.yourdomain.com/api/v1`
 - Web → `https://api-web.yourdomain.com/api/v1`

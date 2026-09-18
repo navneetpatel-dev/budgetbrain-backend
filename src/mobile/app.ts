@@ -6,18 +6,19 @@ import { env } from './shared/config/env';
 import { errorHandler } from './shared/utils/errors';
 import { globalRateLimiter } from './shared/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
+import { createCorsOptions } from '../shared/http/cors';
 import { sequelize } from '../shared/models';
 import { registerMobileRoutes } from './routes';
 
 const app = express();
 
-app.use(helmet());
 app.use(
-  cors({
-    origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(','),
-    credentials: true,
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
   })
 );
+app.use(cors(createCorsOptions(env.CORS_ORIGIN)));
 app.use(express.json({ limit: '10mb' }));
 app.use(createRequestContextMiddleware('mobile'));
 app.use(globalRateLimiter);

@@ -96,6 +96,107 @@ export async function getEntitlementForUser(userId: string, entitlementId = 'pro
   };
 }
 
+export interface SubscriptionStateInput {
+  userId: string;
+  productId: string;
+  entitlementId?: string;
+  status: SubscriptionStatus;
+  plan: SubscriptionPlan;
+  store: SubscriptionStore;
+  isLifetime: boolean;
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+  originalPurchaseDate: Date | null;
+  unsubscribeDetectedAt?: Date | null;
+  billingIssuesDetectedAt?: Date | null;
+  revenuecatAppUserId?: string | null;
+  razorpayOrderId?: string | null;
+  razorpaySubscriptionId?: string | null;
+  razorpayPaymentId?: string | null;
+  /** True when this event represents a recurring renewal (fires the renewal notification). */
+  isRenewalEvent?: boolean;
+  /** Free-form label stored on the audit log only (e.g. RevenueCat's raw event type). */
+  eventLabel: string;
+}
+
+/**
+ * Single sync point shared by every payment provider: upserts the Subscription row and
+ * keeps `User.role` consistent with it. Both RevenueCat (mobile) and Razorpay (web) events
+ * flow through this function so a purchase on either platform is reflected identically for
+ * both — this is what keeps mobile and web entitlement state in sync.
+ */
+export async function applySubscriptionState(input: SubscriptionStateInput) {
+  const user = await User.findByPk(input.userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+
+  const entitlementId = input.entitlementId ?? 'pro';
+
+  const subscription = await repo.upsertSubscription({
+    userId: user.id,
+    revenuecatAppUserId: input.revenuecatAppUserId ?? null,
+    productId: input.productId,
+    entitlementId,
+    status: input.status,
+    plan: input.plan,
+    store: input.store,
+    isLifetime: input.isLifetime,
+    currentPeriodStart: input.currentPeriodStart,
+    currentPeriodEnd: input.currentPeriodEnd,
+    originalPurchaseDate: input.originalPurchaseDate,
+    unsubscribeDetectedAt: input.unsubscribeDetectedAt ?? null,
+    billingIssuesDetectedAt: input.billingIssuesDetectedAt ?? null,
+    razorpayOrderId: input.razorpayOrderId ?? null,
+    razorpaySubscriptionId: input.razorpaySubscriptionId ?? null,
+    razorpayPaymentId: input.razorpayPaymentId ?? null,
+  });
+
+  // Keep User.role in sync: if active and lifetime -> 'lifetime', active -> 'premium', expired -> 'free'
+  let updatedRole = user.role;
+  if (user.role !== 'admin') {
+    if (input.isLifetime) {
+      updatedRole = 'lifetime';
+    } else if (input.status === 'active' || input.status === 'in_grace_period') {
+      updatedRole = 'premium';
+    } else if (input.status === 'expired' || input.status === 'cancelled') {
+      updatedRole = 'free';
+    }
+
+    if (updatedRole !== user.role) {
+      await user.update({ role: updatedRole });
+    }
+  }
+
+  await writeAuditLog({
+    action: AuditAction.USER_ROLE_CHANGE,
+    resource: AuditResource.USER,
+    resourceId: user.id,
+    actorUserId: user.id,
+    metadata: {
+      eventType: input.eventLabel,
+      productId: input.productId,
+      store: input.store,
+      status: input.status,
+      plan: input.plan,
+      newRole: updatedRole,
+    },
+  });
+
+  if (input.isRenewalEvent) {
+    const { createNotification } = await import('@shared/modules/notifications/service/notification.service');
+    await createNotification(
+      user.id,
+      'subscription_renewal',
+      'Subscription renewed',
+      `Your BudgetBrain ${input.plan} subscription has been renewed.`,
+      { subscriptionId: subscription.id, plan: input.plan }
+    );
+  }
+
+  return subscription;
+}
+
 export async function upsertFromWebhookEvent(payload: RevenueCatWebhookPayload) {
   const event = payload.event;
   if (!event) {
@@ -116,7 +217,6 @@ export async function upsertFromWebhookEvent(payload: RevenueCatWebhookPayload) 
     return null;
   }
 
-  const entitlementId = event.entitlement_ids?.[0] || 'pro';
   const plan = resolvePlan(event.product_id);
   const status = resolveStatus(event.type);
   const store = resolveStore(event.store);
@@ -129,11 +229,11 @@ export async function upsertFromWebhookEvent(payload: RevenueCatWebhookPayload) 
       ? new Date(event.expiration_at_ms)
       : null;
 
-  const subscription = await repo.upsertSubscription({
+  return applySubscriptionState({
     userId: user.id,
     revenuecatAppUserId: event.app_user_id,
     productId: event.product_id,
-    entitlementId,
+    entitlementId: event.entitlement_ids?.[0] || 'pro',
     status,
     plan,
     store,
@@ -143,51 +243,9 @@ export async function upsertFromWebhookEvent(payload: RevenueCatWebhookPayload) 
     originalPurchaseDate: event.purchased_at_ms ? new Date(event.purchased_at_ms) : null,
     unsubscribeDetectedAt: event.type === 'CANCELLATION' ? new Date() : null,
     billingIssuesDetectedAt: event.type === 'BILLING_ISSUE' ? new Date() : null,
+    isRenewalEvent: event.type === 'RENEWAL',
+    eventLabel: event.type,
   });
-
-  // Keep User.role in sync: if active and lifetime -> 'lifetime', active -> 'premium', expired -> 'free'
-  let updatedRole = user.role;
-  if (user.role !== 'admin') {
-    if (isLifetime) {
-      updatedRole = 'lifetime';
-
-    } else if (status === 'active' || status === 'in_grace_period') {
-      updatedRole = 'premium';
-    } else if (status === 'expired' || status === 'cancelled') {
-      updatedRole = 'free';
-    }
-
-    if (updatedRole !== user.role) {
-      await user.update({ role: updatedRole });
-    }
-  }
-
-  await writeAuditLog({
-    action: AuditAction.USER_ROLE_CHANGE,
-    resource: AuditResource.USER,
-    resourceId: user.id,
-    actorUserId: user.id,
-    metadata: {
-      eventType: event.type,
-      productId: event.product_id,
-      status,
-      plan,
-      newRole: updatedRole,
-    },
-  });
-
-  if (event.type === 'RENEWAL') {
-    const { createNotification } = await import('@shared/modules/notifications/service/notification.service');
-    await createNotification(
-      user.id,
-      'subscription_renewal',
-      'Subscription renewed',
-      `Your BudgetBrain ${plan} subscription has been renewed.`,
-      { subscriptionId: subscription.id, plan }
-    );
-  }
-
-  return subscription;
 }
 
 export async function listForAdmin(params: repo.ListSubscriptionsParams) {

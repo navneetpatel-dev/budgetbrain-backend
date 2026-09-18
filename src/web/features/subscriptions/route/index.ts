@@ -7,5 +7,7 @@ const router = Router();
 
 router.post('/webhook', asyncHandler(controller.handleWebhook));
 router.get('/status', authenticate, asyncHandler(controller.getStatus));
+router.post('/razorpay/checkout', authenticate, asyncHandler(controller.createRazorpayCheckout));
+router.post('/razorpay/webhook', asyncHandler(controller.handleRazorpayWebhook));
 
 export default router;

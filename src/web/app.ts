@@ -20,7 +20,17 @@ app.use(
   })
 );
 app.use(cors(createCorsOptions(env.CORS_ORIGIN)));
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: '10mb',
+    // Preserve the exact raw bytes alongside the parsed body so webhook handlers
+    // (e.g. Razorpay) can verify an HMAC signature computed over the original
+    // payload — re-serializing req.body would not reproduce the same bytes.
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  })
+);
 app.use(createRequestContextMiddleware('web'));
 app.use(globalRateLimiter);
 

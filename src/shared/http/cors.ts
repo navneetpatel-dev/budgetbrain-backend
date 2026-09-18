@@ -1,4 +1,5 @@
 import type { CorsOptions } from 'cors';
+import type { RequestHandler } from 'express';
 
 const LOCAL_DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$/i;
 const PRIVATE_LAN_ORIGIN =
@@ -30,5 +31,18 @@ export function createCorsOptions(corsOrigin: string): CorsOptions {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
     optionsSuccessStatus: 204,
     maxAge: 86400,
+  };
+}
+
+/** Nginx must proxy /web/* → /*. If it forwards /web/api/v1, strip the prefix so routes match. */
+export function stripNginxAppPrefix(prefix: 'web' | 'mobile' | 'admin'): RequestHandler {
+  const base = `/${prefix}`;
+  return (req, _res, next) => {
+    if (req.url === base) {
+      req.url = '/';
+    } else if (req.url.startsWith(`${base}/`)) {
+      req.url = req.url.slice(base.length) || '/';
+    }
+    next();
   };
 }

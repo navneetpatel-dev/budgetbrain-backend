@@ -6,7 +6,7 @@ import { env } from './shared/config/env';
 import { errorHandler } from './shared/utils/errors';
 import { globalRateLimiter } from './shared/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
-import { createCorsOptions } from '../shared/http/cors';
+import { createCorsOptions, stripNginxAppPrefix } from '../shared/http/cors';
 import { sequelize } from '../shared/models';
 import { registerWebRoutes } from './routes';
 
@@ -19,6 +19,7 @@ app.use(
   })
 );
 app.use(cors(createCorsOptions(env.CORS_ORIGIN)));
+app.use(stripNginxAppPrefix('web'));
 app.use(express.json({ limit: '10mb' }));
 app.use(createRequestContextMiddleware('web'));
 app.use(globalRateLimiter);

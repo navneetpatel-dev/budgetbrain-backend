@@ -9,7 +9,7 @@ import {
   reorderCategoriesSchema,
   suggestCategorySchema,
   updateCategorySchema,
-} from '../validator/category.validation';
+} from '@shared/modules/categories/validator/category.validation';
 
 const router = Router();
 router.use(authenticate);

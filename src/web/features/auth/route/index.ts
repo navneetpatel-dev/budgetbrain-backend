@@ -13,7 +13,7 @@ import {
   resetPasswordSchema,
   socialLoginSchema,
   tokenSchema,
-} from '../validator/auth.validation';
+} from '@shared/modules/auth/validator/auth.validation';
 
 const router = Router();
 
@@ -58,5 +58,8 @@ router.post(
 router.post('/verify-email', validateBody(tokenSchema), asyncHandler(controller.verifyEmail));
 router.post('/google', validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
 router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
+
+router.get('/devices', authenticate, asyncHandler(controller.getDevices));
+router.delete('/devices/:id', authenticate, asyncHandler(controller.revokeDevice));
 
 export default router;

@@ -3,7 +3,7 @@ import { asyncHandler } from '../../../shared/utils/errors';
 import { authenticate, requireOnboarding } from '../../../shared/middleware/auth';
 import { validateBody } from '../../../shared/middleware/validate';
 import * as controller from '../controller/users.controller';
-import { onboardingSchema, updateProfileSchema } from '../validator/user.validation';
+import { onboardingSchema, updateProfileSchema } from '@shared/modules/users/validator/user.validation';
 
 const router = Router();
 router.use(authenticate);

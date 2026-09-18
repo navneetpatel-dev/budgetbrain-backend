@@ -7,7 +7,7 @@ import * as controller from '../controller/investments.controller';
 import {
   createInvestmentSchema,
   updateInvestmentSchema,
-} from '../validator/investment.validation';
+} from '@shared/modules/investments/validator/investment.validation';
 
 const router = Router();
 router.use(authenticate);

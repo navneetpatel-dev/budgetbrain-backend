@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as incomeService from '../service/income.service';
+import { AuthRequest } from '@shared/types';
+import * as incomeService from '@shared/modules/income/service/income.service';
 import type {
   CreateIncomeInput,
   CreateSourceInput,
   ListIncomeInput,
   UpdateIncomeInput,
-} from '../types';
-import type { PaginationInput } from '../../../shared/types';
+} from '@shared/modules/income/types';
+import type { PaginationInput } from '@shared/types';
 
 export async function listIncome(req: Request, res: Response) {
   const filters = req.query as ListIncomeInput;

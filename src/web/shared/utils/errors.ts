@@ -5,16 +5,9 @@ import { getAuditContext } from '../../../shared/audit';
 
 const log = createLogger('web');
 
-export class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-    public code?: string
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
+import { AppError, ValidationError, NotFoundError, ForbiddenError, UnauthorizedError } from '../../../shared/errors';
+
+export { AppError, ValidationError, NotFoundError, ForbiddenError, UnauthorizedError };
 
 export function errorHandler(
   err: Error,

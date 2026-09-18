@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as reportService from '../service/report.service';
-import { generatePdfReport } from '../service/pdf.service';
-import type { DateRangeInput } from '../../../shared/types';
+import { AuthRequest } from '@shared/types';
+import * as reportService from '@shared/modules/reports/service/report.service';
+import { generatePdfReport } from '@shared/modules/reports/service/pdf.service';
+import type { ReportFilters } from '@shared/modules/reports/types';
 
 export async function getRecap(req: Request, res: Response) {
   const recap = await reportService.getMonthlyRecap((req as AuthRequest).userId!);
@@ -11,11 +11,10 @@ export async function getRecap(req: Request, res: Response) {
 }
 
 export async function exportCsv(req: Request, res: Response) {
-  const { startDate, endDate } = req.query as DateRangeInput;
+  const filters = req.query as unknown as ReportFilters;
   const csv = await reportService.generateCsvReport(
     (req as AuthRequest).userId!,
-    startDate,
-    endDate
+    filters
   );
 
   res.setHeader('Content-Type', 'text/csv');
@@ -24,10 +23,22 @@ export async function exportCsv(req: Request, res: Response) {
 }
 
 export async function exportPdf(req: Request, res: Response) {
-  const { startDate, endDate } = req.query as DateRangeInput;
-  const buffer = await generatePdfReport((req as AuthRequest).userId!, startDate, endDate);
+  const filters = req.query as unknown as ReportFilters;
+  const buffer = await generatePdfReport((req as AuthRequest).userId!, filters);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename=budgetbrain-report.pdf');
+  res.send(buffer);
+}
+
+export async function exportExcel(req: Request, res: Response) {
+  const filters = req.query as unknown as ReportFilters;
+  const buffer = await reportService.generateExcelReport((req as AuthRequest).userId!, filters);
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader('Content-Disposition', 'attachment; filename=budgetbrain-report.xlsx');
   res.send(buffer);
 }

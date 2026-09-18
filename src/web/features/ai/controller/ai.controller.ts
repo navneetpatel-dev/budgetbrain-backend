@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as aiService from '../service/ai.service';
-import type { ChatInput } from '../types';
+import { AuthRequest } from '@shared/types';
+import * as aiService from '@shared/modules/ai/service/ai.service';
+import type { ChatInput } from '@shared/modules/ai/types';
 
 export async function getInsights(req: Request, res: Response) {
   const data = await aiService.getSpendingInsights((req as AuthRequest).userId!);

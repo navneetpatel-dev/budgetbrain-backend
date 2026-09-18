@@ -9,7 +9,7 @@ import {
   createSourceSchema,
   listIncomeSchema,
   updateIncomeSchema,
-} from '../validator/income.validation';
+} from '@shared/modules/income/validator/income.validation';
 
 const router = Router();
 router.use(authenticate);

@@ -8,7 +8,7 @@ import {
   contributeGoalSchema,
   createGoalSchema,
   updateGoalSchema,
-} from '../validator/goal.validation';
+} from '@shared/modules/goals/validator/goal.validation';
 
 const router = Router();
 router.use(authenticate);

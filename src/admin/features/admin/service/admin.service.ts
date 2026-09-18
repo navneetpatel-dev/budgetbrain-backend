@@ -6,11 +6,12 @@ import {
   AiConversation,
   RefreshToken,
   SupportTicket,
+  Subscription,
   sequelize,
-} from '../../../../shared/models';
+} from '@database/models';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
-import type { TicketStatus } from '../../../../shared/models/SupportTicket';
+import type { TicketStatus } from '@database/models';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,
@@ -38,13 +39,22 @@ export async function getAdminDashboard() {
   const thirtyDaysAgoStart = new Date(thirtyDaysAgo);
   thirtyDaysAgoStart.setHours(0, 0, 0, 0);
 
-  const [totalUsers, recentUsers, aiUsage, dau, mau] = await Promise.all([
+  const [totalUsers, recentUsers, aiUsage, dau, mau, paidUsers, activeSubs, churnedSubs] = await Promise.all([
     User.count(),
     User.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
     AiConversation.count({ where: { createdAt: { [Op.gte]: thirtyDaysAgo } } }),
     User.count({ where: { lastLoginAt: { [Op.gte]: today } } }),
     User.count({ where: { lastLoginAt: { [Op.gte]: thirtyDaysAgoStart } } }),
+    User.count({ where: { role: { [Op.in]: ['premium', 'lifetime'] } } }),
+    Subscription.count({ where: { status: 'active' } }),
+    Subscription.count({ where: { status: { [Op.in]: ['cancelled', 'expired'] } } }),
   ]);
+
+  const conversionRate = totalUsers > 0 ? Number(((paidUsers / totalUsers) * 100).toFixed(1)) : 0;
+  const churnRate =
+    activeSubs + churnedSubs > 0
+      ? Number(((churnedSubs / (activeSubs + churnedSubs)) * 100).toFixed(1))
+      : 0;
 
   return {
     totalUsers,
@@ -53,6 +63,34 @@ export async function getAdminDashboard() {
     dau,
     mau,
     retentionRate: mau > 0 ? Math.round((dau / mau) * 100) : 0,
+    conversionRate,
+    churnRate,
+    paidUsers,
+  };
+}
+
+export async function getFeatureUsageStats() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const usageByResource = await AuditLog.findAll({
+    where: { createdAt: { [Op.gte]: thirtyDaysAgo } },
+    attributes: [
+      'resource',
+      [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+    ],
+    group: ['resource'],
+    raw: true,
+  });
+
+  return {
+    period: 'last_30_days',
+    features: (usageByResource as unknown as Array<{ resource: string; count: string }>).map(
+      (item) => ({
+        feature: item.resource,
+        eventsCount: Number(item.count),
+      })
+    ),
   };
 }
 

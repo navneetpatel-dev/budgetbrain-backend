@@ -42,5 +42,9 @@ router.patch(
   validateBody(updateSupportTicketSchema),
   asyncHandler(controller.updateSupportTicket)
 );
+router.get('/subscriptions', asyncHandler(controller.listSubscriptions));
+router.get('/revenue', asyncHandler(controller.getRevenueAnalytics));
+router.get('/feature-usage', asyncHandler(controller.getFeatureUsage));
 
 export default router;
+

@@ -2,11 +2,13 @@ import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
 import { AuthRequest } from '../../../shared/types';
 import * as adminService from '../service/admin.service';
+import * as subscriptionsService from '@shared/modules/subscriptions';
 import type {
   UpdateSupportTicketInput,
   UpdateUserInput,
 } from '../types';
 import type { PaginationInput } from '../../../shared/types';
+
 
 export async function getDashboard(_req: Request, res: Response) {
   const data = await adminService.getAdminDashboard();
@@ -72,3 +74,26 @@ export async function updateSupportTicket(req: Request, res: Response) {
   );
   successResponse(res, data);
 }
+
+export async function listSubscriptions(req: Request, res: Response) {
+  const { page, limit, status, plan, search } = req.query as any;
+  const data = await subscriptionsService.listForAdmin({
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined,
+    status,
+    plan,
+    search,
+  });
+  successResponse(res, data);
+}
+
+export async function getRevenueAnalytics(_req: Request, res: Response) {
+  const data = await subscriptionsService.getRevenueAnalytics();
+  successResponse(res, data);
+}
+
+export async function getFeatureUsage(_req: Request, res: Response) {
+  const data = await adminService.getFeatureUsageStats();
+  successResponse(res, data);
+}
+

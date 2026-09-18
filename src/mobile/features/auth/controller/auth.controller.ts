@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
+import type { AuthRequest } from '@shared/types';
 import { AppError, successResponse } from '../../../shared/utils/errors';
-import * as authService from '../service/auth.service';
+import * as authService from '@shared/modules/auth/service/auth.service';
 import type {
   EmailInput,
   LoginInput,
@@ -10,7 +11,7 @@ import type {
   ResetPasswordInput,
   SocialLoginInput,
   TokenInput,
-} from '../types';
+} from '@shared/modules/auth/types';
 
 export async function register(req: Request, res: Response) {
   const { email, password, name } = req.body as RegisterInput;
@@ -80,4 +81,14 @@ export async function appleLogin(req: Request, res: Response) {
   }
   const result = await authService.socialLoginWithApple(tokenToVerify, name);
   successResponse(res, result);
+}
+
+export async function getDevices(req: AuthRequest, res: Response) {
+  const devices = await authService.listDevices(req.userId!);
+  successResponse(res, { devices });
+}
+
+export async function revokeDevice(req: AuthRequest, res: Response) {
+  await authService.revokeDevice(req.userId!, String(req.params.id));
+  successResponse(res, { message: 'Device revoked successfully' });
 }

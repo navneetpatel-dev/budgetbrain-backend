@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as transactionService from '../service/transaction.service';
-import * as dashboardService from '../../dashboard/service/dashboard.service';
+import { AuthRequest } from '@shared/types';
+import * as transactionService from '@shared/modules/expenses/service/transaction.service';
+import * as dashboardService from '@shared/modules/dashboard/service/dashboard.service';
 import type {
   CreateTransactionInput,
   ListTransactionsInput,
   SearchQueryInput,
   UpdateTransactionInput,
-} from '../types';
+} from '@shared/modules/expenses/types';
 
 export async function getDashboard(req: Request, res: Response) {
   const data = await dashboardService.getDashboard((req as AuthRequest).userId!);

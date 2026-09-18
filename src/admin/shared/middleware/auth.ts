@@ -2,7 +2,7 @@ import type { AuthRequest } from '../types';
 import { Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
 import { AppError } from '../utils/errors';
-import { User } from '../../../shared/models';
+import { User } from '@database/models';
 import { setAuditActor } from '../../../shared/audit';
 
 export async function authenticate(

@@ -1,15 +1,15 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as categoryService from '../service/category.service';
-import { suggestCategoryForMerchant } from '../service/merchantMemory.service';
+import { AuthRequest } from '@shared/types';
+import * as categoryService from '@shared/modules/categories/service/category.service';
+import { suggestCategoryForMerchant } from '@shared/modules/categories/service/merchantMemory.service';
 import type {
   CreateCategoryInput,
   ReorderCategoriesInput,
   SuggestCategoryInput,
   UpdateCategoryInput,
-} from '../types';
-import type { PaginationInput } from '../../../shared/types';
+} from '@shared/modules/categories/types';
+import type { PaginationInput } from '@shared/types';
 
 export async function listCategories(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

@@ -4,7 +4,7 @@ import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams } from '../../../shared/middleware/validate';
 import { uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/ai.controller';
-import { chatSchema } from '../validator/ai.validation';
+import { chatSchema } from '@shared/modules/ai/validator/ai.validation';
 
 const router = Router();
 router.use(authenticate);

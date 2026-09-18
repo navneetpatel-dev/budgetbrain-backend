@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as recurringService from '../service/recurringSeries.service';
-import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '../types';
-import type { PaginationInput } from '../../../shared/types';
+import { AuthRequest } from '@shared/types';
+import * as recurringService from '@shared/modules/recurring/service/recurringSeries.service';
+import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '@shared/modules/recurring/types';
+import type { PaginationInput } from '@shared/types';
 
 export async function listRecurringSeries(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

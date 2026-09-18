@@ -1,10 +1,10 @@
 import app from './app';
-import { initModels } from '../shared/models';
+import { initModels } from '@database/models';
 import { prepareDatabase, listenAndLog } from '../shared/startup';
 import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';
 import { validateProductionConfig } from './shared/config/production';
-import { startScheduledJobs } from './features/notifications/service/scheduledJobs.service';
+import { startScheduledJobs } from '@shared/modules/notifications/service/scheduledJobs.service';
 import { createLogger } from '../shared/logging';
 
 const log = createLogger('mobile');

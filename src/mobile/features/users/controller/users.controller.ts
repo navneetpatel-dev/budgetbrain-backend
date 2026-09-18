@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import { sanitizeUser } from '../../auth/service/auth.service';
-import { deleteUserAccount, getUser, updateOnboarding, updateProfile } from '../service/user.service';
-import type { OnboardingInput, UpdateProfileInput } from '../types';
+import { AuthRequest } from '@shared/types';
+import { sanitizeUser } from '@shared/modules/auth/service/auth.service';
+import { deleteUserAccount, getUser, updateOnboarding, updateProfile } from '@shared/modules/users/service/user.service';
+import type { OnboardingInput, UpdateProfileInput } from '@shared/modules/users/types';
 
 export async function getMe(req: Request, res: Response) {
   const user = await getUser((req as AuthRequest).userId!);

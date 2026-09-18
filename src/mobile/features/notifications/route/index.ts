@@ -4,7 +4,7 @@ import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/notifications.controller';
-import { registerDeviceSchema } from '../validator/notification.validation';
+import { registerDeviceSchema } from '@shared/modules/notifications/validator/notification.validation';
 
 const router = Router();
 router.use(authenticate);

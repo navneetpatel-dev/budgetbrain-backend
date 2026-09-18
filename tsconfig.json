@@ -4,7 +4,17 @@
     "module": "commonjs",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@database/*": ["database/*"],
+      "@core/*": ["src/core/*"],
+      "@config/*": ["src/config/*"],
+      "@modules/*": ["src/shared/modules/*"],
+      "@shared/*": ["src/shared/*"],
+      "@testHelpers": ["src/testHelpers/index.ts"],
+      "@testHelpers/*": ["src/testHelpers/*"]
+    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,6 +24,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "database/**/*"],
   "exclude": ["node_modules", "dist"]
 }

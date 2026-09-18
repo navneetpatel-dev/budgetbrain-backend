@@ -7,7 +7,7 @@ import * as controller from '../controller/recurringSeries.controller';
 import {
   createRecurringSeriesSchema,
   updateRecurringSeriesSchema,
-} from '../validator/recurringSeries.validation';
+} from '@shared/modules/recurring/validator/recurringSeries.validation';
 
 const router = Router();
 router.use(authenticate);

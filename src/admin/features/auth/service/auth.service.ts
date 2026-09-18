@@ -7,7 +7,7 @@ import {
   VerificationToken,
   TokenType,
   sequelize,
-} from '../../../../shared/models';
+} from '@database/models';
 import {
   hashPassword,
   comparePassword,

@@ -9,7 +9,7 @@ import {
   confirmParsedSchema,
   parseEmailSchema,
   parseSmsSchema,
-} from '../validator/integrations.validation';
+} from '@shared/modules/integrations/validator/integrations.validation';
 
 const router = Router();
 router.use(authenticate);

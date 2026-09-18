@@ -14,7 +14,7 @@ module.exports = {
     {
       name: 'budgetbrain-mobile',
       cwd,
-      script: 'dist/mobile/index.js',
+      script: 'dist/src/mobile/index.js',
       instances: 1,
       exec_mode: 'fork',
       env: {
@@ -32,7 +32,7 @@ module.exports = {
     {
       name: 'budgetbrain-web',
       cwd,
-      script: 'dist/web/index.js',
+      script: 'dist/src/web/index.js',
       instances: 1,
       exec_mode: 'fork',
       env: {
@@ -50,7 +50,7 @@ module.exports = {
     {
       name: 'budgetbrain-admin',
       cwd,
-      script: 'dist/admin/index.js',
+      script: 'dist/src/admin/index.js',
       instances: 1,
       exec_mode: 'fork',
       env: {

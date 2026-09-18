@@ -4,7 +4,7 @@ import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/support.controller';
-import { createTicketSchema } from '../validator/support.validation';
+import { createTicketSchema } from '@shared/modules/support/validator/support.validation';
 
 const router = Router();
 router.use(authenticate);

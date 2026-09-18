@@ -1,4 +1,4 @@
-import type { Budget } from '../models/Budget';
+import type { Budget } from '@database/models';
 
 /** Sequelize DATEONLY may come back as a string or Date. */
 export function toDateOnly(value: Date | string | null | undefined, fallback: string): string {

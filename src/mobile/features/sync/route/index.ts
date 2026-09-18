@@ -3,7 +3,7 @@ import { asyncHandler } from '../../../shared/utils/errors';
 import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody } from '../../../shared/middleware/validate';
 import * as controller from '../controller/sync.controller';
-import { syncBatchSchema } from '../validator/sync.validation';
+import { syncBatchSchema } from '@shared/modules/sync/validator/sync.validation';
 
 const router = Router();
 router.use(authenticate);

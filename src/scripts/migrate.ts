@@ -1,162 +1,119 @@
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Sequelize } from 'sequelize';
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 const envFile = `.env.${nodeEnv}`;
-if (!existsSync(envFile)) {
-  console.error(`Missing ${envFile}. Create it on the server with required secrets (see .env.example).`);
-  process.exit(1);
+if (existsSync(envFile)) {
+  dotenv.config({ path: envFile });
+} else if (existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+} else {
+  dotenv.config();
 }
 
-dotenv.config({ path: envFile });
+interface MigrationRecord {
+  name: string;
+}
 
-/**
- * Remap legacy `category` period → `monthly` + keep category_id,
- * and replace enum values with monthly | weekly | custom.
- */
-async function migrateBudgetTypeEnum(sequelize: Awaited<typeof import('../shared/models')>['sequelize']) {
-  const dialect = sequelize.getDialect();
-  if (dialect !== 'postgres') {
-    console.log(`Skipping budget type enum migration (dialect=${dialect}).`);
-    return;
-  }
+interface MigrationModule {
+  up: (queryInterface: ReturnType<Sequelize['getQueryInterface']>, SequelizeClass: typeof Sequelize) => Promise<void>;
+  down?: (queryInterface: ReturnType<Sequelize['getQueryInterface']>, SequelizeClass: typeof Sequelize) => Promise<void>;
+}
 
-  const tableExists = await sequelize.query<{ exists: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_name = 'budgets'
-     ) AS exists`,
+async function ensureMigrationTable(sequelize: Sequelize): Promise<void> {
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name VARCHAR(255) PRIMARY KEY,
+      executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+  `);
+}
+
+async function getAppliedMigrations(sequelize: Sequelize): Promise<Set<string>> {
+  const rows = await sequelize.query<MigrationRecord>(
+    `SELECT name FROM schema_migrations ORDER BY name ASC`,
     { type: QueryTypes.SELECT }
   );
-  if (!tableExists[0]?.exists) {
-    console.log('Budgets table not found yet — enum migration deferred to sync.');
-    return;
-  }
-
-  const enumName = 'enum_budgets_type';
-  const exists = await sequelize.query<{ exists: boolean }>(
-    `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enumName) AS exists`,
-    { replacements: { enumName }, type: QueryTypes.SELECT }
-  );
-  if (!exists[0]?.exists) return;
-
-  const labels = await sequelize.query<{ enumlabel: string }>(
-    `SELECT e.enumlabel
-     FROM pg_enum e
-     JOIN pg_type t ON t.oid = e.enumtypid
-     WHERE t.typname = :enumName`,
-    { replacements: { enumName }, type: QueryTypes.SELECT }
-  );
-  const set = new Set(labels.map((l) => l.enumlabel));
-  if (set.has('custom') && !set.has('category')) {
-    console.log(`Budget type enum ${enumName} already migrated.`);
-    return;
-  }
-
-  console.log(`Migrating budget type enum ${enumName}…`);
-
-  await sequelize.query(`UPDATE budgets SET type = 'monthly' WHERE type::text = 'category'`);
-
-  await sequelize.query(`
-    ALTER TABLE budgets ALTER COLUMN type DROP DEFAULT;
-    ALTER TABLE budgets ALTER COLUMN type TYPE TEXT USING type::text;
-    DROP TYPE "${enumName}";
-    CREATE TYPE "${enumName}" AS ENUM ('monthly', 'weekly', 'custom');
-    ALTER TABLE budgets
-      ALTER COLUMN type TYPE "${enumName}"
-      USING type::"${enumName}";
-  `);
-  console.log(`Budget type enum ${enumName} migrated.`);
+  return new Set(rows.map((r) => r.name));
 }
 
-/**
- * Additive columns/enum values for the tags, merchant-memory, budget-rollover,
- * weekly-digest, subscription-tracker, and CSV-import features. `sequelize.sync({ alter: false })`
- * only creates missing tables — it never alters existing ones — so these run as raw SQL first.
- * Every statement is idempotent (`IF NOT EXISTS`) so re-running this script is always safe.
- */
-async function addColumnIfTableExists(
-  sequelize: Awaited<typeof import('../shared/models')>['sequelize'],
-  tableName: string,
-  columnDef: string
-) {
-  const [rows] = await sequelize.query<{ exists: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_name = :tableName
-     ) AS exists`,
-    { replacements: { tableName }, type: QueryTypes.SELECT }
-  );
-  if ((rows as any)?.exists || (rows as any)?.[0]?.exists) {
-    await sequelize.query(`ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS ${columnDef}`);
-  }
-}
+async function runMigrations(): Promise<number> {
+  const { connectDatabase, sequelize } = await import('@database/config/database');
+  const { dbEnv } = await import('@database/config/env');
 
-async function migrateAdditiveColumnsAndEnums(sequelize: Awaited<typeof import('../shared/models')>['sequelize']) {
-  const dialect = sequelize.getDialect();
-  if (dialect !== 'postgres') {
-    console.log(`Skipping additive column/enum migration (dialect=${dialect}).`);
-    return;
-  }
-
-  console.log('Applying additive column/enum migrations…');
-
-  await addColumnIfTableExists(sequelize, 'transactions', `tags TEXT[] DEFAULT '{}'`);
-  await addColumnIfTableExists(sequelize, 'transactions', `recurring_series_id UUID`);
-  await addColumnIfTableExists(sequelize, 'budgets', `rollover BOOLEAN DEFAULT false`);
-  await addColumnIfTableExists(sequelize, 'users', `weekly_digest_opt_in BOOLEAN DEFAULT true`);
-
-  await addColumnIfTableExists(sequelize, 'audit_logs', `actor_type VARCHAR(20) DEFAULT 'user'`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `outcome VARCHAR(20) DEFAULT 'success'`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `severity VARCHAR(20) DEFAULT 'info'`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `source VARCHAR(20) DEFAULT 'system'`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `request_id VARCHAR(64)`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `before_state JSONB`);
-  await addColumnIfTableExists(sequelize, 'audit_logs', `after_state JSONB`);
-
-  // ALTER TYPE ... ADD VALUE must run as its own statement (not combined with other DDL).
-  try {
-    await sequelize.query(`ALTER TYPE enum_parsed_transactions_source ADD VALUE IF NOT EXISTS 'csv'`);
-  } catch {}
-  try {
-    await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'bill_due'`);
-  } catch {}
-  try {
-    await sequelize.query(`ALTER TYPE enum_notifications_type ADD VALUE IF NOT EXISTS 'weekly_digest'`);
-  } catch {}
-
-  console.log('Additive column/enum migrations complete.');
-}
-
-async function migrate(): Promise<number> {
-  const { connectDatabase } = await import('../shared/db/database');
-  const { dbEnv } = await import('../shared/db/env');
-  console.log(`Migrating ${dbEnv.DB_NAME} on ${dbEnv.DB_HOST}:${dbEnv.DB_PORT} (NODE_ENV=${dbEnv.NODE_ENV})`);
+  console.log(`\n========================================`);
+  console.log(`Running database migrations for ${dbEnv.DB_NAME} on ${dbEnv.DB_HOST}:${dbEnv.DB_PORT} (NODE_ENV=${dbEnv.NODE_ENV})`);
+  console.log(`========================================\n`);
 
   const connected = await connectDatabase();
-
   if (!connected) {
-    console.error(`Migration aborted — could not connect to ${dbEnv.DB_HOST}/${dbEnv.DB_NAME}`);
+    console.error(`Migration aborted — could not connect to database.`);
     return 1;
   }
 
-  const { initModels, sequelize } = await import('../shared/models');
-  initModels();
+  try {
+    await ensureMigrationTable(sequelize);
+    const applied = await getAppliedMigrations(sequelize);
 
-  // Enum remap must run before sync so model ENUM matches DB
-  await migrateBudgetTypeEnum(sequelize);
-  await migrateAdditiveColumnsAndEnums(sequelize);
-  await sequelize.sync({ alter: false });
+    const migrationsDir = path.resolve(__dirname, '../../database/migrations');
+    if (!existsSync(migrationsDir)) {
+      console.log(`No migrations directory found at ${migrationsDir}`);
+      return 0;
+    }
 
-  console.log('Database migration complete (schema synced).');
-  await sequelize.close();
-  return 0;
+    const files = readdirSync(migrationsDir)
+      .filter((file) => /^\d+.*\.js$/.test(file))
+      .sort();
+
+    const pending = files.filter((f) => !applied.has(f));
+
+    if (pending.length === 0) {
+      console.log(`All migrations are already up to date (${files.length} applied).`);
+      return 0;
+    }
+
+    console.log(`Found ${pending.length} pending migration(s):`);
+    for (const f of pending) {
+      console.log(`  - ${f}`);
+    }
+    console.log('');
+
+    const queryInterface = sequelize.getQueryInterface();
+    const SequelizeClass = Sequelize;
+
+    for (const migrationFile of pending) {
+      console.log(`Applying migration: ${migrationFile}...`);
+      const migrationPath = path.join(migrationsDir, migrationFile);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const migration: MigrationModule = require(migrationPath);
+
+      if (typeof migration.up !== 'function') {
+        throw new Error(`Migration ${migrationFile} does not export an up() function`);
+      }
+
+      await migration.up(queryInterface, SequelizeClass);
+      await sequelize.query(
+        `INSERT INTO schema_migrations (name, executed_at) VALUES (:name, NOW())`,
+        { replacements: { name: migrationFile } }
+      );
+      console.log(`✓ Migration ${migrationFile} applied successfully.`);
+    }
+
+    console.log(`\nAll migrations applied successfully.`);
+    return 0;
+  } catch (error) {
+    console.error('Migration failed:', error);
+    return 1;
+  } finally {
+    await sequelize.close();
+  }
 }
 
-migrate()
+runMigrations()
   .then((code) => process.exit(code))
   .catch((err) => {
-    console.error('Migration failed:', err);
+    console.error('Migration runner error:', err);
     process.exit(1);
   });

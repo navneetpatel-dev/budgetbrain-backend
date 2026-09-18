@@ -1,0 +1,117 @@
+import { User } from './user.model';
+import { RefreshToken } from './refreshToken.model';
+import { Device } from './device.model';
+import { Transaction } from './transaction.model';
+import { TransactionAttachment } from './transactionAttachment.model';
+import { Category } from './category.model';
+import { IncomeSource } from './incomeSource.model';
+import { Budget } from './budget.model';
+import { BudgetAlert } from './budgetAlert.model';
+import { Goal } from './goal.model';
+import { GoalContribution } from './goalContribution.model';
+import { Notification } from './notification.model';
+import { FamilyGroup } from './familyGroup.model';
+import { FamilyMember } from './familyMember.model';
+import { AiConversation } from './aiConversation.model';
+import { AuditLog } from './auditLog.model';
+import { FinancialAccount } from './financialAccount.model';
+import { Investment } from './investment.model';
+import { ParsedTransaction } from './parsedTransaction.model';
+import { SupportTicket } from './supportTicket.model';
+import { VerificationToken } from './verificationToken.model';
+import { MerchantCategoryRule } from './merchantCategoryRule.model';
+import { ExpenseSplitParticipant } from './expenseSplitParticipant.model';
+import { Loan } from './loan.model';
+import { LoanPayment } from './loanPayment.model';
+import { RecurringSeries } from './recurringSeries.model';
+import { Subscription } from './subscription.model';
+
+export function initAssociations(): void {
+  // User associations
+  User.hasMany(RefreshToken, { foreignKey: 'userId', as: 'refreshTokens' });
+  User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
+  User.hasMany(Transaction, { foreignKey: 'userId', as: 'transactions' });
+  User.hasMany(Category, { foreignKey: 'userId', as: 'categories' });
+  User.hasMany(IncomeSource, { foreignKey: 'userId', as: 'incomeSources' });
+  User.hasMany(Budget, { foreignKey: 'userId', as: 'budgets' });
+  User.hasMany(Goal, { foreignKey: 'userId', as: 'goals' });
+  User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
+  User.hasMany(FamilyGroup, { foreignKey: 'ownerId', as: 'ownedGroups' });
+  User.hasMany(AiConversation, { foreignKey: 'userId', as: 'aiConversations' });
+  User.hasMany(AuditLog, { foreignKey: 'userId', as: 'auditLogs' });
+  User.hasMany(FinancialAccount, { foreignKey: 'userId', as: 'financialAccounts' });
+  User.hasMany(Investment, { foreignKey: 'userId', as: 'investments' });
+  User.hasMany(ParsedTransaction, { foreignKey: 'userId', as: 'parsedTransactions' });
+  User.hasMany(SupportTicket, { foreignKey: 'userId', as: 'supportTickets' });
+  User.hasMany(VerificationToken, { foreignKey: 'userId', as: 'verificationTokens' });
+  User.hasMany(MerchantCategoryRule, { foreignKey: 'userId', as: 'merchantCategoryRules' });
+  User.hasMany(Loan, { foreignKey: 'userId', as: 'loans' });
+  User.hasMany(RecurringSeries, { foreignKey: 'userId', as: 'recurringSeries' });
+  User.hasMany(Subscription, { foreignKey: 'userId', as: 'subscriptions' });
+
+  // BelongsTo User
+  RefreshToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Device.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Category.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Investment.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  SupportTicket.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  VerificationToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  AiConversation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  AuditLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Subscription.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  // IncomeSource
+  IncomeSource.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  IncomeSource.hasMany(Transaction, { foreignKey: 'incomeSourceId', as: 'transactions' });
+
+  // Budget & Alerts
+  Budget.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Budget.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+  Budget.hasMany(BudgetAlert, { foreignKey: 'budgetId', as: 'alerts' });
+  BudgetAlert.belongsTo(Budget, { foreignKey: 'budgetId', as: 'budget' });
+  BudgetAlert.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  // Goal & Contributions
+  Goal.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Goal.hasMany(GoalContribution, { foreignKey: 'goalId', as: 'contributions' });
+  GoalContribution.belongsTo(Goal, { foreignKey: 'goalId', as: 'goal' });
+  GoalContribution.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  // Family
+  FamilyGroup.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
+  FamilyGroup.hasMany(FamilyMember, { foreignKey: 'familyGroupId', as: 'members' });
+  FamilyMember.belongsTo(FamilyGroup, { foreignKey: 'familyGroupId', as: 'familyGroup' });
+  FamilyMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  // FinancialAccount
+  FinancialAccount.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+  // Loan & Payments
+  Loan.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Loan.hasMany(LoanPayment, { foreignKey: 'loanId', as: 'payments' });
+  LoanPayment.belongsTo(Loan, { foreignKey: 'loanId', as: 'loan' });
+
+  // MerchantCategoryRule
+  MerchantCategoryRule.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  MerchantCategoryRule.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+
+  // RecurringSeries
+  RecurringSeries.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  RecurringSeries.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+  RecurringSeries.hasMany(Transaction, { foreignKey: 'recurringSeriesId', as: 'transactions' });
+
+  // ParsedTransaction
+  ParsedTransaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  ParsedTransaction.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+
+  // Transaction & Attachments & Splits
+  Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Transaction.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+  Transaction.belongsTo(IncomeSource, { foreignKey: 'incomeSourceId', as: 'incomeSource' });
+  Transaction.hasMany(TransactionAttachment, { foreignKey: 'transactionId', as: 'attachments' });
+  Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
+  Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
+  TransactionAttachment.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+  ExpenseSplitParticipant.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+}

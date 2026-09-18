@@ -14,24 +14,59 @@ permissions:
 
 jobs:
   ci:
-    name: Build
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: budgetbrain
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: budgetbrain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
+          node-version: 20
           cache: npm
 
       - run: npm ci
+      - run: npm run lint
+      - name: Run Database Migrations for Test
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: budgetbrain_test
+          DB_USER: budgetbrain
+          DB_PASSWORD: testpassword
+        run: npm run db:migrate
+      - name: Run Tests
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: budgetbrain_test
+          DB_USER: budgetbrain
+          DB_PASSWORD: testpassword
+          JWT_ACCESS_SECRET: test_access_secret_32_characters_minimum!
+          JWT_REFRESH_SECRET: test_refresh_secret_32_characters_minimum!
+        run: npm test
       - run: npm run build
       - name: Verify entrypoints
         run: |
-          test -f dist/mobile/index.js
-          test -f dist/web/index.js
-          test -f dist/admin/index.js
-          test -f dist/scripts/migrate.js
+          test -f dist/src/mobile/index.js
+          test -f dist/src/web/index.js
+          test -f dist/src/admin/index.js
+          test -f dist/src/scripts/migrate.js
 
   deploy:
     name: Deploy

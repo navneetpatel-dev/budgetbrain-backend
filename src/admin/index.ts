@@ -1,5 +1,5 @@
 import app from './app';
-import { initModels } from '../shared/models';
+import { initModels } from '@database/models';
 import { prepareDatabase, listenAndLog } from '../shared/startup';
 import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';

@@ -8,7 +8,7 @@ import { globalRateLimiter } from './shared/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
 import { createCorsOptions } from '../shared/http/cors';
 import { jsonNotFound, registerApiAliases, registerApiIndex } from '../shared/http/routes';
-import { sequelize } from '../shared/models';
+import { sequelize } from '@database/models';
 import { registerMobileRoutes } from './routes';
 
 const app = express();

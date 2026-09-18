@@ -5,7 +5,7 @@ import { validateParams } from '../../../shared/middleware/validate';
 import { uuidParamSchema } from '../../../shared/validation';
 import { upload } from '../../../shared/middleware/upload';
 import * as controller from '../controller/attachments.controller';
-import { attachmentParamsSchema } from '../validator/transaction.validation';
+import { attachmentParamsSchema } from '@shared/modules/expenses/validator/transaction.validation';
 
 const router = Router();
 router.use(authenticate);

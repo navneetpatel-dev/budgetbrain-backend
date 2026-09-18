@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import * as investmentService from '../service/investment.service';
+import { AuthRequest } from '@shared/types';
+import * as investmentService from '@shared/modules/investments/service/investment.service';
 import type {
   CreateInvestmentInput,
   UpdateInvestmentInput,
-} from '../types';
-import type { PaginationInput } from '../../../shared/types';
+} from '@shared/modules/investments/types';
+import type { PaginationInput } from '@shared/types';
 
 export async function listInvestments(req: Request, res: Response) {
   const { page, limit } = req.query as PaginationInput;

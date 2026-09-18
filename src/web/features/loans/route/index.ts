@@ -4,7 +4,7 @@ import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/loans.controller';
-import { createLoanSchema, payLoanSchema, updateLoanSchema } from '../validator/loan.validation';
+import { createLoanSchema, payLoanSchema, updateLoanSchema } from '@shared/modules/loans/validator/loan.validation';
 
 const router = Router();
 router.use(authenticate);

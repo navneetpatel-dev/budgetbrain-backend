@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { successResponse, AppError } from '../../../shared/utils/errors';
-import { AuthRequest } from '../../../shared/types';
-import { Transaction, TransactionAttachment } from '../../../../shared/models';
+import { AuthRequest } from '@shared/types';
+import { Transaction, TransactionAttachment } from '@database/models';
 import { uploadFile, withSignedDownloadUrl } from '../../../shared/services/s3.service';
 
 export async function createAttachment(req: Request, res: Response) {

@@ -9,7 +9,7 @@ import {
   searchQuerySchema,
   transactionSchema,
   updateTransactionSchema,
-} from '../validator/transaction.validation';
+} from '@shared/modules/expenses/validator/transaction.validation';
 
 const router = Router();
 router.use(authenticate);

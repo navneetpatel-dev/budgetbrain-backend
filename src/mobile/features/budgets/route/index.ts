@@ -4,7 +4,7 @@ import { authenticate } from '../../../shared/middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../../../shared/middleware/validate';
 import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/budgets.controller';
-import { createBudgetSchema, updateBudgetSchema } from '../validator/budget.validation';
+import { createBudgetSchema, updateBudgetSchema } from '@shared/modules/budgets/validator/budget.validation';
 
 const router = Router();
 router.use(authenticate);

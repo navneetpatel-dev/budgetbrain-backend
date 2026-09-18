@@ -9,6 +9,7 @@ export const AuditAction = {
   AUTH_PASSWORD_RESET_REQUEST: 'auth.password_reset_request',
   AUTH_EMAIL_VERIFY: 'auth.email_verify',
   AUTH_SOCIAL_LOGIN: 'auth.social_login',
+  AUTH_DEVICE_REVOKE: 'auth.device_revoke',
 
   USER_UPDATE: 'user.update',
   USER_DELETE: 'user.delete',
@@ -65,6 +66,7 @@ export const AuditResource = {
   LOAN: 'loan',
   RECURRING_SERIES: 'recurring_series',
   AUTH: 'auth',
+  DEVICE: 'device',
 } as const;
 
 export type AuditResourceValue = (typeof AuditResource)[keyof typeof AuditResource];

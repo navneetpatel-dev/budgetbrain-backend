@@ -9,7 +9,7 @@ import {
   createSplitSchema,
   groupIdParamSchema,
   joinGroupSchema,
-} from '../validator/family.validation';
+} from '@shared/modules/family/validator/family.validation';
 
 const router = Router();
 router.use(authenticate);

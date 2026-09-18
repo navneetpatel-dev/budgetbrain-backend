@@ -31,3 +31,13 @@ export const createSplitSchema = z.object({
     .min(1, M.splitParticipantsMin)
     .max(20, M.splitParticipantsMax),
 });
+
+export const removeMemberParamSchema = z.object({
+  groupId: uuidField(),
+  userId: uuidField(),
+});
+
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(['owner', 'admin', 'contributor', 'read_only']),
+});
+

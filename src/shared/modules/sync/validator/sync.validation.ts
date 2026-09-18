@@ -1,30 +1,27 @@
 import { z } from 'zod';
 import { requiredText, timestampField, ValidationMessages as M } from '@shared/validation';
-import {
-  syncTransactionCreateSchema,
-  syncTransactionUpdateSchema,
-  syncTransactionDeleteSchema,
-} from '@shared/modules/expenses/validator/transaction.validation';
+
+export const syncResourceEnum = z.enum(['transaction', 'income', 'budget', 'goal']);
 
 const syncItemBase = z.object({
   id: requiredText('syncItemId'),
-  resource: z.literal('transaction'),
+  resource: syncResourceEnum,
   timestamp: timestampField(),
 });
 
 const createItemSchema = syncItemBase.extend({
   action: z.literal('create'),
-  payload: syncTransactionCreateSchema,
+  payload: z.record(z.unknown()),
 });
 
 const updateItemSchema = syncItemBase.extend({
   action: z.literal('update'),
-  payload: syncTransactionUpdateSchema,
+  payload: z.record(z.unknown()),
 });
 
 const deleteItemSchema = syncItemBase.extend({
   action: z.literal('delete'),
-  payload: syncTransactionDeleteSchema,
+  payload: z.record(z.unknown()).optional().default({}),
 });
 
 export const syncBatchSchema = z.object({

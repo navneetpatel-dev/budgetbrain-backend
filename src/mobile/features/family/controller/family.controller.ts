@@ -63,3 +63,22 @@ export async function settleSplit(req: Request, res: Response) {
   const result = await familyService.settleSplit((req as AuthRequest).userId!, id);
   successResponse(res, result);
 }
+
+export async function removeMember(req: Request, res: Response) {
+  const { groupId, userId } = req.params as { groupId: string; userId: string };
+  const result = await familyService.removeMember((req as AuthRequest).userId!, groupId, userId);
+  successResponse(res, result);
+}
+
+export async function deleteGroup(req: Request, res: Response) {
+  const { groupId } = req.params as { groupId: string };
+  const result = await familyService.deleteGroup((req as AuthRequest).userId!, groupId);
+  successResponse(res, result);
+}
+
+export async function updateMemberRole(req: Request, res: Response) {
+  const { groupId, userId } = req.params as { groupId: string; userId: string };
+  const { role } = req.body as { role: 'owner' | 'admin' | 'contributor' | 'read_only' };
+  const result = await familyService.updateMemberRole((req as AuthRequest).userId!, groupId, userId, role);
+  successResponse(res, result);
+}

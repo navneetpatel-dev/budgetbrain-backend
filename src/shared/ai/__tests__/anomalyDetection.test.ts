@@ -4,6 +4,7 @@ import {
   detectDuplicateExpenses,
   detectSpendingSpikes,
   detectSubscriptionIncreases,
+  detectUnusualTransactions,
 } from '../anomalyDetection.engine';
 
 describe('Anomaly Detection Engine', () => {
@@ -124,6 +125,34 @@ describe('Anomaly Detection Engine', () => {
     });
   });
 
+  describe('detectUnusualTransactions', () => {
+    it('detects transaction significantly higher than merchant baseline', () => {
+      const txs = [
+        { id: '1', amount: 200, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+        { id: '2', amount: 220, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+        { id: '3', amount: 210, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+        // Baseline ~210, outlier: 1500 (> 2.5x and > 500 diff)
+        { id: '4', amount: 1500, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+      ];
+
+      const anomalies = detectUnusualTransactions(txs);
+      expect(anomalies).toHaveLength(1);
+      expect(anomalies[0].type).toBe('unusual_transaction');
+      expect(anomalies[0].transactionId).toBe('4');
+      expect(anomalies[0].merchant).toBe('Grocery Hub');
+    });
+
+    it('ignores normal fluctuations or merchants with fewer than 3 transactions', () => {
+      const txs = [
+        { id: '1', amount: 200, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+        { id: '2', amount: 1500, merchant: 'Grocery Hub', categoryId: 'groceries', date: now },
+      ];
+
+      const anomalies = detectUnusualTransactions(txs);
+      expect(anomalies).toHaveLength(0);
+    });
+  });
+
   describe('runAnomalyDetection', () => {
     it('runs all anomaly checks concurrently', () => {
       const txs = [
@@ -135,3 +164,4 @@ describe('Anomaly Detection Engine', () => {
     });
   });
 });
+

@@ -9,18 +9,36 @@ import {
   createSplitSchema,
   groupIdParamSchema,
   joinGroupSchema,
+  removeMemberParamSchema,
+  updateMemberRoleSchema,
 } from '@shared/modules/family/validator/family.validation';
 
 const router = Router();
 router.use(authenticate);
 
 router.post('/groups', validateBody(createGroupSchema), asyncHandler(controller.createGroup));
+router.delete(
+  '/groups/:groupId',
+  validateParams(groupIdParamSchema),
+  asyncHandler(controller.deleteGroup)
+);
 router.post('/join', validateBody(joinGroupSchema), asyncHandler(controller.joinGroup));
 router.get('/groups', validateQuery(paginationSchema), asyncHandler(controller.listMemberships));
 router.get(
   '/groups/:groupId/members',
   validateParams(groupIdParamSchema),
   asyncHandler(controller.listGroupMembers)
+);
+router.delete(
+  '/groups/:groupId/members/:userId',
+  validateParams(removeMemberParamSchema),
+  asyncHandler(controller.removeMember)
+);
+router.patch(
+  '/groups/:groupId/members/:userId',
+  validateParams(removeMemberParamSchema),
+  validateBody(updateMemberRoleSchema),
+  asyncHandler(controller.updateMemberRole)
 );
 router.post(
   '/groups/:groupId/splits',

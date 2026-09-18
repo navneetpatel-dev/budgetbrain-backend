@@ -31,7 +31,9 @@ export const AuditAction = {
   BUDGET_DELETE: 'budget.delete',
 
   FAMILY_GROUP_CREATE: 'family.group_create',
+  FAMILY_GROUP_DELETE: 'family.group_delete',
   FAMILY_GROUP_JOIN: 'family.group_join',
+  FAMILY_MEMBER_REMOVE: 'family.member_remove',
   FAMILY_SPLIT_CREATE: 'family.split_create',
   FAMILY_SPLIT_SETTLE: 'family.split_settle',
 

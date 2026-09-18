@@ -15,7 +15,11 @@ export interface RecurringSeriesForAnomaly {
 }
 
 export interface DetectedAnomaly {
-  type: 'spending_spike' | 'duplicate_expense' | 'subscription_cost_increase';
+  type:
+    | 'spending_spike'
+    | 'duplicate_expense'
+    | 'subscription_cost_increase'
+    | 'unusual_transaction';
   transactionId?: string;
   recurringSeriesId?: string;
   merchant?: string;
@@ -167,6 +171,52 @@ export function detectSubscriptionIncreases(
 }
 
 /**
+ * 4. Unusual transaction detection:
+ * Detects individual transactions where the amount at a given merchant is significantly higher
+ * than the user's historical baseline at that merchant (>= 3 historical transactions at this merchant,
+ * transaction > 2.5x historical average and at least ₹500 higher).
+ */
+export function detectUnusualTransactions(
+  transactions: TransactionForAnomaly[]
+): DetectedAnomaly[] {
+  const anomalies: DetectedAnomaly[] = [];
+  const byMerchant = new Map<string, TransactionForAnomaly[]>();
+
+  for (const t of transactions) {
+    if (!t.merchant) continue;
+    const key = t.merchant.trim().toLowerCase();
+    const list = byMerchant.get(key) ?? [];
+    list.push(t);
+    byMerchant.set(key, list);
+  }
+
+  for (const [, mTransactions] of byMerchant) {
+    if (mTransactions.length < 3) continue;
+
+    for (const t of mTransactions) {
+      const others = mTransactions.filter((x) => x.id !== t.id);
+      if (others.length < 2) continue;
+
+      const otherAmounts = others.map((x) => x.amount);
+      const mean = otherAmounts.reduce((a, b) => a + b, 0) / otherAmounts.length;
+      if (t.amount > mean * 2.5 && t.amount - mean >= 500) {
+        const factor = (t.amount / mean).toFixed(1);
+        anomalies.push({
+          type: 'unusual_transaction',
+          transactionId: t.id,
+          merchant: t.merchant!,
+          amount: t.amount,
+          severity: t.amount > mean * 4 ? 'high' : 'medium',
+          reason: `Unusual transaction: ₹${t.amount.toFixed(2)} at ${t.merchant} is ${factor}x higher than your usual average (₹${mean.toFixed(0)}) there`,
+        });
+      }
+    }
+  }
+
+  return anomalies;
+}
+
+/**
  * Comprehensive anomaly detection runner.
  */
 export function runAnomalyDetection(
@@ -176,6 +226,8 @@ export function runAnomalyDetection(
   const duplicates = detectDuplicateExpenses(transactions);
   const spikes = detectSpendingSpikes(transactions);
   const subscriptionIncreases = detectSubscriptionIncreases(transactions, recurringSeries);
+  const unusual = detectUnusualTransactions(transactions);
 
-  return [...duplicates, ...spikes, ...subscriptionIncreases];
+  return [...duplicates, ...spikes, ...subscriptionIncreases, ...unusual];
 }
+

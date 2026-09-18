@@ -95,9 +95,10 @@ export async function listUserMemberships(userId: string, filters: PaginationInp
   return paginatedResult('memberships', rows, count, page, limit);
 }
 
-async function assertMembership(userId: string, groupId: string): Promise<void> {
+async function assertMembership(userId: string, groupId: string) {
   const membership = await FamilyMember.findOne({ where: { userId, groupId } });
   if (!membership) throw new AppError(403, 'Not a member of this family group');
+  return membership;
 }
 
 export async function listGroupMembers(userId: string, groupId: string) {
@@ -110,7 +111,10 @@ export async function listGroupMembers(userId: string, groupId: string) {
 }
 
 export async function createSplit(userId: string, groupId: string, data: CreateSplitInput) {
-  await assertMembership(userId, groupId);
+  const membership = await assertMembership(userId, groupId);
+  if (membership.role === 'read_only') {
+    throw new AppError(403, 'Read-only members cannot create expense splits');
+  }
 
   const transaction = await Transaction.findOne({ where: { id: data.transactionId, userId } });
   if (!transaction) throw new AppError(404, 'Transaction not found');
@@ -211,6 +215,14 @@ export async function settleSplit(userId: string, splitParticipantId: string) {
       throw new AppError(403, 'Not authorized to settle this split');
     }
 
+    const membership = await FamilyMember.findOne({
+      where: { groupId: participant.groupId, userId },
+      transaction: t,
+    });
+    if (!membership || membership.role === 'read_only') {
+      throw new AppError(403, 'Read-only members cannot settle expense splits');
+    }
+
     if (participant.settled) {
       throw new AppError(409, 'Split is already settled');
     }
@@ -227,6 +239,110 @@ export async function settleSplit(userId: string, splitParticipantId: string) {
     });
 
     return participant;
+  });
+}
+
+export async function removeMember(actorId: string, groupId: string, targetUserId: string) {
+  return sequelize.transaction(async (t) => {
+    const group = await FamilyGroup.findByPk(groupId, { transaction: t });
+    if (!group) throw new AppError(404, 'Family group not found');
+
+    const actorMembership = await FamilyMember.findOne({
+      where: { groupId, userId: actorId },
+      transaction: t,
+    });
+    if (!actorMembership) throw new AppError(403, 'Not a member of this family group');
+
+    const targetMembership = await FamilyMember.findOne({
+      where: { groupId, userId: targetUserId },
+      transaction: t,
+    });
+    if (!targetMembership) throw new AppError(404, 'Member not found in this group');
+
+    const isSelf = actorId === targetUserId;
+    if (!isSelf) {
+      if (actorMembership.role !== 'owner' && actorMembership.role !== 'admin') {
+        throw new AppError(403, 'Only group owners and admins can remove members');
+      }
+      if (actorMembership.role === 'admin' && (targetMembership.role === 'owner' || targetMembership.role === 'admin')) {
+        throw new AppError(403, 'Admins cannot remove group owners or other admins');
+      }
+    } else {
+      if (actorMembership.role === 'owner') {
+        const memberCount = await FamilyMember.count({ where: { groupId }, transaction: t });
+        if (memberCount > 1) {
+          throw new AppError(400, 'Owners cannot leave a group with active members. Transfer ownership or delete the group.');
+        }
+      }
+    }
+
+    await targetMembership.destroy({ transaction: t });
+
+    await writeAuditLog({
+      action: AuditAction.FAMILY_MEMBER_REMOVE,
+      resource: AuditResource.FAMILY_MEMBER,
+      resourceId: targetMembership.id,
+      actorUserId: actorId,
+      beforeState: { groupId, userId: targetUserId, role: targetMembership.role },
+      transaction: t,
+    });
+
+    return { removed: true, userId: targetUserId };
+  });
+}
+
+export async function deleteGroup(actorId: string, groupId: string) {
+  return sequelize.transaction(async (t) => {
+    const group = await FamilyGroup.findByPk(groupId, { transaction: t });
+    if (!group) throw new AppError(404, 'Family group not found');
+
+    const actorMembership = await FamilyMember.findOne({
+      where: { groupId, userId: actorId },
+      transaction: t,
+    });
+    if (!actorMembership || actorMembership.role !== 'owner') {
+      throw new AppError(403, 'Only the group owner can delete the family group');
+    }
+
+    await ExpenseSplitParticipant.destroy({ where: { groupId }, transaction: t });
+    await FamilyMember.destroy({ where: { groupId }, transaction: t });
+    await group.destroy({ transaction: t });
+
+    await writeAuditLog({
+      action: AuditAction.FAMILY_GROUP_DELETE,
+      resource: AuditResource.FAMILY_GROUP,
+      resourceId: groupId,
+      actorUserId: actorId,
+      beforeState: { name: group.name, ownerId: group.ownerId },
+      transaction: t,
+    });
+
+    return { deleted: true, groupId };
+  });
+}
+
+export async function updateMemberRole(
+  actorId: string,
+  groupId: string,
+  targetUserId: string,
+  newRole: 'owner' | 'admin' | 'contributor' | 'read_only'
+) {
+  return sequelize.transaction(async (t) => {
+    const actorMembership = await FamilyMember.findOne({ where: { groupId, userId: actorId }, transaction: t });
+    if (!actorMembership || actorMembership.role !== 'owner') {
+      throw new AppError(403, 'Only the group owner can change member roles');
+    }
+
+    const targetMembership = await FamilyMember.findOne({ where: { groupId, userId: targetUserId }, transaction: t });
+    if (!targetMembership) throw new AppError(404, 'Member not found');
+
+    if (newRole === 'owner') {
+      await actorMembership.update({ role: 'admin' }, { transaction: t });
+      await FamilyGroup.update({ ownerId: targetUserId }, { where: { id: groupId }, transaction: t });
+    }
+
+    await targetMembership.update({ role: newRole }, { transaction: t });
+    return targetMembership;
   });
 }
 

@@ -1,4 +1,4 @@
-import { AiConversation, Transaction, Category, RecurringSeries } from '@database/models';
+import { AiConversation, Transaction, Category, RecurringSeries, Budget } from '@database/models';
 import type { AiMessage } from '@database/models';
 import { AppError } from '@shared/errors';
 import { env } from '@config/env';
@@ -14,13 +14,26 @@ import {
 import { runAnomalyDetection } from '@shared/ai/anomalyDetection.engine';
 
 
+export interface StructuredInsight {
+  kind: 'monthly_comparison' | 'top_category' | 'saving_opportunity';
+  title: string;
+  message: string;
+  amount?: number;
+  category?: string;
+  changePercent?: number;
+}
+
 export async function getSpendingInsights(userId: string) {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  const [thisMonth, lastMonth, byCategory] = await Promise.all([
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysPassed = now.getDate();
+  const daysRemaining = daysInMonth - daysPassed;
+
+  const [thisMonth, lastMonth, byCategory, budgets, recurringSeries] = await Promise.all([
     Transaction.sum('amount', {
       where: { userId, type: 'expense', date: { [Op.gte]: thisMonthStart } },
     }),
@@ -38,6 +51,13 @@ export async function getSpendingInsights(userId: string) {
       group: ['categoryId', 'category.id', 'category.name'],
       raw: true,
     }),
+    Budget.findAll({
+      where: { userId },
+      include: [{ model: Category, as: 'category', attributes: ['name'] }],
+    }),
+    RecurringSeries.findAll({
+      where: { userId, active: true },
+    }),
   ]);
 
   const current = Number(thisMonth ?? 0);
@@ -45,12 +65,42 @@ export async function getSpendingInsights(userId: string) {
   const changePercent = previous > 0 ? ((current - previous) / previous) * 100 : 0;
 
   const insights: string[] = [];
+  const structuredInsights: StructuredInsight[] = [];
+
+  // 1. Monthly comparison
   if (changePercent > 5) {
-    insights.push(`You spent ${Math.round(changePercent)}% more this month compared to last month.`);
+    const msg = `You spent ${Math.round(changePercent)}% more this month compared to last month.`;
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'monthly_comparison',
+      title: 'Spending Increased',
+      message: msg,
+      changePercent: Math.round(changePercent),
+      amount: current,
+    });
   } else if (changePercent < -5) {
-    insights.push(`Great job! You spent ${Math.abs(Math.round(changePercent))}% less this month.`);
+    const msg = `Great job! You spent ${Math.abs(Math.round(changePercent))}% less this month.`;
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'monthly_comparison',
+      title: 'Spending Reduced',
+      message: msg,
+      changePercent: Math.round(changePercent),
+      amount: current,
+    });
+  } else {
+    const msg = 'Your spending is stable compared to last month.';
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'monthly_comparison',
+      title: 'Stable Spending',
+      message: msg,
+      changePercent: 0,
+      amount: current,
+    });
   }
 
+  // 2. Top spending category
   const topCategory = [...byCategory].sort(
     (a, b) =>
       Number((b as unknown as { total: string }).total) -
@@ -58,16 +108,72 @@ export async function getSpendingInsights(userId: string) {
   )[0] as unknown as { category?: { name: string }; total: string } | undefined;
 
   if (topCategory?.category) {
-    insights.push(
-      `Your top spending category this month is ${topCategory.category.name} at ₹${Number(topCategory.total).toFixed(0)}.`
-    );
+    const catName = topCategory.category.name;
+    const catTotal = Number(topCategory.total);
+    const msg = `Your top spending category this month is ${catName} at ₹${catTotal.toFixed(0)}.`;
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'top_category',
+      title: `${catName} is Top Expense`,
+      message: msg,
+      category: catName,
+      amount: catTotal,
+    });
   }
 
-  if (insights.length === 0) {
-    insights.push('Your spending is stable this month. Keep tracking to build better habits.');
+  // 3. Saving opportunities & Budget recommendations
+  let savingOpportunityAdded = false;
+  if (budgets.length > 0) {
+    for (const b of budgets) {
+      const budgetAmount = Number(b.amount);
+      const catSpendItem = byCategory.find(
+        (c: any) => c.categoryId === b.categoryId
+      ) as unknown as { total?: string } | undefined;
+      const catSpent = catSpendItem?.total ? Number(catSpendItem.total) : 0;
+      const percentUsed = budgetAmount > 0 ? (catSpent / budgetAmount) * 100 : 0;
+
+      if (percentUsed >= 80 && percentUsed <= 100 && daysRemaining > 5) {
+        const catName = (b as any).category?.name || b.name;
+        const msg = `You have used ${Math.round(percentUsed)}% of your ${catName} budget with ${daysRemaining} days remaining in the month.`;
+        insights.push(msg);
+        structuredInsights.push({
+          kind: 'saving_opportunity',
+          title: `Budget Pace Warning: ${catName}`,
+          message: msg,
+          category: catName,
+          amount: catSpent,
+        });
+        savingOpportunityAdded = true;
+        break;
+      }
+    }
   }
 
-  return { insights, summary: { current, previous, changePercent } };
+  if (!savingOpportunityAdded && recurringSeries.length > 0) {
+    const totalRecurring = recurringSeries.reduce((sum, r) => sum + Number(r.amount), 0);
+    const msg = `You have ${recurringSeries.length} active recurring subscriptions totaling ₹${totalRecurring.toFixed(0)}/mo. Reviewing inactive services could free up cash flow.`;
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'saving_opportunity',
+      title: 'Review Recurring Services',
+      message: msg,
+      amount: totalRecurring,
+    });
+  } else if (!savingOpportunityAdded) {
+    const msg = 'Setting up monthly category budgets will help unlock automated savings recommendations.';
+    insights.push(msg);
+    structuredInsights.push({
+      kind: 'saving_opportunity',
+      title: 'Build Budget Goals',
+      message: msg,
+    });
+  }
+
+  return {
+    insights,
+    structuredInsights,
+    summary: { current, previous, changePercent },
+  };
 }
 
 function titleFromMessage(message: string): string {

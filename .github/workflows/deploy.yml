@@ -89,7 +89,8 @@ jobs:
           set -euo pipefail
           PORT="${EC2_PORT:-22}"
           DIR="${APP_DIR:-/var/www/budgetbrain-api}"
-          USER_HOST="${EC2_USER}@${EC2_HOST}"
+          USER="${EC2_USER:-ec2-user}"
+          USER_HOST="${USER}@${EC2_HOST}"
 
           ssh -p "$PORT" \
             -o StrictHostKeyChecking=yes \

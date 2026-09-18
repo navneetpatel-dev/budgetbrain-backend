@@ -18,7 +18,8 @@ Database: **PostgreSQL** (prefer **AWS RDS** in the same VPC/region)
 
 ## 1. AWS prerequisites
 
-1. Create an **EC2** instance (Ubuntu 22.04/24.04, t3.small+).
+1. Create an **EC2** instance (Amazon Linux 2023 or Ubuntu 22.04/24.04, t3.small+).
+   GitHub secret `EC2_USER` is `ec2-user` on Amazon Linux, `ubuntu` on Ubuntu.
 2. Security group inbound:
    - **22** from your IP (SSH)
    - **80 / 443** from `0.0.0.0/0` (HTTP/HTTPS)
@@ -38,13 +39,18 @@ Database: **PostgreSQL** (prefer **AWS RDS** in the same VPC/region)
 SSH into the instance, then:
 
 ```bash
-# Clone once (public repo) OR use a deploy key for private repos
+# Amazon Linux has no git by default:
+sudo dnf install -y git     # Amazon Linux 2023
+# sudo yum install -y git   # Amazon Linux 2
+# sudo apt-get update && sudo apt-get install -y git   # Ubuntu
+
+# Clone once (HTTPS). For a private repo, add a deploy key first.
 sudo mkdir -p /var/www
 sudo chown "$USER:$USER" /var/www
 git clone -b main https://github.com/navneetpatel-dev/budgetbrain-backend.git /var/www/budgetbrain-api
 cd /var/www/budgetbrain-api
 
-# Bootstrap Node, PM2, nginx, firewall
+# Bootstrap Node, PM2, nginx
 bash scripts/ec2-setup.sh
 ```
 

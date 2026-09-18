@@ -6,8 +6,8 @@ import { env } from './shared/config/env';
 import { errorHandler } from './shared/utils/errors';
 import { globalRateLimiter } from './shared/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
-import { createCorsOptions, stripNginxAppPrefix } from '../shared/http/cors';
-import { jsonNotFound, registerApiAliases } from '../shared/http/routes';
+import { createCorsOptions } from '../shared/http/cors';
+import { jsonNotFound, registerApiAliases, registerApiIndex } from '../shared/http/routes';
 import { sequelize } from '../shared/models';
 import { registerMobileRoutes } from './routes';
 
@@ -20,7 +20,6 @@ app.use(
   })
 );
 app.use(cors(createCorsOptions(env.CORS_ORIGIN)));
-app.use(stripNginxAppPrefix('mobile'));
 app.use(express.json({ limit: '10mb' }));
 app.use(createRequestContextMiddleware('mobile'));
 app.use(globalRateLimiter);
@@ -47,7 +46,7 @@ async function health(_req: express.Request, res: express.Response) {
 }
 
 app.get(['/health', '/mobile/health'], health);
-
+registerApiIndex(app, 'mobile', env.API_VERSION);
 registerApiAliases(app, 'mobile', env.API_VERSION, registerMobileRoutes);
 
 app.use(jsonNotFound);

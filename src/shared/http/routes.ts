@@ -8,6 +8,18 @@ export function jsonNotFound(_req: Request, res: Response): void {
   });
 }
 
+export function registerApiIndex(app: Express, appName: 'web' | 'mobile' | 'admin', apiVersion: string): void {
+  const handler = (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      service: `budgetbrain-${appName}-api`,
+      version: apiVersion,
+      login: `POST /${appName}/api/${apiVersion}/auth/login`,
+    });
+  };
+  app.get(['/api/' + apiVersion, `/${appName}/api/${apiVersion}`], handler);
+}
+
 export function registerApiAliases(
   app: Express,
   appName: 'web' | 'mobile' | 'admin',

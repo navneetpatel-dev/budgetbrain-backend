@@ -70,14 +70,16 @@ jobs:
           PORT="${EC2_PORT:-22}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          for i in 1 2 3; do
-            if ssh-keyscan -p "$PORT" -H -T 10 "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "ssh-keyscan failed for ${EC2_HOST}:${PORT}. Open SG port 22 to GitHub Actions."
-          exit 1
+          case "${EC2_HOST}" in
+            10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
+              echo "EC2_HOST looks like a private VPC IP. Set the secret to the public IP 40.192.65.184"
+              exit 1
+              ;;
+          esac
+          ssh-keyscan -4 -p "$PORT" -T 15 "$EC2_HOST" >> ~/.ssh/known_hosts || true
+          if ! grep -q . ~/.ssh/known_hosts; then
+            echo "Could not scan host keys (will use accept-new on SSH)."
+          fi
 
       - name: Deploy over SSH
         env:
@@ -92,9 +94,8 @@ jobs:
           USER="${EC2_USER:-ec2-user}"
           USER_HOST="${USER}@${EC2_HOST}"
 
-          ssh -p "$PORT" \
-            -o StrictHostKeyChecking=yes \
-            -o IdentitiesOnly=yes \
+          ssh -4 -p "$PORT" \
+            -o StrictHostKeyChecking=accept-new \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
             "$USER_HOST" \

@@ -175,7 +175,13 @@ export async function sendBillDueReminders(): Promise<void> {
         'bill_due',
         'Upcoming bill',
         `${s.merchant} — ₹${Number(s.amount).toFixed(2)} is due ${dueDate === today ? 'today' : `on ${dueDate}`}.`,
-        { recurringSeriesId: s.id }
+        {
+          recurringSeriesId: s.id,
+          merchant: s.merchant,
+          categoryId: s.categoryId,
+          amount: s.amount,
+          currency: s.currency,
+        }
       );
       await s.update({ lastChargedDate: new Date(today) });
     }

@@ -56,3 +56,14 @@ export async function contributeToGoal(req: Request, res: Response) {
   );
   successResponse(res, result, 201);
 }
+
+export async function listContributions(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const { page, limit } = req.query as PaginationInput;
+  const result = await goalService.listGoalContributions(
+    (req as AuthRequest).userId!,
+    id,
+    { page, limit }
+  );
+  successResponse(res, result);
+}

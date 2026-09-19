@@ -475,3 +475,115 @@ function shiftDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
+
+export interface SpendingTrendPoint {
+  date: string;
+  label: string;
+  amount: number;
+}
+
+export interface SpendingTrends {
+  daily: SpendingTrendPoint[];
+  weekly: SpendingTrendPoint[];
+  monthly: SpendingTrendPoint[];
+}
+
+/**
+ * Computes daily (last 14 days), weekly (last 8 weeks), and monthly (last 6 months)
+ * expense trends strictly on the server, guaranteeing continuous date coverage.
+ */
+export async function getSpendingTrends(userId: string): Promise<SpendingTrends> {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const sixMonthsIso = sixMonthsAgo.toISOString().slice(0, 10);
+
+  const transactions = await Transaction.findAll({
+    where: {
+      userId,
+      type: 'expense',
+      date: { [Op.gte]: sixMonthsIso },
+    },
+    attributes: ['amount', 'date'],
+    raw: true,
+  });
+
+  // 1. Daily trends: last 14 days ending today
+  const dailyBuckets = new Map<string, number>();
+  const dailyPoints: SpendingTrendPoint[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    dailyBuckets.set(iso, 0);
+    dailyPoints.push({ date: iso, label, amount: 0 });
+  }
+
+  // 2. Weekly trends: last 8 weeks ending with current week
+  const weeklyBuckets = new Map<string, number>();
+  const weeklyPoints: SpendingTrendPoint[] = [];
+  for (let w = 7; w >= 0; w--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - w * 7);
+    const startOfWeek = new Date(d);
+    startOfWeek.setDate(d.getDate() - d.getDay());
+    const iso = startOfWeek.toISOString().slice(0, 10);
+    const label = `Wk of ${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    if (!weeklyBuckets.has(iso)) {
+      weeklyBuckets.set(iso, 0);
+      weeklyPoints.push({ date: iso, label, amount: 0 });
+    }
+  }
+
+  // 3. Monthly trends: last 6 calendar months ending with current month
+  const monthlyBuckets = new Map<string, number>();
+  const monthlyPoints: SpendingTrendPoint[] = [];
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const iso = d.toISOString().slice(0, 7); // YYYY-MM
+    const label = d.toLocaleDateString('en-US', { month: 'short' });
+    monthlyBuckets.set(iso, 0);
+    monthlyPoints.push({ date: iso, label, amount: 0 });
+  }
+
+  // Populate buckets from transactions
+  for (const t of transactions) {
+    const amt = Number(t.amount);
+    const txDate = new Date(t.date);
+    const dayIso = txDate.toISOString().slice(0, 10);
+    const monthIso = txDate.toISOString().slice(0, 7);
+
+    if (dailyBuckets.has(dayIso)) {
+      dailyBuckets.set(dayIso, (dailyBuckets.get(dayIso) ?? 0) + amt);
+    }
+
+    if (monthlyBuckets.has(monthIso)) {
+      monthlyBuckets.set(monthIso, (monthlyBuckets.get(monthIso) ?? 0) + amt);
+    }
+
+    // Weekly bucket
+    const txStartOfWeek = new Date(txDate);
+    txStartOfWeek.setDate(txDate.getDate() - txDate.getDay());
+    const weekIso = txStartOfWeek.toISOString().slice(0, 10);
+    if (weeklyBuckets.has(weekIso)) {
+      weeklyBuckets.set(weekIso, (weeklyBuckets.get(weekIso) ?? 0) + amt);
+    }
+  }
+
+  for (const p of dailyPoints) {
+    p.amount = Math.round((dailyBuckets.get(p.date) ?? 0) * 100) / 100;
+  }
+  for (const p of weeklyPoints) {
+    p.amount = Math.round((weeklyBuckets.get(p.date) ?? 0) * 100) / 100;
+  }
+  for (const p of monthlyPoints) {
+    p.amount = Math.round((monthlyBuckets.get(p.date) ?? 0) * 100) / 100;
+  }
+
+  return {
+    daily: dailyPoints,
+    weekly: weeklyPoints,
+    monthly: monthlyPoints,
+  };
+}
+

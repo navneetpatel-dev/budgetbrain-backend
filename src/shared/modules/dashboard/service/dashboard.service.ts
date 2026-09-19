@@ -16,6 +16,7 @@ export async function getDashboard(userId: string) {
     categoryBreakdown,
     noSpendStreak,
     upcomingBills,
+    spendingTrends,
   ] = await Promise.all([
     transactionService.getTotalIncome(userId, user),
     transactionService.getTotalExpenses(userId, user),
@@ -25,6 +26,7 @@ export async function getDashboard(userId: string) {
     transactionService.getCategoryBreakdown(userId, user, 2),
     transactionService.getNoSpendStreak(userId),
     recurringService.listUpcomingForDashboard(userId, 3),
+    transactionService.getSpendingTrends(userId),
   ]);
 
   const netSavings = totalIncome - totalExpenses;
@@ -44,5 +46,6 @@ export async function getDashboard(userId: string) {
     categoryBreakdown,
     noSpendStreak,
     upcomingBills,
+    spendingTrends,
   };
 }

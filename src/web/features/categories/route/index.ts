@@ -29,5 +29,10 @@ router.post(
   validateParams(uuidParamSchema),
   asyncHandler(controller.archiveCategory)
 );
+router.post(
+  '/:id/unarchive',
+  validateParams(uuidParamSchema),
+  asyncHandler(controller.unarchiveCategory)
+);
 
 export default router;

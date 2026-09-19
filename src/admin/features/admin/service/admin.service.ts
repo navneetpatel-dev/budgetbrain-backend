@@ -94,9 +94,36 @@ export async function getFeatureUsageStats() {
   };
 }
 
-export async function listUsers(page = 1, limit = 20) {
+export interface ListUsersFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: string;
+  isSuspended?: boolean | string;
+}
+
+export async function listUsers(filters: ListUsersFilters = {}) {
+  const page = Number(filters.page) || 1;
+  const limit = Math.min(Number(filters.limit) || 20, 100);
   const offset = (page - 1) * limit;
+
+  const where: Record<string | symbol, unknown> = {};
+  if (filters.role && filters.role !== 'all') {
+    where.role = filters.role;
+  }
+  if (filters.isSuspended !== undefined && filters.isSuspended !== 'all') {
+    where.isSuspended = filters.isSuspended === 'true' || filters.isSuspended === true;
+  }
+  if (filters.search && filters.search.trim()) {
+    const term = `%${filters.search.trim()}%`;
+    where[Op.or] = [
+      { name: { [Op.iLike]: term } },
+      { email: { [Op.iLike]: term } },
+    ];
+  }
+
   const { rows, count } = await User.findAndCountAll({
+    where,
     attributes: { exclude: ['passwordHash'] },
     order: [['createdAt', 'DESC']],
     limit,
@@ -197,9 +224,14 @@ export async function listAiUsage(page = 1, limit = 20) {
   return { conversations, total: count, page, limit };
 }
 
-export async function listSupportTickets(page = 1, limit = 20) {
+export async function listSupportTickets(page = 1, limit = 20, status?: string) {
   const offset = (page - 1) * limit;
+  const where: Record<string, unknown> = {};
+  if (status && status !== 'all') {
+    where.status = status;
+  }
   const { rows, count } = await SupportTicket.findAndCountAll({
+    where,
     include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
     order: [['createdAt', 'DESC']],
     limit,

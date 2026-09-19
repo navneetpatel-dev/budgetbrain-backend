@@ -12,8 +12,12 @@ import type {
 import type { PaginationInput } from '@shared/types';
 
 export async function listCategories(req: Request, res: Response) {
-  const { page, limit } = req.query as PaginationInput;
-  const data = await categoryService.listCategories((req as AuthRequest).userId!, { page, limit });
+  const { page, limit, includeArchived } = req.query as PaginationInput & { includeArchived?: string | boolean };
+  const data = await categoryService.listCategories((req as AuthRequest).userId!, {
+    page,
+    limit,
+    includeArchived: includeArchived === 'true' || includeArchived === true,
+  });
   successResponse(res, data);
 }
 
@@ -38,6 +42,12 @@ export async function updateCategory(req: Request, res: Response) {
 export async function archiveCategory(req: Request, res: Response) {
   const { id } = req.params as { id: string };
   const category = await categoryService.archiveCategory((req as AuthRequest).userId!, id);
+  successResponse(res, category);
+}
+
+export async function unarchiveCategory(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const category = await categoryService.unarchiveCategory((req as AuthRequest).userId!, id);
   successResponse(res, category);
 }
 

@@ -6,8 +6,10 @@ import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/admin.controller';
 import {
   auditLogsQuerySchema,
+  supportTicketsQuerySchema,
   updateSupportTicketSchema,
   updateUserSchema,
+  usersQuerySchema,
 } from '../validator/admin.validation';
 
 const router = Router();
@@ -15,7 +17,7 @@ router.use(authenticate);
 router.use(requireAdmin);
 
 router.get('/dashboard', asyncHandler(controller.getDashboard));
-router.get('/users', validateQuery(paginationSchema), asyncHandler(controller.listUsers));
+router.get('/users', validateQuery(usersQuerySchema), asyncHandler(controller.listUsers));
 router.get('/users/:id', validateParams(uuidParamSchema), asyncHandler(controller.getUser));
 router.patch(
   '/users/:id',
@@ -33,7 +35,7 @@ router.get('/stats', asyncHandler(controller.getStats));
 router.get('/ai-usage', validateQuery(paginationSchema), asyncHandler(controller.listAiUsage));
 router.get(
   '/support-tickets',
-  validateQuery(paginationSchema),
+  validateQuery(supportTicketsQuerySchema),
   asyncHandler(controller.listSupportTickets)
 );
 router.patch(

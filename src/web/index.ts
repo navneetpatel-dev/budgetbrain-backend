@@ -5,6 +5,7 @@ import { env } from './shared/config/env';
 import { initSentry } from './shared/config/sentry';
 import { validateProductionConfig } from './shared/config/production';
 import { createLogger } from '../shared/logging';
+import { startScheduledJobs } from '@shared/modules/notifications/service/scheduledJobs.service';
 
 const log = createLogger('web');
 
@@ -14,7 +15,10 @@ validateProductionConfig();
 async function bootstrap() {
   try {
     initModels();
-    await prepareDatabase(log);
+    const dbConnected = await prepareDatabase(log);
+    if (dbConnected && process.env.ENABLE_CRON === 'true') {
+      startScheduledJobs();
+    }
 
     listenAndLog(app, log, 'web', {
       port: env.PORT,

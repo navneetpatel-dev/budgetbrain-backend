@@ -29,9 +29,38 @@ export async function createGoal(userId: string, data: CreateGoalInput) {
 }
 
 export async function getGoal(userId: string, id: string) {
-  const goal = await Goal.findOne({ where: { id, userId } });
+  const goal = await Goal.findOne({
+    where: { id, userId },
+    include: [
+      {
+        model: GoalContribution,
+        as: 'contributions',
+        attributes: ['id', 'amount', 'notes', 'contributedAt', 'createdAt'],
+      },
+    ],
+    order: [[{ model: GoalContribution, as: 'contributions' }, 'contributedAt', 'DESC']],
+  });
   if (!goal) throw new AppError(404, 'Goal not found');
   return goal;
+}
+
+export async function listGoalContributions(
+  userId: string,
+  goalId: string,
+  filters: PaginationInput = {}
+) {
+  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+  if (!goal) throw new AppError(404, 'Goal not found');
+
+  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
+  const { rows, count } = await GoalContribution.findAndCountAll({
+    where: { goalId },
+    order: [['contributedAt', 'DESC']],
+    limit,
+    offset,
+  });
+
+  return paginatedResult('contributions', rows, count, page, limit);
 }
 
 export async function listGoals(userId: string, filters: PaginationInput = {}) {

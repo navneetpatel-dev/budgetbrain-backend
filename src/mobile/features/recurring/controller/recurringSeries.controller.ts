@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
 import { AuthRequest } from '@shared/types';
 import * as recurringService from '@shared/modules/recurring/service/recurringSeries.service';
+import * as recurringDetectionService from '@shared/modules/recurring/service/recurringDetection.service';
 import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '@shared/modules/recurring/types';
 import type { PaginationInput } from '@shared/types';
 
@@ -36,4 +37,9 @@ export async function deleteRecurringSeries(req: Request, res: Response) {
   const { id } = req.params as { id: string };
   await recurringService.deleteRecurringSeries((req as AuthRequest).userId!, id);
   successResponse(res, { message: 'Recurring series deleted' });
+}
+
+export async function detectRecurring(req: Request, res: Response) {
+  const series = await recurringDetectionService.detectRecurringPatternsForUser((req as AuthRequest).userId!);
+  successResponse(res, { series });
 }

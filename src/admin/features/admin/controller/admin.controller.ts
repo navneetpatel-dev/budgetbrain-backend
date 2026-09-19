@@ -16,8 +16,7 @@ export async function getDashboard(_req: Request, res: Response) {
 }
 
 export async function listUsers(req: Request, res: Response) {
-  const { page, limit } = req.query as PaginationInput;
-  const data = await adminService.listUsers(page, limit);
+  const data = await adminService.listUsers(req.query as adminService.ListUsersFilters);
   successResponse(res, data);
 }
 
@@ -60,8 +59,8 @@ export async function listAiUsage(req: Request, res: Response) {
 }
 
 export async function listSupportTickets(req: Request, res: Response) {
-  const { page, limit } = req.query as PaginationInput;
-  const data = await adminService.listSupportTickets(page, limit);
+  const { page, limit, status } = req.query as PaginationInput & { status?: string };
+  const data = await adminService.listSupportTickets(page, limit, status);
   successResponse(res, data);
 }
 

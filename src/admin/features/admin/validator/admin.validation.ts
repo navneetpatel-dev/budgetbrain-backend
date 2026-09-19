@@ -10,8 +10,18 @@ import {
 } from '../../../../shared/validation';
 
 export const updateUserSchema = z.object({
-  role: enumField(['free', 'admin'] as const).optional(),
+  role: enumField(['free', 'premium', 'lifetime', 'admin'] as const).optional(),
   suspended: z.boolean().optional(),
+});
+
+export const usersQuerySchema = paginationSchema.extend({
+  search: z.string().trim().max(100).optional(),
+  role: enumField(['all', 'free', 'premium', 'lifetime', 'admin'] as const).optional(),
+  isSuspended: z.union([z.boolean(), z.string()]).optional(),
+});
+
+export const supportTicketsQuerySchema = paginationSchema.extend({
+  status: enumField(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).optional(),
 });
 
 export const updateSupportTicketSchema = z.object({

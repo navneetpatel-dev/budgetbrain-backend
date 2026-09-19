@@ -4,6 +4,7 @@ import {
   Transaction,
   Subscription,
   Device,
+  Category,
 } from '@database/models';
 import type { UserCreationAttributes } from '@database/models/user.model';
 import type { DeviceCreationAttributes } from '@database/models/device.model';
@@ -71,4 +72,19 @@ export async function createTestDevice(
     platform: 'ios',
     ...overrides,
   });
+}
+
+export async function createTestCategory(
+  userId: string,
+  overrides: Record<string, unknown> = {}
+): Promise<Category> {
+  return Category.create({
+    userId,
+    name: 'Test Category',
+    icon: 'food',
+    color: '#FF5722',
+    sortOrder: 0,
+    isArchived: false,
+    ...overrides,
+  } as any);
 }

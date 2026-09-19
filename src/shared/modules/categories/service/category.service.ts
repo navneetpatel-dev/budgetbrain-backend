@@ -5,10 +5,17 @@ import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
 import type { CreateCategoryInput, UpdateCategoryInput } from '../types';
 
-export async function listCategories(userId: string, filters: PaginationInput = {}) {
+export async function listCategories(
+  userId: string,
+  filters: PaginationInput & { includeArchived?: boolean } = {}
+) {
   const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 100);
+  const where: Record<string, unknown> = { userId };
+  if (!filters.includeArchived) {
+    where.isArchived = false;
+  }
   const { rows, count } = await Category.findAndCountAll({
-    where: { userId, isArchived: false },
+    where,
     order: [['sortOrder', 'ASC']],
     limit,
     offset,
@@ -48,6 +55,13 @@ export async function archiveCategory(userId: string, id: string) {
   const category = await Category.findOne({ where: { id, userId } });
   if (!category) throw new AppError(404, 'Category not found');
   await category.update({ isArchived: true });
+  return category;
+}
+
+export async function unarchiveCategory(userId: string, id: string) {
+  const category = await Category.findOne({ where: { id, userId } });
+  if (!category) throw new AppError(404, 'Category not found');
+  await category.update({ isArchived: false });
   return category;
 }
 

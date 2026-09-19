@@ -29,5 +29,11 @@ router.post(
   validateBody(contributeGoalSchema),
   asyncHandler(controller.contributeToGoal)
 );
+router.get(
+  '/:id/contributions',
+  validateParams(uuidParamSchema),
+  validateQuery(paginationSchema),
+  asyncHandler(controller.listContributions)
+);
 
 export default router;

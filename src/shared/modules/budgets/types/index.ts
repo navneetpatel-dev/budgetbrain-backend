@@ -4,7 +4,7 @@ import { createBudgetSchema, updateBudgetSchema } from '../validator/budget.vali
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 
-import type { Budget, Category } from '@database/models';
+import type { Budget, BudgetRolloverMode, Category } from '@database/models';
 
 export type BudgetWithSpent = ReturnType<Budget['toJSON']> & {
   category?: Category | null;
@@ -13,4 +13,6 @@ export type BudgetWithSpent = ReturnType<Budget['toJSON']> & {
   effectiveAmount: number;
   /** Server-computed, capped 0-100. Clients must render this, not divide spent/effectiveAmount themselves. */
   spentPercentage: number;
+  rolloverMode: BudgetRolloverMode;
+  rolloverStartedAt: Date | null;
 };

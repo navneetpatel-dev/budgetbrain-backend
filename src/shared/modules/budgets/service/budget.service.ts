@@ -1,6 +1,11 @@
 import { Op, fn, col } from 'sequelize';
 import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '@database/models';
-import { getBudgetDateRange, getPreviousBudgetDateRange } from '@shared/budgets/budgetPeriod';
+import {
+  getBudgetDateRange,
+  getPreviousBudgetDateRange,
+  getPeriodsBetween,
+  toDateOnly,
+} from '@shared/budgets/budgetPeriod';
 import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
@@ -36,16 +41,45 @@ async function computeBudgetSpent(userId: string, budget: Budget): Promise<numbe
   return sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
 }
 
+const MAX_COMPOUNDING_PERIODS = 24;
+
 /**
  * Single-period rollover: leftover (or deficit) from the immediately preceding period,
- * measured against the budget's nominal amount (not compounded across multiple periods).
+ * measured against the budget's nominal amount.
  * Not supported for `custom` budgets, which have a fixed one-off date range.
  */
-async function computeRolloverAmount(userId: string, budget: Budget): Promise<number> {
-  if (!budget.rollover || budget.type === 'custom') return 0;
+async function computeSingleRollover(userId: string, budget: Budget): Promise<number> {
   const { startDate, endDate } = getPreviousBudgetDateRange(budget);
   const previousSpent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
   return Number(budget.amount) - previousSpent;
+}
+
+/**
+ * Compounding rollover: accumulates leftover/deficit across every period since
+ * `rolloverStartedAt` (or the budget's `startDate` if rollover predates that timestamp),
+ * capped at MAX_COMPOUNDING_PERIODS to bound query cost for long-lived budgets.
+ */
+async function computeCompoundingRollover(userId: string, budget: Budget): Promise<number> {
+  const { endDate: previousPeriodEnd } = getPreviousBudgetDateRange(budget);
+  const fromDate = toDateOnly(budget.rolloverStartedAt, toDateOnly(budget.startDate, previousPeriodEnd));
+  const periods = getPeriodsBetween(budget, fromDate, previousPeriodEnd, MAX_COMPOUNDING_PERIODS);
+
+  const deltas = await Promise.all(
+    periods.map(async ({ startDate, endDate }) => {
+      const spent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+      return Number(budget.amount) - spent;
+    })
+  );
+
+  return deltas.reduce((sum, delta) => sum + delta, 0);
+}
+
+async function computeRolloverAmount(userId: string, budget: Budget): Promise<number> {
+  if (!budget.rollover || budget.type === 'custom') return 0;
+  if (budget.rolloverMode === 'compounding') {
+    return computeCompoundingRollover(userId, budget);
+  }
+  return computeSingleRollover(userId, budget);
 }
 
 /** Mirrors Goal.progressPercentage's capping formula (database/models/goal.model.ts). */
@@ -103,6 +137,8 @@ export async function createBudget(userId: string, data: CreateBudgetInput) {
     // who explicitly wants fewer/later alerts.
     alertThreshold: data.alertThreshold ?? 50,
     rollover: data.rollover ?? false,
+    rolloverMode: data.rolloverMode ?? 'single',
+    rolloverStartedAt: data.rolloverMode === 'compounding' ? new Date() : null,
   });
 
   await writeAuditLog({
@@ -164,7 +200,14 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
     alertThreshold: budget.alertThreshold,
     endDate: budget.endDate,
     rollover: budget.rollover,
+    rolloverMode: budget.rolloverMode,
   };
+
+  // Switching into compounding mode for the first time anchors the accumulation window to
+  // now, so history predating the switch is never retroactively compounded. Switching back
+  // to 'single' (or re-selecting 'compounding' when already in it) leaves the anchor as-is.
+  const switchingToCompounding =
+    data.rolloverMode === 'compounding' && budget.rolloverMode !== 'compounding';
 
   await budget.update({
     ...(data.name !== undefined && { name: data.name }),
@@ -172,6 +215,8 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
     ...(data.alertThreshold !== undefined && { alertThreshold: data.alertThreshold }),
     ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
     ...(data.rollover !== undefined && { rollover: data.rollover }),
+    ...(data.rolloverMode !== undefined && { rolloverMode: data.rolloverMode }),
+    ...(switchingToCompounding && { rolloverStartedAt: new Date() }),
   });
 
   await writeAuditLog({
@@ -186,6 +231,7 @@ export async function updateBudget(userId: string, id: string, data: UpdateBudge
       alertThreshold: budget.alertThreshold,
       endDate: budget.endDate,
       rollover: budget.rollover,
+      rolloverMode: budget.rolloverMode,
     },
   });
 

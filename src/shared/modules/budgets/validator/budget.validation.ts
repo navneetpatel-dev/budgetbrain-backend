@@ -28,6 +28,7 @@ export const createBudgetSchema = z
     endDate: optionalBudgetEndDate,
     alertThreshold: alertThresholdField(true),
     rollover: z.boolean().optional(),
+    rolloverMode: z.enum(['single', 'compounding']).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.type === 'custom') {
@@ -68,4 +69,5 @@ export const updateBudgetSchema = z.object({
   alertThreshold: alertThresholdField(true),
   endDate: optionalBudgetEndDate,
   rollover: z.boolean().optional(),
+  rolloverMode: z.enum(['single', 'compounding']).optional(),
 });

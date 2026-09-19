@@ -3,6 +3,12 @@ import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 /** Budget period — category scope is separate via optional `categoryId`. */
 export type BudgetType = 'monthly' | 'weekly' | 'custom';
 
+/**
+ * 'single' — leftover/deficit from only the immediately preceding period (default).
+ * 'compounding' — accumulates leftover/deficit across every period since `rolloverStartedAt`.
+ */
+export type BudgetRolloverMode = 'single' | 'compounding';
+
 export interface BudgetAttributes {
   id: string;
   userId: string;
@@ -15,13 +21,15 @@ export interface BudgetAttributes {
   endDate: Date | null;
   alertThreshold: number;
   rollover: boolean;
+  rolloverMode: BudgetRolloverMode;
+  rolloverStartedAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type BudgetCreationAttributes = Optional<
   BudgetAttributes,
-  'id' | 'categoryId' | 'endDate' | 'alertThreshold' | 'rollover'
+  'id' | 'categoryId' | 'endDate' | 'alertThreshold' | 'rollover' | 'rolloverMode' | 'rolloverStartedAt'
 >;
 
 export class Budget
@@ -39,6 +47,8 @@ export class Budget
   declare endDate: Date | null;
   declare alertThreshold: number;
   declare rollover: boolean;
+  declare rolloverMode: BudgetRolloverMode;
+  declare rolloverStartedAt: Date | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -95,6 +105,17 @@ export function initBudgetModel(sequelize: Sequelize): typeof Budget {
       rollover: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
+      },
+      rolloverMode: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: 'single',
+        field: 'rollover_mode',
+      },
+      rolloverStartedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: 'rollover_started_at',
       },
     },
     { sequelize, tableName: 'budgets' }

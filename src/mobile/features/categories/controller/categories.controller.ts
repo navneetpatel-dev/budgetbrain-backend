@@ -5,6 +5,7 @@ import * as categoryService from '@shared/modules/categories/service/category.se
 import { suggestCategoryForMerchant } from '@shared/modules/categories/service/merchantMemory.service';
 import type {
   CreateCategoryInput,
+  MergeCategoriesInput,
   ReorderCategoriesInput,
   SuggestCategoryInput,
   UpdateCategoryInput,
@@ -64,4 +65,15 @@ export async function reorderCategories(req: Request, res: Response) {
     orderedIds
   );
   successResponse(res, categories);
+}
+
+export async function mergeCategories(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const { toCategoryId } = req.body as MergeCategoriesInput;
+  const category = await categoryService.mergeCategories(
+    (req as AuthRequest).userId!,
+    id,
+    toCategoryId
+  );
+  successResponse(res, category);
 }

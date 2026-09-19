@@ -6,6 +6,7 @@ import { paginationSchema, uuidParamSchema } from '../../../shared/validation';
 import * as controller from '../controller/categories.controller';
 import {
   createCategorySchema,
+  mergeCategoriesSchema,
   reorderCategoriesSchema,
   suggestCategorySchema,
   updateCategorySchema,
@@ -33,6 +34,12 @@ router.post(
   '/:id/unarchive',
   validateParams(uuidParamSchema),
   asyncHandler(controller.unarchiveCategory)
+);
+router.post(
+  '/:id/merge',
+  validateParams(uuidParamSchema),
+  validateBody(mergeCategoriesSchema),
+  asyncHandler(controller.mergeCategories)
 );
 
 export default router;

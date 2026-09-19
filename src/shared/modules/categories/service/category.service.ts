@@ -1,5 +1,13 @@
-import { Category } from '@database/models';
+import {
+  Budget,
+  Category,
+  MerchantCategoryRule,
+  RecurringSeries,
+  Transaction,
+  sequelize,
+} from '@database/models';
 import { AppError } from '@shared/errors';
+import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
@@ -72,4 +80,53 @@ export async function reorderCategories(userId: string, orderedIds: string[]) {
     )
   );
   return listCategories(userId, { page: 1, limit: 100 });
+}
+
+/**
+ * Reassigns every reference to `fromCategoryId` (transactions, budgets, recurring series,
+ * merchant auto-categorization rules) to `toCategoryId`, then soft-archives the source
+ * category (never hard-deleted, so historical reads and audit trails stay intact).
+ */
+export async function mergeCategories(userId: string, fromCategoryId: string, toCategoryId: string) {
+  if (fromCategoryId === toCategoryId) {
+    throw new AppError(400, 'Cannot merge a category into itself', 'CATEGORY_MERGE_SAME');
+  }
+
+  return sequelize.transaction(async (t) => {
+    const fromCategory = await Category.findOne({
+      where: { id: fromCategoryId, userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!fromCategory) throw new AppError(404, 'Source category not found');
+
+    const toCategory = await Category.findOne({ where: { id: toCategoryId, userId }, transaction: t });
+    if (!toCategory) throw new AppError(404, 'Target category not found');
+
+    const [[transactionsMoved], [budgetsMoved], [recurringMoved], [rulesMoved]] = await Promise.all([
+      Transaction.update({ categoryId: toCategoryId }, { where: { userId, categoryId: fromCategoryId }, transaction: t }),
+      Budget.update({ categoryId: toCategoryId }, { where: { userId, categoryId: fromCategoryId }, transaction: t }),
+      RecurringSeries.update({ categoryId: toCategoryId }, { where: { userId, categoryId: fromCategoryId }, transaction: t }),
+      MerchantCategoryRule.update({ categoryId: toCategoryId }, { where: { userId, categoryId: fromCategoryId }, transaction: t }),
+    ]);
+
+    await fromCategory.update({ isArchived: true }, { transaction: t });
+
+    await writeAuditLog({
+      action: AuditAction.CATEGORY_MERGE,
+      resource: AuditResource.CATEGORY,
+      resourceId: fromCategoryId,
+      actorUserId: userId,
+      afterState: {
+        mergedInto: toCategoryId,
+        transactionsMoved,
+        budgetsMoved,
+        recurringMoved,
+        rulesMoved,
+      },
+      transaction: t,
+    });
+
+    return toCategory;
+  });
 }

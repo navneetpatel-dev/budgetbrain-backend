@@ -34,3 +34,7 @@ export const reorderCategoriesSchema = z.object({
 export const suggestCategorySchema = z.object({
   merchant: requiredText('merchant'),
 });
+
+export const mergeCategoriesSchema = z.object({
+  toCategoryId: uuidField(),
+});

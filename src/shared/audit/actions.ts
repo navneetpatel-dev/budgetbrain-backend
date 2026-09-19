@@ -51,6 +51,8 @@ export const AuditAction = {
   RECURRING_SERIES_CREATE: 'recurring_series.create',
   RECURRING_SERIES_UPDATE: 'recurring_series.update',
   RECURRING_SERIES_DELETE: 'recurring_series.delete',
+
+  CATEGORY_MERGE: 'category.merge',
 } as const;
 
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];
@@ -69,6 +71,7 @@ export const AuditResource = {
   RECURRING_SERIES: 'recurring_series',
   AUTH: 'auth',
   DEVICE: 'device',
+  CATEGORY: 'category',
 } as const;
 
 export type AuditResourceValue = (typeof AuditResource)[keyof typeof AuditResource];

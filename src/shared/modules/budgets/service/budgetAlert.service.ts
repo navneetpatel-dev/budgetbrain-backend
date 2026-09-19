@@ -3,6 +3,9 @@ import { Budget, BudgetAlert, Transaction } from '@database/models';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
 
+/** Fixed progressive alert tiers, per requirements.md's budget-alert granularity gap. */
+const ALERT_TIERS = [50, 80, 90, 100] as const;
+
 export async function checkBudgetAlertsAfterExpense(
   userId: string,
   categoryId?: string | null,
@@ -44,43 +47,45 @@ export async function checkBudgetAlertsAfterExpense(
     if (budgetAmount <= 0) continue;
 
     const percentUsed = (spent / budgetAmount) * 100;
-    const threshold = budget.alertThreshold;
+    const tiersToCheck = ALERT_TIERS.filter((tier) => tier >= budget.alertThreshold);
 
-    if (percentUsed < threshold) continue;
+    for (const threshold of tiersToCheck) {
+      if (percentUsed < threshold) continue;
 
-    const existingAlert = await BudgetAlert.findOne({
-      where: {
-        budgetId: budget.id,
+      const existingAlert = await BudgetAlert.findOne({
+        where: {
+          budgetId: budget.id,
+          userId,
+          threshold,
+          triggeredAt: { [Op.gte]: startDate },
+        },
+        ...txOpts,
+      });
+
+      if (existingAlert) continue;
+
+      await BudgetAlert.create(
+        {
+          budgetId: budget.id,
+          userId,
+          threshold,
+          triggeredAt: new Date(),
+        },
+        txOpts
+      );
+
+      const exceeded = threshold >= 100;
+      await createNotification(
         userId,
-        threshold,
-        triggeredAt: { [Op.gte]: startDate },
-      },
-      ...txOpts,
-    });
-
-    if (existingAlert) continue;
-
-    await BudgetAlert.create(
-      {
-        budgetId: budget.id,
-        userId,
-        threshold,
-        triggeredAt: new Date(),
-      },
-      txOpts
-    );
-
-    const exceeded = percentUsed >= 100;
-    await createNotification(
-      userId,
-      'budget_exceeded',
-      exceeded ? 'Budget exceeded' : 'Budget alert',
-      exceeded
-        ? `You've exceeded your "${budget.name}" budget (${Math.round(percentUsed)}% used).`
-        : `You've used ${Math.round(percentUsed)}% of your "${budget.name}" budget.`,
-      { budgetId: budget.id, percentUsed: Math.round(percentUsed) },
-      !dbTx,
-      dbTx
-    );
+        'budget_exceeded',
+        exceeded ? 'Budget exceeded' : 'Budget alert',
+        exceeded
+          ? `You've exceeded your "${budget.name}" budget (${Math.round(percentUsed)}% used).`
+          : `You've used ${threshold}% of your "${budget.name}" budget.`,
+        { budgetId: budget.id, percentUsed: Math.round(percentUsed), threshold },
+        !dbTx,
+        dbTx
+      );
+    }
   }
 }

@@ -89,7 +89,7 @@ export function initBudgetModel(sequelize: Sequelize): typeof Budget {
       },
       alertThreshold: {
         type: DataTypes.INTEGER,
-        defaultValue: 80,
+        defaultValue: 50,
         field: 'alert_threshold',
       },
       rollover: {

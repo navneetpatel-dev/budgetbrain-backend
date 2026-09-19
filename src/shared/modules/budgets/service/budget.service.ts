@@ -98,7 +98,10 @@ export async function createBudget(userId: string, data: CreateBudgetInput) {
     categoryId: data.categoryId ?? null,
     startDate: new Date(data.startDate),
     endDate: data.endDate ? new Date(data.endDate) : null,
-    alertThreshold: data.alertThreshold ?? 80,
+    // 50 is the lowest of the 4 progressive alert tiers (50/80/90/100) — new budgets get
+    // the full progression by default; alertThreshold only raises the floor for someone
+    // who explicitly wants fewer/later alerts.
+    alertThreshold: data.alertThreshold ?? 50,
     rollover: data.rollover ?? false,
   });
 

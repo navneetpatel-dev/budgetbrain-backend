@@ -25,6 +25,62 @@ export function resolveConflict(clientTimestampMs: number, serverTimestampMs: nu
   return clientTimestampMs > serverTimestampMs ? 'client' : 'server';
 }
 
+const NEVER_MERGE_FIELDS = new Set(['id', 'userId', 'createdAt', 'updatedAt']);
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+  if (a instanceof Date || b instanceof Date) {
+    const at = new Date(a as any).getTime();
+    const bt = new Date(b as any).getTime();
+    return !Number.isNaN(at) && !Number.isNaN(bt) && at === bt;
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+      return false;
+    }
+  }
+  // Decimal/numeric fields can round-trip as "150.00" (string, from Postgres DECIMAL) vs
+  // 150 (number, from client JSON) — compare numerically rather than by strict type+value.
+  const an = Number(a);
+  const bn = Number(b);
+  if (!Number.isNaN(an) && !Number.isNaN(bn)) return an === bn;
+  return false;
+}
+
+/**
+ * Field-level merge for a client-wins sync conflict. Only fields the client's payload
+ * actually differs on (relative to the row's CURRENT server state) are included in the
+ * resulting update — fields the payload omits, or that already match the server's current
+ * value, are left completely untouched. This closes the whole-row-overwrite gap where an
+ * offline client's full-object payload (carrying a stale copy of every field, not just the
+ * one it actually edited) would otherwise clobber a *different* field's newer server-side
+ * value with its own out-of-date copy.
+ *
+ * Known limitation (documented, not fixed by this pass): if BOTH the client and the server
+ * changed the SAME field while the client was offline, this merge can't tell — there is no
+ * per-field client-side timestamp to arbitrate with. In that case the field is included in
+ * this "client differs from server" set like any other change, and the caller's existing
+ * row-level `resolveConflict()` timestamp comparison (already run before this is called)
+ * is what decided the client should win at all. A true 3-way merge would need mobile/web's
+ * offline queues to track per-field change timestamps, which is out of scope here.
+ */
+export function mergeFields(
+  existing: Record<string, unknown>,
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const key of Object.keys(payload)) {
+    if (NEVER_MERGE_FIELDS.has(key)) continue;
+    if (!valuesEqual(payload[key], existing[key])) {
+      merged[key] = payload[key];
+    }
+  }
+  return merged;
+}
+
 export async function processBatchSync(
   userId: string,
   items: SyncBatchItem[]
@@ -87,8 +143,7 @@ async function processTransactionSync(userId: string, item: SyncBatchItem): Prom
         const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
         if (winner === 'client') {
-          const data = { ...item.payload };
-          delete (data as any).id;
+          const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
           await transactionService.updateTransaction(userId, existing.id, data as any, { transaction: t });
           return {
             id: item.id,
@@ -139,8 +194,7 @@ async function processTransactionSync(userId: string, item: SyncBatchItem): Prom
       const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
       if (winner === 'client') {
-        const data = { ...item.payload };
-        delete (data as any).id;
+        const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
         await transactionService.updateTransaction(userId, existing.id, data as any, { transaction: t });
         return {
           id: item.id,
@@ -223,8 +277,7 @@ async function processBudgetSync(userId: string, item: SyncBatchItem): Promise<S
         const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
         if (winner === 'client') {
-          const data = { ...item.payload };
-          delete (data as any).id;
+          const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
           await existing.update(data as any, { transaction: t });
           return { id: item.id, resource: 'budget', action: 'create', status: 'applied' };
         }
@@ -264,8 +317,7 @@ async function processBudgetSync(userId: string, item: SyncBatchItem): Promise<S
       const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
       if (winner === 'client') {
-        const data = { ...item.payload };
-        delete (data as any).id;
+        const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
         await existing.update(data as any, { transaction: t });
         return { id: item.id, resource: 'budget', action: 'update', status: 'applied' };
       }
@@ -331,8 +383,7 @@ async function processGoalSync(userId: string, item: SyncBatchItem): Promise<Syn
         const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
         if (winner === 'client') {
-          const data = { ...item.payload };
-          delete (data as any).id;
+          const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
           await existing.update(data as any, { transaction: t });
           return { id: item.id, resource: 'goal', action: 'create', status: 'applied' };
         }
@@ -372,8 +423,7 @@ async function processGoalSync(userId: string, item: SyncBatchItem): Promise<Syn
       const winner = resolveConflict(clientTimestampMs, serverTimestampMs);
 
       if (winner === 'client') {
-        const data = { ...item.payload };
-        delete (data as any).id;
+        const data = mergeFields(existing.get({ plain: true }) as unknown as Record<string, unknown>, item.payload as Record<string, unknown>);
         await existing.update(data as any, { transaction: t });
         return { id: item.id, resource: 'goal', action: 'update', status: 'applied' };
       }

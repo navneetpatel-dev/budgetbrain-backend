@@ -59,8 +59,12 @@ export async function listAiUsage(req: Request, res: Response) {
 }
 
 export async function listSupportTickets(req: Request, res: Response) {
-  const { page, limit, status } = req.query as PaginationInput & { status?: string };
-  const data = await adminService.listSupportTickets(page, limit, status);
+  const { page, limit, status, sortBy, sortDir } = req.query as PaginationInput & {
+    status?: string;
+    sortBy?: string;
+    sortDir?: string;
+  };
+  const data = await adminService.listSupportTickets(page, limit, status, sortBy, sortDir);
   successResponse(res, data);
 }
 

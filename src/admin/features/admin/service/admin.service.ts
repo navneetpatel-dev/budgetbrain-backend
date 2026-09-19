@@ -100,7 +100,12 @@ export interface ListUsersFilters {
   search?: string;
   role?: string;
   isSuspended?: boolean | string;
+  sortBy?: string;
+  sortDir?: string;
 }
+
+const USERS_SORT_COLUMNS = ['createdAt', 'email', 'role', 'isSuspended', 'lastLoginAt'] as const;
+const SUPPORT_TICKETS_SORT_COLUMNS = ['createdAt', 'status', 'priority'] as const;
 
 export async function listUsers(filters: ListUsersFilters = {}) {
   const page = Number(filters.page) || 1;
@@ -122,10 +127,15 @@ export async function listUsers(filters: ListUsersFilters = {}) {
     ];
   }
 
+  const sortBy = (USERS_SORT_COLUMNS as readonly string[]).includes(filters.sortBy ?? '')
+    ? (filters.sortBy as (typeof USERS_SORT_COLUMNS)[number])
+    : 'createdAt';
+  const sortDir = filters.sortDir === 'ASC' ? 'ASC' : 'DESC';
+
   const { rows, count } = await User.findAndCountAll({
     where,
     attributes: { exclude: ['passwordHash'] },
-    order: [['createdAt', 'DESC']],
+    order: [[sortBy, sortDir]],
     limit,
     offset,
   });
@@ -224,16 +234,28 @@ export async function listAiUsage(page = 1, limit = 20) {
   return { conversations, total: count, page, limit };
 }
 
-export async function listSupportTickets(page = 1, limit = 20, status?: string) {
+export async function listSupportTickets(
+  page = 1,
+  limit = 20,
+  status?: string,
+  sortByInput?: string,
+  sortDirInput?: string
+) {
   const offset = (page - 1) * limit;
   const where: Record<string, unknown> = {};
   if (status && status !== 'all') {
     where.status = status;
   }
+
+  const sortBy = (SUPPORT_TICKETS_SORT_COLUMNS as readonly string[]).includes(sortByInput ?? '')
+    ? (sortByInput as (typeof SUPPORT_TICKETS_SORT_COLUMNS)[number])
+    : 'createdAt';
+  const sortDir = sortDirInput === 'ASC' ? 'ASC' : 'DESC';
+
   const { rows, count } = await SupportTicket.findAndCountAll({
     where,
     include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
-    order: [['createdAt', 'DESC']],
+    order: [[sortBy, sortDir]],
     limit,
     offset,
   });

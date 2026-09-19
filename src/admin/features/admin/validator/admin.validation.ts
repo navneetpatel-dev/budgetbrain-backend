@@ -14,14 +14,22 @@ export const updateUserSchema = z.object({
   suspended: z.boolean().optional(),
 });
 
+export const USERS_SORT_COLUMNS = ['createdAt', 'email', 'role', 'isSuspended', 'lastLoginAt'] as const;
+export const SUPPORT_TICKETS_SORT_COLUMNS = ['createdAt', 'status', 'priority'] as const;
+const sortDirField = enumField(['ASC', 'DESC'] as const).optional();
+
 export const usersQuerySchema = paginationSchema.extend({
   search: z.string().trim().max(100).optional(),
   role: enumField(['all', 'free', 'premium', 'lifetime', 'admin'] as const).optional(),
   isSuspended: z.union([z.boolean(), z.string()]).optional(),
+  sortBy: enumField(USERS_SORT_COLUMNS).optional(),
+  sortDir: sortDirField,
 });
 
 export const supportTicketsQuerySchema = paginationSchema.extend({
   status: enumField(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).optional(),
+  sortBy: enumField(SUPPORT_TICKETS_SORT_COLUMNS).optional(),
+  sortDir: sortDirField,
 });
 
 export const updateSupportTicketSchema = z.object({

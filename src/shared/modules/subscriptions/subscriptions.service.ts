@@ -184,14 +184,33 @@ export async function applySubscriptionState(input: SubscriptionStateInput) {
   });
 
   if (input.isRenewalEvent) {
-    const { createNotification } = await import('@shared/modules/notifications/service/notification.service');
-    await createNotification(
-      user.id,
-      'subscription_renewal',
-      'Subscription renewed',
-      `Your BudgetBrain ${input.plan} subscription has been renewed.`,
-      { subscriptionId: subscription.id, plan: input.plan }
+    // Both RevenueCat and Razorpay retry undelivered webhooks — dedupe so a redelivered
+    // renewal event doesn't send the customer a second "renewed" push for the same
+    // real-world renewal.
+    const { Notification } = await import('@database/models');
+    const { Op } = await import('sequelize');
+    const recentWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentRenewals = await Notification.findAll({
+      where: {
+        userId: user.id,
+        type: 'subscription_renewal',
+        createdAt: { [Op.gte]: recentWindowStart },
+      },
+    });
+    const alreadyNotified = recentRenewals.some(
+      (n) => (n.data as { subscriptionId?: string } | null)?.subscriptionId === subscription.id
     );
+
+    if (!alreadyNotified) {
+      const { createNotification } = await import('@shared/modules/notifications/service/notification.service');
+      await createNotification(
+        user.id,
+        'subscription_renewal',
+        'Subscription renewed',
+        `Your BudgetBrain ${input.plan} subscription has been renewed.`,
+        { subscriptionId: subscription.id, plan: input.plan }
+      );
+    }
   }
 
   return subscription;

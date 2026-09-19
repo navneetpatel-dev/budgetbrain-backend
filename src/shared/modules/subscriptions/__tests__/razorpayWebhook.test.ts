@@ -7,7 +7,7 @@ import {
   upsertFromRazorpayEvent,
   createCheckoutOrder,
 } from '../razorpay.service';
-import { User } from '@database/models';
+import { User, Notification } from '@database/models';
 import { PLAN_PRICES_INR } from '../subscriptions.constants';
 
 const TEST_SECRET = 'test_razorpay_webhook_secret';
@@ -163,5 +163,160 @@ describe('Razorpay webhook & checkout', () => {
     // PLAN_PRICES_INR inside the service.
     expect(createCheckoutOrder.length).toBe(2);
     expect(PLAN_PRICES_INR.monthly).toBe(199);
+  });
+
+  it('payment.captured for a subscription charge (no notes.plan) does NOT default to lifetime', async () => {
+    const user = await createTestUser({ role: 'free' });
+
+    // First, a real recurring activation so the user is a legitimate monthly subscriber.
+    const currentStart = Math.floor(Date.now() / 1000);
+    await upsertFromRazorpayEvent({
+      event: 'subscription.activated',
+      payload: {
+        subscription: {
+          entity: {
+            id: 'sub_test_defaulting',
+            plan_id: 'plan_monthly_test',
+            status: 'active',
+            current_start: currentStart,
+            current_end: currentStart + 30 * 86400,
+            notes: { userId: user.id, plan: 'monthly' },
+          },
+        },
+      },
+    });
+
+    // Razorpay also fires payment.captured for the same charge, but on a payment entity
+    // that carries a subscription_id and no notes at all (the exact ambiguous case that
+    // used to silently default to 'lifetime'). It must be a no-op here, not an upgrade.
+    const result = await upsertFromRazorpayEvent({
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: 'pay_test_subcharge',
+            subscription_id: 'sub_test_defaulting',
+          },
+        },
+      },
+    });
+
+    expect(result).toBeNull();
+    const refreshed = await User.findByPk(user.id);
+    expect(refreshed!.role).toBe('premium'); // still monthly premium, NOT lifetime
+  });
+
+  it('payment.captured with no notes and no subscription_id refuses to guess a plan', async () => {
+    // Force the order-lookup fallback to fail closed rather than depend on real Razorpay
+    // credentials being configured in this test environment.
+    env.RAZORPAY_KEY_ID = undefined;
+    env.RAZORPAY_KEY_SECRET = undefined;
+
+    const result = await upsertFromRazorpayEvent({
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: { id: 'pay_test_ambiguous', order_id: 'order_nonexistent' },
+        },
+      },
+    });
+    // No notes on the payment, and the order lookup will fail (Razorpay not configured
+    // in this test env) — must refuse to guess rather than default to lifetime.
+    expect(result).toBeNull();
+  });
+
+  it('payment.failed on a recurring subscription marks it in_billing_retry without downgrading role', async () => {
+    const user = await createTestUser({ role: 'free' });
+    const currentStart = Math.floor(Date.now() / 1000);
+
+    await upsertFromRazorpayEvent({
+      event: 'subscription.activated',
+      payload: {
+        subscription: {
+          entity: {
+            id: 'sub_test_billing_issue',
+            plan_id: 'plan_monthly_test',
+            status: 'active',
+            current_start: currentStart,
+            current_end: currentStart + 30 * 86400,
+            notes: { userId: user.id, plan: 'monthly' },
+          },
+        },
+      },
+    });
+
+    const result = await upsertFromRazorpayEvent({
+      event: 'payment.failed',
+      payload: {
+        payment: {
+          entity: { id: 'pay_test_failed', subscription_id: 'sub_test_billing_issue' },
+        },
+      },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe('in_billing_retry');
+    expect(result!.billingIssuesDetectedAt).not.toBeNull();
+
+    const refreshed = await User.findByPk(user.id);
+    expect(refreshed!.role).toBe('premium'); // not downgraded on a single failed attempt
+  });
+
+  it('payment.failed for a one-time (lifetime) order is a no-op', async () => {
+    const result = await upsertFromRazorpayEvent({
+      event: 'payment.failed',
+      payload: {
+        payment: { entity: { id: 'pay_test_failed_onetime', order_id: 'order_test_1' } },
+      },
+    });
+    expect(result).toBeNull();
+  });
+
+  it('redelivering the same renewal webhook event only sends one renewal notification', async () => {
+    const user = await createTestUser({ role: 'premium' });
+    const currentStart = Math.floor(Date.now() / 1000);
+    const currentEnd = currentStart + 30 * 86400;
+
+    const activatePayload = {
+      event: 'subscription.activated' as const,
+      payload: {
+        subscription: {
+          entity: {
+            id: 'sub_test_dedup',
+            plan_id: 'plan_monthly_test',
+            status: 'active',
+            current_start: currentStart,
+            current_end: currentEnd,
+            notes: { userId: user.id, plan: 'monthly' as const },
+          },
+        },
+      },
+    };
+    await upsertFromRazorpayEvent(activatePayload);
+
+    const renewalPayload = {
+      event: 'subscription.charged' as const,
+      payload: {
+        subscription: {
+          entity: {
+            id: 'sub_test_dedup',
+            plan_id: 'plan_monthly_test',
+            status: 'active',
+            current_start: currentEnd,
+            current_end: currentEnd + 30 * 86400,
+            notes: { userId: user.id, plan: 'monthly' as const },
+          },
+        },
+      },
+    };
+
+    // Deliver the renewal event twice, as a webhook retry would.
+    await upsertFromRazorpayEvent(renewalPayload);
+    await upsertFromRazorpayEvent(renewalPayload);
+
+    const renewalNotifications = await Notification.findAll({
+      where: { userId: user.id, type: 'subscription_renewal' },
+    });
+    expect(renewalNotifications.length).toBe(1);
   });
 });

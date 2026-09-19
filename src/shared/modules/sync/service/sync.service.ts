@@ -10,6 +10,10 @@ export interface SyncItemResult {
   action: string;
   serverUpdatedAt?: string;
   error?: string;
+  /** Server-assigned row id — only present for a successfully applied `create` action, so a
+   * client can match a resource queued offline alongside it (e.g. a receipt attachment) to
+   * the real row once it exists. */
+  serverId?: string;
 }
 
 /**
@@ -103,12 +107,13 @@ async function processTransactionSync(userId: string, item: SyncBatchItem): Prom
         };
       }
 
-      await transactionService.createTransaction(userId, item.payload as any, { transaction: t });
+      const created = await transactionService.createTransaction(userId, item.payload as any, { transaction: t });
       return {
         id: item.id,
         resource: item.resource,
         action: 'create',
         status: 'applied',
+        serverId: created?.id,
       };
     }
 

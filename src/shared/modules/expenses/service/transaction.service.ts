@@ -13,6 +13,7 @@ import { checkBudgetAlertsAfterExpense } from '@shared/modules/budgets/service/b
 import { upsertMerchantCategoryRule } from '@shared/modules/categories/service/merchantMemory.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { resolvePagination, paginatedResult } from '@shared/pagination';
+import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
 import type {
   CreateTransactionInput,
@@ -105,9 +106,25 @@ function buildTransactionWhere(userId: string, filters: TransactionFilters): Rec
   return where;
 }
 
+async function applyHistoryLimit(userId: string, filters: TransactionFilters): Promise<TransactionFilters> {
+  const entitlement = await getEntitlementForUser(userId, 'pro');
+  if (entitlement.isEntitled) {
+    return filters;
+  }
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const ninetyDaysIso = ninetyDaysAgo.toISOString().slice(0, 10);
+
+  if (!filters.startDate || filters.startDate < ninetyDaysIso) {
+    return { ...filters, startDate: ninetyDaysIso };
+  }
+  return filters;
+}
+
 export async function listTransactions(userId: string, filters: TransactionFilters) {
-  const { page, limit, offset } = resolvePagination(filters.page, filters.limit);
-  const where = buildTransactionWhere(userId, filters);
+  const effectiveFilters = await applyHistoryLimit(userId, filters);
+  const { page, limit, offset } = resolvePagination(effectiveFilters.page, effectiveFilters.limit);
+  const where = buildTransactionWhere(userId, effectiveFilters);
 
   const { rows, count } = await Transaction.findAndCountAll({
     where,
@@ -120,7 +137,7 @@ export async function listTransactions(userId: string, filters: TransactionFilte
     offset,
   });
 
-  const summary = await getTransactionsSummary(userId, filters);
+  const summary = await getTransactionsSummary(userId, effectiveFilters);
 
   return { transactions: rows, total: count, page, limit, summary };
 }
@@ -138,7 +155,8 @@ export async function getTransactionsSummary(
   userId: string,
   filters: TransactionFilters
 ): Promise<{ totalExpense: number; totalIncome: number }> {
-  const rest = { ...filters };
+  const effectiveFilters = await applyHistoryLimit(userId, filters);
+  const rest = { ...effectiveFilters };
   delete rest.type;
   const where = buildTransactionWhere(userId, rest);
 

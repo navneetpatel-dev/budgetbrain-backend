@@ -4,6 +4,7 @@ import { getBudgetDateRange, getPreviousBudgetDateRange } from '@shared/budgets/
 import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
+import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
 
@@ -75,6 +76,18 @@ async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpen
 export async function createBudget(userId: string, data: CreateBudgetInput) {
   const user = await User.findByPk(userId);
   if (!user) throw new AppError(404, 'User not found');
+
+  const entitlement = await getEntitlementForUser(userId, 'pro');
+  if (!entitlement.isEntitled) {
+    const existingCount = await Budget.count({ where: { userId } });
+    if (existingCount >= 3) {
+      throw new AppError(
+        403,
+        'Free tier is limited to 3 budgets. Upgrade to Pro for unlimited budgets.',
+        'BUDGET_LIMIT_REACHED'
+      );
+    }
+  }
 
   const budget = await Budget.create({
     userId,

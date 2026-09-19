@@ -20,6 +20,7 @@ import loansRoutes from './features/loans/route';
 import recurringRoutes from './features/recurring/route';
 import subscriptionsRoutes from './features/subscriptions/route';
 import searchRoutes from './features/search/route';
+import currencyRoutes from '@shared/modules/currency/currency.routes';
 import { authenticate, requireOnboarding } from './shared/middleware/auth';
 import { requireEntitlement } from '@shared/middleware/requireEntitlement';
 import type { Express } from 'express';
@@ -36,12 +37,12 @@ export function registerMobileRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/income`, protectedFeature, incomeRoutes);
   app.use(`${apiPrefix}/categories`, protectedFeature, categoriesRoutes);
   app.use(`${apiPrefix}/budgets`, protectedFeature, budgetsRoutes);
-  app.use(`${apiPrefix}/goals`, protectedFeature, goalsRoutes);
+  app.use(`${apiPrefix}/goals`, protectedFeature, requireEntitlement('pro'), goalsRoutes);
   app.use(`${apiPrefix}/reports`, protectedFeature, reportsRoutes);
   app.use(`${apiPrefix}/notifications`, protectedFeature, notificationsRoutes);
   app.use(`${apiPrefix}/family`, protectedFeature, requireEntitlement('pro'), familyRoutes);
   app.use(`${apiPrefix}/ai`, protectedFeature, requireEntitlement('pro'), aiRoutes);
-  app.use(`${apiPrefix}/sync`, protectedFeature, syncRoutes);
+  app.use(`${apiPrefix}/sync`, protectedFeature, requireEntitlement('pro'), syncRoutes);
   app.use(`${apiPrefix}/accounts`, protectedFeature, accountsRoutes);
   app.use(`${apiPrefix}/investments`, protectedFeature, investmentsRoutes);
   app.use(`${apiPrefix}/net-worth`, protectedFeature, netWorthRoutes);
@@ -51,6 +52,7 @@ export function registerMobileRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/loans`, protectedFeature, loansRoutes);
   app.use(`${apiPrefix}/recurring-series`, protectedFeature, recurringRoutes);
   app.use(`${apiPrefix}/search`, protectedFeature, searchRoutes);
+  app.use(`${apiPrefix}/currencies`, protectedFeature, currencyRoutes);
 }
 
 

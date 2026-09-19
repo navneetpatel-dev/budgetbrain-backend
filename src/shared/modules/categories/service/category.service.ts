@@ -1,6 +1,7 @@
 import { Category } from '@database/models';
 import { AppError } from '@shared/errors';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
+import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
 import type { CreateCategoryInput, UpdateCategoryInput } from '../types';
 
@@ -17,6 +18,15 @@ export async function listCategories(userId: string, filters: PaginationInput = 
 
 export async function createCategory(userId: string, data: CreateCategoryInput) {
   const count = await Category.count({ where: { userId, isArchived: false } });
+
+  const entitlement = await getEntitlementForUser(userId, 'pro');
+  if (!entitlement.isEntitled && count >= 14) {
+    throw new AppError(
+      403,
+      'Free tier is limited to 5 custom categories. Upgrade to Pro for unlimited categories.',
+      'CATEGORY_LIMIT_REACHED'
+    );
+  }
 
   return Category.create({
     userId,

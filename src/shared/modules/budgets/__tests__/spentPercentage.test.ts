@@ -50,4 +50,25 @@ describe('Budget.spentPercentage — server-computed, capped 0-100', () => {
     const enriched = await getBudget(user.id, budget.id);
     expect(enriched.spentPercentage).toBe(0);
   });
+
+  it('throws BUDGET_LIMIT_REACHED when Free user tries to create a 4th budget', async () => {
+    const user = await createTestUser();
+    for (let i = 1; i <= 3; i++) {
+      await createBudget(user.id, {
+        name: `Budget ${i}`,
+        type: 'monthly',
+        amount: 500,
+        startDate: new Date().toISOString().slice(0, 10),
+      });
+    }
+
+    await expect(
+      createBudget(user.id, {
+        name: 'Budget 4',
+        type: 'monthly',
+        amount: 500,
+        startDate: new Date().toISOString().slice(0, 10),
+      })
+    ).rejects.toThrow('Free tier is limited to 3 budgets');
+  });
 });

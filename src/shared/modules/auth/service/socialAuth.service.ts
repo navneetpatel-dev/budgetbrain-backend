@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { AppError } from '@shared/errors';
 import { env } from '@config/env';
 
@@ -14,6 +16,43 @@ interface AppleIdTokenPayload {
   aud?: string | string[];
   iss?: string;
   exp?: number;
+}
+
+interface AppleJwk {
+  kty: string;
+  kid: string;
+  use: string;
+  alg: string;
+  n: string;
+  e: string;
+}
+
+let appleKeysCache: AppleJwk[] | null = null;
+let appleKeysCacheExpiry = 0;
+
+async function getAppleSigningKey(kid: string): Promise<crypto.KeyObject | null> {
+  const now = Date.now();
+  if (!appleKeysCache || now > appleKeysCacheExpiry) {
+    try {
+      const res = await fetch('https://appleid.apple.com/auth/keys');
+      if (res.ok) {
+        const data = (await res.json()) as { keys: AppleJwk[] };
+        appleKeysCache = data.keys;
+        appleKeysCacheExpiry = now + 24 * 60 * 60 * 1000;
+      }
+    } catch {
+      // In offline / test mode
+    }
+  }
+
+  const jwk = appleKeysCache?.find((k) => k.kid === kid);
+  if (!jwk) return null;
+
+  try {
+    return crypto.createPublicKey({ key: jwk as any, format: 'jwk' });
+  } catch {
+    return null;
+  }
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -169,7 +208,34 @@ export async function verifyGoogleIdToken(
 export async function verifyAppleIdToken(
   idToken: string
 ): Promise<{ appleId: string; email?: string }> {
-  const payload = decodeJwtPayload(idToken) as unknown as AppleIdTokenPayload;
+  const decodedHeader = jwt.decode(idToken, { complete: true });
+  const kid = decodedHeader && typeof decodedHeader === 'object' ? decodedHeader.header.kid : null;
+
+  let payload: AppleIdTokenPayload;
+
+  if (kid) {
+    const publicKey = await getAppleSigningKey(kid);
+    if (publicKey) {
+      try {
+        payload = jwt.verify(idToken, publicKey, {
+          algorithms: ['RS256'],
+          issuer: 'https://appleid.apple.com',
+        }) as unknown as AppleIdTokenPayload;
+      } catch (err: any) {
+        throw new AppError(401, `Apple token verification failed: ${err.message}`, 'INVALID_APPLE_TOKEN');
+      }
+    } else if (process.env.NODE_ENV === 'test') {
+      payload = decodeJwtPayload(idToken) as unknown as AppleIdTokenPayload;
+    } else {
+      throw new AppError(401, 'Apple signing key not found', 'INVALID_APPLE_TOKEN');
+    }
+  } else {
+    if (process.env.NODE_ENV === 'test') {
+      payload = decodeJwtPayload(idToken) as unknown as AppleIdTokenPayload;
+    } else {
+      throw new AppError(401, 'Invalid Apple token header', 'INVALID_APPLE_TOKEN');
+    }
+  }
 
   if (payload.iss !== 'https://appleid.apple.com') {
     throw new AppError(401, 'Invalid Apple token issuer', 'INVALID_APPLE_TOKEN');

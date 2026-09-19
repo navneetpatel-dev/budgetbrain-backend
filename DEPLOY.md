@@ -116,6 +116,12 @@ SMTP_PORT=587
 SMTP_USER=...
 SMTP_PASS=...
 EMAIL_FROM=BudgetBrain <noreply@yourdomain.com>
+
+# Cron: set to 'true' on exactly ONE of the three processes below (web is
+# the convention). Setting it on more than one process causes every
+# scheduled job (budget alerts, bill reminders, digests, etc.) to fire once
+# per process that has it enabled, sending duplicate notifications/emails.
+ENABLE_CRON=true
 ```
 
 Generate secrets:
@@ -123,6 +129,8 @@ Generate secrets:
 ```bash
 openssl rand -base64 48
 ```
+
+Only the **web** process should run with `ENABLE_CRON=true`; leave it unset (or `false`) on the mobile and admin processes' env files.
 
 ### First manual start (once)
 

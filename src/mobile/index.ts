@@ -18,7 +18,7 @@ async function bootstrap() {
 
     const dbConnected = await prepareDatabase(log);
 
-    if (dbConnected) {
+    if (dbConnected && process.env.ENABLE_CRON === 'true') {
       startScheduledJobs();
     }
 

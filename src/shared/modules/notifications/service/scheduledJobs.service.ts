@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 import { User, Transaction, Notification, Subscription } from '@database/models';
 import { createNotification } from './notification.service';
 import { getWeeklySpendComparison } from '@shared/modules/expenses/service/transaction.service';
-import { sendBillDueReminders } from '@shared/modules/recurring/service/recurringSeries.service';
+import { sendBillDueReminders, processRecurringGoalContributions } from '@shared/modules/recurring/service/recurringSeries.service';
 import { detectRecurringPatternsForAllUsers } from '@shared/modules/recurring/service/recurringDetection.service';
 import { fetchAndUpsertLiveRates } from '@shared/currency/currency.engine';
 
@@ -158,6 +158,15 @@ export function startScheduledJobs(): void {
       console.log(`[cron] recurring detection completed: ${count} series detected`);
     } catch (err) {
       console.error('[cron] recurring_detection failed:', err);
+    }
+  });
+
+  // Automated recurring goal contributions — daily 7:00 AM server time
+  cron.schedule('0 7 * * *', async () => {
+    try {
+      await processRecurringGoalContributions();
+    } catch (err) {
+      console.error('[cron] recurring_goal_contribution failed:', err);
     }
   });
 

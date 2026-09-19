@@ -17,6 +17,7 @@ export const createRecurringSeriesSchema = z.object({
   cadence: enumField(['weekly', 'monthly', 'yearly'] as const),
   nextDueDate: requiredDate,
   reminderDaysBefore: z.number().int().min(0).max(30).optional(),
+  goalId: uuidField().optional(),
 });
 
 export const updateRecurringSeriesSchema = z.object({
@@ -25,4 +26,5 @@ export const updateRecurringSeriesSchema = z.object({
   nextDueDate: optionalDate,
   active: z.boolean().optional(),
   reminderDaysBefore: z.number().int().min(0).max(30).optional(),
+  goalId: uuidField().nullable().optional(),
 });

@@ -16,13 +16,21 @@ export interface RecurringSeriesAttributes {
   active: boolean;
   reminderDaysBefore: number;
   source: RecurringSeriesSource;
+  goalId: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type RecurringSeriesCreationAttributes = Optional<
   RecurringSeriesAttributes,
-  'id' | 'categoryId' | 'currency' | 'lastChargedDate' | 'active' | 'reminderDaysBefore' | 'source'
+  | 'id'
+  | 'categoryId'
+  | 'currency'
+  | 'lastChargedDate'
+  | 'active'
+  | 'reminderDaysBefore'
+  | 'source'
+  | 'goalId'
 >;
 
 export class RecurringSeries
@@ -41,6 +49,7 @@ export class RecurringSeries
   declare active: boolean;
   declare reminderDaysBefore: number;
   declare source: RecurringSeriesSource;
+  declare goalId: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -102,6 +111,11 @@ export function initRecurringSeriesModel(sequelize: Sequelize): typeof Recurring
         type: DataTypes.ENUM('manual', 'detected'),
         defaultValue: 'manual',
       },
+      goalId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'goal_id',
+      },
     },
     { sequelize, tableName: 'recurring_series' }
   );
@@ -112,8 +126,10 @@ export function associateRecurringSeries(): void {
   const { User } = require('./user.model') as typeof import('./user.model');
   const { Category } = require('./category.model') as typeof import('./category.model');
   const { Transaction } = require('./transaction.model') as typeof import('./transaction.model');
+  const { Goal } = require('./goal.model') as typeof import('./goal.model');
 
   RecurringSeries.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   RecurringSeries.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
   RecurringSeries.hasMany(Transaction, { foreignKey: 'recurringSeriesId', as: 'transactions' });
+  RecurringSeries.belongsTo(Goal, { foreignKey: 'goalId', as: 'goal' });
 }

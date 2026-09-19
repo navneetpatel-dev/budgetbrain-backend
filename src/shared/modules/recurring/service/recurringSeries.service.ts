@@ -1,8 +1,9 @@
 import { Op } from 'sequelize';
-import { RecurringSeries, Transaction } from '@database/models';
+import { sequelize, RecurringSeries, Transaction, Goal } from '@database/models';
 import type { RecurringCadence } from '@database/models';
 import { AppError } from '@shared/errors';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
+import { contributeToGoal } from '@shared/modules/goals/service/goal.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
@@ -93,6 +94,7 @@ export async function createRecurringSeries(userId: string, data: CreateRecurrin
     nextDueDate: new Date(data.nextDueDate),
     reminderDaysBefore: data.reminderDaysBefore ?? 3,
     source: 'manual',
+    goalId: data.goalId ?? null,
   });
 
   await writeAuditLog({
@@ -122,6 +124,7 @@ export async function updateRecurringSeries(
     ...(data.nextDueDate !== undefined && { nextDueDate: new Date(data.nextDueDate) }),
     ...(data.active !== undefined && { active: data.active }),
     ...(data.reminderDaysBefore !== undefined && { reminderDaysBefore: data.reminderDaysBefore }),
+    ...(data.goalId !== undefined && { goalId: data.goalId }),
   });
 
   await writeAuditLog({
@@ -180,5 +183,54 @@ export async function sendBillDueReminders(): Promise<void> {
     if (today > dueDate) {
       await s.update({ nextDueDate: new Date(shiftByCadence(dueDate, s.cadence)) });
     }
+  }
+}
+
+/**
+ * Cron entry point: auto-contributes to a linked Goal for every active, due recurring series.
+ * The contribution and the due-date advance happen in one transaction so a crash mid-way can't
+ * cause a retry to double-contribute. If the linked Goal is already complete, the series is
+ * deactivated (with a notification) instead of over-contributing.
+ */
+export async function processRecurringGoalContributions(): Promise<void> {
+  const today = todayIso();
+  const series = await RecurringSeries.findAll({
+    where: { active: true, goalId: { [Op.ne]: null }, nextDueDate: { [Op.lte]: new Date(today) } },
+  });
+
+  for (const s of series) {
+    await sequelize.transaction(async (t) => {
+      const goal = s.goalId ? await Goal.findByPk(s.goalId, { transaction: t }) : null;
+
+      if (!goal || goal.completedAt) {
+        await s.update(
+          { active: false, goalId: null },
+          { transaction: t }
+        );
+        await createNotification(
+          s.userId,
+          'recurring_expense',
+          'Automatic goal contribution stopped',
+          goal
+            ? `"${goal.name}" is already complete, so the recurring contribution from ${s.merchant} has been turned off.`
+            : `The goal linked to ${s.merchant}'s recurring contribution no longer exists, so it has been turned off.`,
+          { recurringSeriesId: s.id, goalId: s.goalId }
+        );
+        return;
+      }
+
+      await contributeToGoal(
+        s.userId,
+        goal.id,
+        Number(s.amount),
+        'Automatic recurring contribution',
+        t
+      );
+
+      await s.update(
+        { nextDueDate: new Date(shiftByCadence(String(s.nextDueDate).slice(0, 10), s.cadence)) },
+        { transaction: t }
+      );
+    });
   }
 }

@@ -1,7 +1,6 @@
 import Stripe from 'stripe';
 import { env } from '@config/env';
 import { AppError } from '@shared/errors';
-import { PLAN_PRICES_INR } from './subscriptions.constants';
 import { applySubscriptionState } from './subscriptions.service';
 import * as repo from './subscriptions.repository';
 import { User } from '@database/models';

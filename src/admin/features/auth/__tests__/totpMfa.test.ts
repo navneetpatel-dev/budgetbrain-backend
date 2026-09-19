@@ -17,12 +17,13 @@ describe('Admin TOTP/MFA', () => {
     await setupTestDb();
   });
 
-  it('enrollment generates a valid secret and otpauth URI', async () => {
+  it('enrollment generates a valid secret, otpauth URI, and QR data URL', async () => {
     const user = await createAdminWithPassword();
-    const { secret, otpauthUrl } = await enrollTotp(user.id);
+    const { secret, otpauthUrl, qrCodeDataUrl } = await enrollTotp(user.id);
     expect(secret).toMatch(/^[A-Z2-7]+$/);
     expect(otpauthUrl).toContain('otpauth://totp/');
     expect(otpauthUrl).toContain(encodeURIComponent(user.email));
+    expect(qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
   });
 
   it('confirm-enrollment rejects a wrong first code and does not enable TOTP', async () => {

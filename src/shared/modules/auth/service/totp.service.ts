@@ -1,4 +1,5 @@
 import { authenticator } from 'otplib';
+import QRCode from 'qrcode';
 import { User } from '@database/models';
 import { AppError } from '@shared/errors';
 
@@ -7,9 +8,12 @@ const ISSUER = 'BudgetBrain Admin';
 /**
  * Generates a new TOTP secret for the user and stores it (not yet enabled — enabling
  * happens only once the first code is verified in confirmTotpEnrollment, so an
- * abandoned enrollment attempt never silently activates 2FA).
+ * abandoned enrollment attempt never silently activates 2FA). The QR code is rendered
+ * server-side to a data URI so the client only needs an <img>, not a QR library.
  */
-export async function enrollTotp(userId: string): Promise<{ secret: string; otpauthUrl: string }> {
+export async function enrollTotp(
+  userId: string
+): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
   const user = await User.findByPk(userId);
   if (!user) {
     throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
@@ -19,7 +23,8 @@ export async function enrollTotp(userId: string): Promise<{ secret: string; otpa
   await user.update({ totpSecret: secret });
 
   const otpauthUrl = authenticator.keyuri(user.email, ISSUER, secret);
-  return { secret, otpauthUrl };
+  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+  return { secret, otpauthUrl, qrCodeDataUrl };
 }
 
 /** Verifies the first code against the pending secret, then activates 2FA. */

@@ -12,6 +12,7 @@ import {
   generateCoachFallback,
 } from '@shared/ai';
 import { runAnomalyDetection } from '@shared/ai/anomalyDetection.engine';
+import { checkAiQuota, incrementAiQuota } from './aiQuota.service';
 
 
 export interface StructuredInsight {
@@ -252,6 +253,8 @@ function titleFromMessage(message: string): string {
 }
 
 export async function chatWithCoach(userId: string, message: string, conversationId?: string) {
+  await checkAiQuota(userId);
+
   const [context, existingConversation] = await Promise.all([
     buildFinanceContext(userId),
     conversationId
@@ -276,8 +279,9 @@ export async function chatWithCoach(userId: string, message: string, conversatio
   let assistantContent: string;
 
   if (env.OPENAI_API_KEY) {
+    await checkAiQuota(userId);
     try {
-      assistantContent = await chatCompletion({
+      const completion = await chatCompletion({
         apiKey: env.OPENAI_API_KEY,
         messages: [
           {
@@ -295,7 +299,10 @@ export async function chatWithCoach(userId: string, message: string, conversatio
           { role: 'user', content: message },
         ],
       });
-    } catch {
+      assistantContent = completion.content;
+      await incrementAiQuota(userId, completion.usage.totalTokens);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
       assistantContent = generateCoachFallback(message, context);
     }
   } else {

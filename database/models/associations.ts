@@ -25,6 +25,7 @@ import { Loan } from './loan.model';
 import { LoanPayment } from './loanPayment.model';
 import { RecurringSeries } from './recurringSeries.model';
 import { Subscription } from './subscription.model';
+import { AiUsageQuota } from './aiUsageQuota.model';
 
 export function initAssociations(): void {
   // User associations
@@ -118,4 +119,8 @@ export function initAssociations(): void {
   Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
   TransactionAttachment.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
   ExpenseSplitParticipant.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+
+  // AiUsageQuota
+  AiUsageQuota.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  User.hasMany(AiUsageQuota, { foreignKey: 'userId', as: 'aiUsageQuotas' });
 }

@@ -5,3 +5,5 @@ export type { FinanceContextResult } from './context/buildFinanceContext';
 export { chatCompletion, OpenAiChatError } from './openai/chatCompletion';
 export type { ChatMessage } from './openai/chatCompletion';
 export { generateCoachFallback } from './fallback';
+export { extractReceiptData } from './openai/visionExtraction';
+export type { ReceiptExtraction } from './openai/visionExtraction';

@@ -36,6 +36,7 @@ import { initLoanPaymentModel, LoanPayment, associateLoanPayment } from './loanP
 import { initRecurringSeriesModel, RecurringSeries, associateRecurringSeries } from './recurringSeries.model';
 import { initSubscriptionModel, Subscription, associateSubscription } from './subscription.model';
 import { initExchangeRate, ExchangeRate } from './exchangeRate.model';
+import { initAiUsageQuotaModel, AiUsageQuota, associateAiUsageQuota } from './aiUsageQuota.model';
 import { initAssociations } from './associations';
 
 export function initModels(db: Sequelize = sequelize): void {
@@ -68,6 +69,7 @@ export function initModels(db: Sequelize = sequelize): void {
   initRecurringSeriesModel(db);
   initSubscriptionModel(db);
   initExchangeRate(db);
+  initAiUsageQuotaModel(db);
 
   initAssociations();
 }
@@ -104,6 +106,7 @@ export {
   RecurringSeries,
   Subscription,
   ExchangeRate,
+  AiUsageQuota,
 };
 
 export type { TokenType, NotificationType };

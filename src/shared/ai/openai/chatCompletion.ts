@@ -23,10 +23,15 @@ export class OpenAiChatError extends Error {
   }
 }
 
+export interface ChatCompletionResult {
+  content: string;
+  usage: { totalTokens: number };
+}
+
 /**
  * Calls OpenAI Chat Completions. Throws OpenAiChatError on non-OK / empty replies.
  */
-export async function chatCompletion(options: ChatCompletionOptions): Promise<string> {
+export async function chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResult> {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -44,6 +49,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<st
   const data = (await response.json()) as {
     error?: { message?: string };
     choices?: { message?: { content?: string } }[];
+    usage?: { total_tokens?: number };
   };
 
   if (!response.ok) {
@@ -58,5 +64,5 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<st
     throw new OpenAiChatError('OpenAI returned an empty response');
   }
 
-  return content;
+  return { content, usage: { totalTokens: data.usage?.total_tokens ?? 0 } };
 }

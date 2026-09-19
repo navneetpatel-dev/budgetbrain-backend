@@ -37,6 +37,7 @@ import { initRecurringSeriesModel, RecurringSeries, associateRecurringSeries } f
 import { initSubscriptionModel, Subscription, associateSubscription } from './subscription.model';
 import { initExchangeRate, ExchangeRate } from './exchangeRate.model';
 import { initAiUsageQuotaModel, AiUsageQuota, associateAiUsageQuota } from './aiUsageQuota.model';
+import { initWebauthnCredentialModel, WebauthnCredential } from './webauthnCredential.model';
 import { initAssociations } from './associations';
 
 export function initModels(db: Sequelize = sequelize): void {
@@ -70,6 +71,7 @@ export function initModels(db: Sequelize = sequelize): void {
   initSubscriptionModel(db);
   initExchangeRate(db);
   initAiUsageQuotaModel(db);
+  initWebauthnCredentialModel(db);
 
   initAssociations();
 }
@@ -107,6 +109,7 @@ export {
   Subscription,
   ExchangeRate,
   AiUsageQuota,
+  WebauthnCredential,
 };
 
 export type { TokenType, NotificationType };

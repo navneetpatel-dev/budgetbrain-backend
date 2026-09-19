@@ -26,6 +26,7 @@ import { LoanPayment } from './loanPayment.model';
 import { RecurringSeries } from './recurringSeries.model';
 import { Subscription } from './subscription.model';
 import { AiUsageQuota } from './aiUsageQuota.model';
+import { WebauthnCredential } from './webauthnCredential.model';
 
 export function initAssociations(): void {
   // User associations
@@ -123,4 +124,8 @@ export function initAssociations(): void {
   // AiUsageQuota
   AiUsageQuota.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   User.hasMany(AiUsageQuota, { foreignKey: 'userId', as: 'aiUsageQuotas' });
+
+  // WebauthnCredential
+  WebauthnCredential.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  User.hasMany(WebauthnCredential, { foreignKey: 'userId', as: 'webauthnCredentials' });
 }

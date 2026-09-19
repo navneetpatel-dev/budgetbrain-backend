@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import type { AuthRequest } from '@shared/types';
 import { AppError, successResponse } from '../../../shared/utils/errors';
 import * as authService from '@shared/modules/auth/service/auth.service';
+import * as webauthnService from '@shared/modules/auth/service/webauthn.service';
 import type {
   EmailInput,
   LoginInput,
@@ -11,7 +12,14 @@ import type {
   ResetPasswordInput,
   SocialLoginInput,
   TokenInput,
+  WebauthnRegisterVerifyInput,
+  WebauthnLoginOptionsInput,
+  WebauthnLoginVerifyInput,
 } from '@shared/modules/auth/types';
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from '@simplewebauthn/server';
 
 export async function register(req: Request, res: Response) {
   const { email, password, name } = req.body as RegisterInput;
@@ -91,4 +99,45 @@ export async function getDevices(req: AuthRequest, res: Response) {
 export async function revokeDevice(req: AuthRequest, res: Response) {
   await authService.revokeDevice(req.userId!, String(req.params.id));
   successResponse(res, { message: 'Device revoked successfully' });
+}
+
+export async function webauthnRegisterOptions(req: AuthRequest, res: Response) {
+  const options = await webauthnService.generateRegistrationOptions(req.userId!);
+  successResponse(res, options);
+}
+
+export async function webauthnRegisterVerify(req: AuthRequest, res: Response) {
+  const { response, deviceLabel } = req.body as WebauthnRegisterVerifyInput;
+  const result = await webauthnService.verifyRegistration(
+    req.userId!,
+    response as unknown as RegistrationResponseJSON,
+    deviceLabel
+  );
+  successResponse(res, result, 201);
+}
+
+export async function webauthnLoginOptions(req: Request, res: Response) {
+  const { email } = req.body as WebauthnLoginOptionsInput;
+  const options = await webauthnService.generateAuthenticationOptions(email);
+  successResponse(res, options);
+}
+
+export async function webauthnLoginVerify(req: Request, res: Response) {
+  const { email, response, deviceId } = req.body as WebauthnLoginVerifyInput;
+  const result = await webauthnService.verifyAuthentication(
+    email,
+    response as unknown as AuthenticationResponseJSON,
+    deviceId
+  );
+  successResponse(res, result);
+}
+
+export async function webauthnListCredentials(req: AuthRequest, res: Response) {
+  const credentials = await webauthnService.listCredentials(req.userId!);
+  successResponse(res, { credentials });
+}
+
+export async function webauthnRemoveCredential(req: AuthRequest, res: Response) {
+  await webauthnService.removeCredential(req.userId!, String(req.params.id));
+  successResponse(res, { message: 'Passkey removed successfully' });
 }

@@ -13,6 +13,9 @@ import {
   resetPasswordSchema,
   socialLoginSchema,
   tokenSchema,
+  webauthnRegisterVerifySchema,
+  webauthnLoginOptionsSchema,
+  webauthnLoginVerifySchema,
 } from '@shared/modules/auth/validator/auth.validation';
 
 const router = Router();
@@ -61,5 +64,37 @@ router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.a
 
 router.get('/devices', authenticate, asyncHandler(controller.getDevices));
 router.delete('/devices/:id', authenticate, asyncHandler(controller.revokeDevice));
+
+// WebAuthn / passkeys — web surface only. Registration is authenticated (adding a passkey to
+// an already-signed-in account); login is public (this IS the sign-in step).
+router.post(
+  '/webauthn/register/options',
+  authenticate,
+  asyncHandler(controller.webauthnRegisterOptions)
+);
+router.post(
+  '/webauthn/register/verify',
+  authenticate,
+  validateBody(webauthnRegisterVerifySchema),
+  asyncHandler(controller.webauthnRegisterVerify)
+);
+router.post(
+  '/webauthn/login/options',
+  authRateLimiter,
+  validateBody(webauthnLoginOptionsSchema),
+  asyncHandler(controller.webauthnLoginOptions)
+);
+router.post(
+  '/webauthn/login/verify',
+  authRateLimiter,
+  validateBody(webauthnLoginVerifySchema),
+  asyncHandler(controller.webauthnLoginVerify)
+);
+router.get('/webauthn/credentials', authenticate, asyncHandler(controller.webauthnListCredentials));
+router.delete(
+  '/webauthn/credentials/:id',
+  authenticate,
+  asyncHandler(controller.webauthnRemoveCredential)
+);
 
 export default router;

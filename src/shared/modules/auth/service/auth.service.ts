@@ -42,7 +42,7 @@ async function createDefaultCategories(userId: string, transaction?: DbTransacti
   );
 }
 
-async function issueTokens(user: User, deviceId?: string, transaction?: DbTransaction) {
+export async function issueTokens(user: User, deviceId?: string, transaction?: DbTransaction) {
   const payload = { userId: user.id, email: user.email, role: user.role };
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken(payload);

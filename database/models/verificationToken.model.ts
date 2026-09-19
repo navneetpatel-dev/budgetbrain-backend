@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 
-export type TokenType = 'otp' | 'password_reset' | 'email_verify';
+export type TokenType = 'otp' | 'password_reset' | 'email_verify' | 'webauthn_challenge';
 
 export interface VerificationTokenAttributes {
   id: string;
@@ -42,7 +42,7 @@ export function initVerificationTokenModel(sequelize: Sequelize): typeof Verific
       email: { type: DataTypes.STRING(255), allowNull: false },
       token: { type: DataTypes.STRING(255), allowNull: false },
       type: {
-        type: DataTypes.ENUM('otp', 'password_reset', 'email_verify'),
+        type: DataTypes.ENUM('otp', 'password_reset', 'email_verify', 'webauthn_challenge'),
         allowNull: false,
       },
       expiresAt: { type: DataTypes.DATE, allowNull: false, field: 'expires_at' },

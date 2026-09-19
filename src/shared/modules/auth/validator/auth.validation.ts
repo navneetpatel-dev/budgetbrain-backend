@@ -44,6 +44,25 @@ export const tokenSchema = z.object({
   token: requiredText('token'),
 });
 
+// WebAuthn request/response payloads are the browser's own PublicKeyCredential JSON shape
+// (RegistrationResponseJSON / AuthenticationResponseJSON) — @simplewebauthn/server's own
+// verify*Response() calls are the real structural validation, so these schemas only guard the
+// envelope fields this endpoint layer actually branches on.
+export const webauthnRegisterVerifySchema = z.object({
+  response: z.record(z.string(), z.unknown()),
+  deviceLabel: z.string().trim().max(255).optional(),
+});
+
+export const webauthnLoginOptionsSchema = z.object({
+  email: emailField(),
+});
+
+export const webauthnLoginVerifySchema = z.object({
+  email: emailField(),
+  response: z.record(z.string(), z.unknown()),
+  deviceId: uuidField().optional(),
+});
+
 export const socialLoginSchema = z
   .object({
     idToken: optionalText('idToken'),

@@ -57,3 +57,13 @@ export const socialLoginSchema = z
   .refine((data) => Boolean(data.idToken || data.token || data.accessToken || data.code), {
     message: 'idToken, token, accessToken, or code is required',
   });
+
+export const mfaLoginSchema = z.object({
+  mfaToken: z.string().trim().min(1, 'mfaToken is required'),
+  code: otpField(),
+  deviceId: uuidField().optional(),
+});
+
+export const totpCodeSchema = z.object({
+  code: otpField(),
+});

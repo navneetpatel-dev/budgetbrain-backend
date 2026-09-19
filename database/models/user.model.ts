@@ -32,6 +32,8 @@ export interface UserAttributes {
   isSuspended: boolean;
   weeklyDigestOptIn: boolean;
   monthlyDigestOptIn: boolean;
+  totpSecret: string | null;
+  totpEnabled: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -57,6 +59,8 @@ export type UserCreationAttributes = Optional<
   | 'isSuspended'
   | 'weeklyDigestOptIn'
   | 'monthlyDigestOptIn'
+  | 'totpSecret'
+  | 'totpEnabled'
 >;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -82,6 +86,8 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare isSuspended: boolean;
   declare weeklyDigestOptIn: boolean;
   declare monthlyDigestOptIn: boolean;
+  declare totpSecret: string | null;
+  declare totpEnabled: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -190,6 +196,17 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
         field: 'monthly_digest_opt_in',
+      },
+      totpSecret: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'totp_secret',
+      },
+      totpEnabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'totp_enabled',
       },
     },
     {

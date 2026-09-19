@@ -43,3 +43,23 @@ export function generateOtp(): string {
 export function generateInviteCode(): string {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
+
+interface MfaPendingPayload {
+  userId: string;
+  purpose: 'mfa_pending';
+}
+
+/** Short-lived token identifying "this user passed password verification, TOTP still pending". */
+export function generateMfaToken(userId: string): string {
+  return jwt.sign({ userId, purpose: 'mfa_pending' } satisfies MfaPendingPayload, env.JWT_ACCESS_SECRET, {
+    expiresIn: '5m',
+  });
+}
+
+export function verifyMfaToken(token: string): { userId: string } {
+  const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as MfaPendingPayload;
+  if (payload.purpose !== 'mfa_pending') {
+    throw new Error('Invalid token purpose');
+  }
+  return { userId: payload.userId };
+}

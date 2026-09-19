@@ -16,11 +16,14 @@ import {
   hashToken,
   verifyRefreshToken,
   generateOtp,
+  generateMfaToken,
+  verifyMfaToken,
 } from '../../../shared/utils/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { AppError } from '../../../shared/utils/errors';
 import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
 import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
+import { verifyTotpCode } from '@shared/modules/auth/service/totp.service';
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user.toJSON();
@@ -189,6 +192,17 @@ export async function login(email: string, password: string, deviceId?: string) 
     throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
 
+  if (user.totpEnabled) {
+    await writeAuditLog({
+      action: AuditAction.AUTH_LOGIN,
+      resource: AuditResource.USER,
+      resourceId: user.id,
+      actorUserId: user.id,
+      metadata: { deviceId: deviceId ?? null, step: 'password_ok_awaiting_totp' },
+    });
+    return { mfaRequired: true as const, mfaToken: generateMfaToken(user.id) };
+  }
+
   const tokens = await sequelize.transaction(async (t) => {
     const result = await issueTokens(user, deviceId, t);
     await writeAuditLog({
@@ -203,6 +217,39 @@ export async function login(email: string, password: string, deviceId?: string) 
   });
 
   return tokens;
+}
+
+/** Completes login for a TOTP-enabled admin — the only path that issues real tokens for them. */
+export async function loginMfa(mfaToken: string, code: string, deviceId?: string) {
+  let userId: string;
+  try {
+    ({ userId } = verifyMfaToken(mfaToken));
+  } catch {
+    throw new AppError(401, 'Invalid or expired MFA session', 'INVALID_MFA_TOKEN');
+  }
+
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+  if (user.isSuspended) {
+    throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
+  }
+
+  await verifyTotpCode(user.id, code);
+
+  return sequelize.transaction(async (t) => {
+    const result = await issueTokens(user, deviceId, t);
+    await writeAuditLog({
+      action: AuditAction.AUTH_LOGIN,
+      resource: AuditResource.USER,
+      resourceId: user.id,
+      actorUserId: user.id,
+      metadata: { deviceId: deviceId ?? null, method: 'password+totp' },
+      transaction: t,
+    });
+    return result;
+  });
 }
 
 export async function refresh(refreshToken: string) {
@@ -269,6 +316,16 @@ export async function requestOtp(email: string) {
   if (!user) {
     return;
   }
+  if (user.totpEnabled) {
+    // Passwordless OTP-email login is a password *alternative* — once an account has
+    // TOTP enabled it must go through password+authenticator-code, otherwise OTP-email
+    // becomes a silent bypass of the 2FA this account explicitly opted into.
+    throw new AppError(
+      403,
+      'This account requires password + authenticator code to sign in.',
+      'TOTP_REQUIRED'
+    );
+  }
 
   const otp = generateOtp();
   await sequelize.transaction(async (t) => {
@@ -299,6 +356,15 @@ export async function verifyOtp(email: string, otp: string, deviceId?: string) {
     const user = await User.findOne({ where: { email }, transaction: t });
     if (!user) {
       throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+    }
+    if (user.totpEnabled) {
+      // Defense in depth: reject even an already-issued OTP if TOTP was enabled after
+      // it was requested but before it was used.
+      throw new AppError(
+        403,
+        'This account requires password + authenticator code to sign in.',
+        'TOTP_REQUIRED'
+      );
     }
 
     const tokens = await issueTokens(user, deviceId, t);

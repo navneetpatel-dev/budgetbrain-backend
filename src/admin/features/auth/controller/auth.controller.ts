@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AppError, successResponse } from '../../../shared/utils/errors';
 import type { AuthRequest } from '../../../shared/types';
 import * as authService from '../service/auth.service';
+import * as totpService from '@shared/modules/auth/service/totp.service';
 import type {
   EmailInput,
   LoginInput,
@@ -86,4 +87,23 @@ export async function appleLogin(req: Request, res: Response) {
   }
   const result = await authService.socialLoginWithApple(tokenToVerify, name);
   successResponse(res, result);
+}
+
+export async function loginMfa(req: Request, res: Response) {
+  const { mfaToken, code, deviceId } = req.body as { mfaToken: string; code: string; deviceId?: string };
+  const result = await authService.loginMfa(mfaToken, code, deviceId);
+  successResponse(res, result);
+}
+
+export async function enrollTotp(req: Request, res: Response) {
+  const user = (req as AuthRequest).user!;
+  const result = await totpService.enrollTotp(user.id);
+  successResponse(res, result);
+}
+
+export async function confirmTotp(req: Request, res: Response) {
+  const user = (req as AuthRequest).user!;
+  const { code } = req.body as { code: string };
+  await totpService.confirmTotpEnrollment(user.id, code);
+  successResponse(res, { message: 'Two-factor authentication enabled' });
 }

@@ -7,12 +7,14 @@ import * as controller from '../controller/auth.controller';
 import {
   emailSchema,
   loginSchema,
+  mfaLoginSchema,
   otpVerifySchema,
   refreshTokenSchema,
   registerSchema,
   resetPasswordSchema,
   socialLoginSchema,
   tokenSchema,
+  totpCodeSchema,
 } from '../validator/auth.validation';
 
 const router = Router();
@@ -59,5 +61,18 @@ router.post(
 router.post('/verify-email', validateBody(tokenSchema), asyncHandler(controller.verifyEmail));
 router.post('/google', validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
 router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
+router.post(
+  '/login/mfa',
+  authRateLimiter,
+  validateBody(mfaLoginSchema),
+  asyncHandler(controller.loginMfa)
+);
+router.post('/totp/enroll', authenticate, asyncHandler(controller.enrollTotp));
+router.post(
+  '/totp/confirm',
+  authenticate,
+  validateBody(totpCodeSchema),
+  asyncHandler(controller.confirmTotp)
+);
 
 export default router;

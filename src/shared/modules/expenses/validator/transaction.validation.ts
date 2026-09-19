@@ -10,6 +10,7 @@ import {
   currencyField,
   transactionDate,
   amountField,
+  optionalMoneyValueField,
   uuidField,
   enumField,
   tagsField,
@@ -29,6 +30,8 @@ const transactionObjectSchema = z.object({
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
   tags: tagsField(),
+  /** Income-only. `netAmount` is never accepted from the client — always server-computed. */
+  taxWithheld: optionalMoneyValueField(),
 });
 
 export const transactionSchema = transactionObjectSchema.superRefine((data, ctx) => {
@@ -44,6 +47,13 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
       code: z.ZodIssueCode.custom,
       path: ['categoryId'],
       message: M.categoryRequired,
+    });
+  }
+  if (data.type === 'expense' && data.taxWithheld !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['taxWithheld'],
+      message: 'taxWithheld only applies to income transactions',
     });
   }
 });

@@ -201,6 +201,8 @@ export async function createTransaction(
         recurringRule: data.recurringRule ?? null,
         tags: data.tags ?? [],
         searchVector: buildSearchVector(data),
+        taxWithheld: data.taxWithheld ?? null,
+        netAmount: data.taxWithheld !== undefined ? Number(data.amount) - Number(data.taxWithheld) : null,
       },
       { transaction: t }
     );
@@ -255,6 +257,10 @@ export async function updateTransaction(
     });
     if (!transaction) throw new AppError(404, 'Transaction not found');
 
+    if (data.taxWithheld !== undefined && transaction.type !== 'income') {
+      throw new AppError(400, 'taxWithheld only applies to income transactions');
+    }
+
     const beforeState = {
       amount: transaction.amount,
       categoryId: transaction.categoryId,
@@ -274,6 +280,15 @@ export async function updateTransaction(
     if (data.incomeSourceId !== undefined) updateData.incomeSourceId = data.incomeSourceId;
     if (data.date) updateData.date = new Date(data.date);
     if (data.tags !== undefined) updateData.tags = data.tags;
+    if (data.taxWithheld !== undefined) {
+      updateData.taxWithheld = data.taxWithheld;
+      const effectiveAmount = data.amount !== undefined ? data.amount : transaction.amount;
+      updateData.netAmount = Number(effectiveAmount) - Number(data.taxWithheld);
+    } else if (data.amount !== undefined && transaction.taxWithheld !== null) {
+      // Amount changed without an explicit taxWithheld update — keep netAmount consistent
+      // with the existing withholding rather than leaving it stale.
+      updateData.netAmount = Number(data.amount) - Number(transaction.taxWithheld);
+    }
 
     await transaction.update(
       {

@@ -20,6 +20,8 @@ export interface TransactionAttributes {
   recurringSeriesId: string | null;
   tags: string[] | null;
   searchVector: string | null;
+  taxWithheld: number | null;
+  netAmount: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -37,6 +39,8 @@ export type TransactionCreationAttributes = Optional<
   | 'recurringSeriesId'
   | 'tags'
   | 'searchVector'
+  | 'taxWithheld'
+  | 'netAmount'
 >;
 
 export class Transaction
@@ -59,6 +63,8 @@ export class Transaction
   declare recurringSeriesId: string | null;
   declare tags: string[] | null;
   declare searchVector: string | null;
+  declare taxWithheld: number | null;
+  declare netAmount: number | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -133,6 +139,16 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         type: DataTypes.TEXT,
         allowNull: true,
         field: 'search_vector',
+      },
+      taxWithheld: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: true,
+        field: 'tax_withheld',
+      },
+      netAmount: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: true,
+        field: 'net_amount',
       },
     },
     {

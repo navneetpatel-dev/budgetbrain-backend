@@ -11,6 +11,7 @@ import {
   transactionDate,
   optionalTransactionDate,
   amountField,
+  optionalMoneyValueField,
   uuidField,
   enumField,
 } from '@shared/validation';
@@ -30,6 +31,8 @@ export const createIncomeSchema = z.object({
   date: transactionDate,
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
+  /** `netAmount` is never accepted from the client — always server-computed from amount - taxWithheld. */
+  taxWithheld: optionalMoneyValueField(),
 });
 
 export const updateIncomeSchema = z.object({
@@ -37,6 +40,7 @@ export const updateIncomeSchema = z.object({
   notes: optionalText('notes'),
   date: optionalTransactionDate,
   incomeSourceId: uuidField().optional(),
+  taxWithheld: optionalMoneyValueField(),
 });
 
 export const createSourceSchema = z.object({

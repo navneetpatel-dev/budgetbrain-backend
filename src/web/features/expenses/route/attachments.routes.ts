@@ -26,6 +26,11 @@ router.get(
   validateParams(attachmentParamsSchema),
   asyncHandler(controller.getAttachment)
 );
+router.get(
+  '/:id/attachments/:attachmentId/suggestion',
+  validateParams(attachmentParamsSchema),
+  asyncHandler(controller.getAttachmentSuggestion)
+);
 router.delete(
   '/:id/attachments/:attachmentId',
   validateParams(attachmentParamsSchema),

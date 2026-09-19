@@ -2,7 +2,32 @@ import { Request, Response } from 'express';
 import { successResponse, AppError } from '../../../shared/utils/errors';
 import { AuthRequest } from '@shared/types';
 import { Transaction, TransactionAttachment } from '@database/models';
-import { uploadFile, withSignedDownloadUrl } from '../../../shared/services/s3.service';
+import { uploadFile, withSignedDownloadUrl, getSignedDownloadUrl } from '../../../shared/services/s3.service';
+import { env } from '@config/env';
+import { extractReceiptData } from '@shared/ai';
+
+/**
+ * Fire-and-forget: never awaited by the request handler. A slow or failing OpenAI Vision
+ * call must not block or fail the upload response — extraction is best-effort, surfaced
+ * later via GET .../suggestion.
+ */
+function scheduleReceiptExtraction(attachmentId: string, s3Key: string, s3Url: string): void {
+  if (!env.OPENAI_API_KEY) return;
+  void (async () => {
+    try {
+      const imageUrl = await getSignedDownloadUrl(s3Key, s3Url);
+      const extracted = await extractReceiptData({ apiKey: env.OPENAI_API_KEY!, imageUrl });
+      if (extracted) {
+        await TransactionAttachment.update(
+          { extractedData: extracted },
+          { where: { id: attachmentId } }
+        );
+      }
+    } catch (err) {
+      console.warn('[attachments] receipt extraction failed:', err instanceof Error ? err.message : err);
+    }
+  })();
+}
 
 export async function createAttachment(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
@@ -23,6 +48,23 @@ export async function createAttachment(req: Request, res: Response) {
   });
 
   successResponse(res, await withSignedDownloadUrl(attachment.toJSON()), 201);
+
+  scheduleReceiptExtraction(attachment.id, attachment.s3Key, attachment.s3Url);
+}
+
+export async function getAttachmentSuggestion(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  const { id, attachmentId } = req.params as { id: string; attachmentId: string };
+
+  const transaction = await Transaction.findOne({ where: { id, userId } });
+  if (!transaction) throw new AppError(404, 'Transaction not found');
+
+  const attachment = await TransactionAttachment.findOne({
+    where: { id: attachmentId, transactionId: transaction.id },
+  });
+  if (!attachment) throw new AppError(404, 'Attachment not found');
+
+  successResponse(res, { extractedData: attachment.extractedData });
 }
 
 export async function listAttachments(req: Request, res: Response) {

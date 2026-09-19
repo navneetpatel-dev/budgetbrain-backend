@@ -1,5 +1,12 @@
 import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 
+export interface ReceiptExtractedData {
+  merchant?: string;
+  amount?: number;
+  date?: string;
+  confidence: number;
+}
+
 export interface TransactionAttachmentAttributes {
   id: string;
   transactionId: string;
@@ -8,13 +15,14 @@ export interface TransactionAttachmentAttributes {
   fileSize: number;
   s3Key: string;
   s3Url: string;
+  extractedData: ReceiptExtractedData | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type TransactionAttachmentCreationAttributes = Optional<
   TransactionAttachmentAttributes,
-  'id'
+  'id' | 'extractedData'
 >;
 
 export class TransactionAttachment
@@ -28,6 +36,7 @@ export class TransactionAttachment
   declare fileSize: number;
   declare s3Key: string;
   declare s3Url: string;
+  declare extractedData: ReceiptExtractedData | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -69,6 +78,12 @@ export function initTransactionAttachmentModel(sequelize: Sequelize): typeof Tra
         type: DataTypes.STRING(1000),
         allowNull: false,
         field: 's3_url',
+      },
+      extractedData: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+        defaultValue: null,
+        field: 'extracted_data',
       },
     },
     { sequelize, tableName: 'transaction_attachments' }

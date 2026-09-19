@@ -10,13 +10,22 @@ const transporter = env.SMTP_USER
     })
   : null;
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  attachments?: EmailAttachment[]
 ): Promise<void> {
   if (!transporter) {
-    console.log(`[Email stub] To: ${to}, Subject: ${subject}`);
+    console.log(
+      `[Email stub] To: ${to}, Subject: ${subject}${attachments?.length ? `, Attachments: ${attachments.map((a) => a.filename).join(', ')}` : ''}`
+    );
     return;
   }
 
@@ -25,6 +34,7 @@ export async function sendEmail(
     to,
     subject,
     html,
+    attachments,
   });
 }
 

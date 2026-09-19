@@ -6,6 +6,7 @@ import { getWeeklySpendComparison } from '@shared/modules/expenses/service/trans
 import { sendBillDueReminders, processRecurringGoalContributions } from '@shared/modules/recurring/service/recurringSeries.service';
 import { detectRecurringPatternsForAllUsers } from '@shared/modules/recurring/service/recurringDetection.service';
 import { fetchAndUpsertLiveRates } from '@shared/currency/currency.engine';
+import { sendMonthlyReportDigests } from '@shared/modules/reports/service/reportDigest.service';
 
 
 export function startScheduledJobs(): void {
@@ -167,6 +168,16 @@ export function startScheduledJobs(): void {
       await processRecurringGoalContributions();
     } catch (err) {
       console.error('[cron] recurring_goal_contribution failed:', err);
+    }
+  });
+
+  // Monthly report email digest — 1st of month at 6:00 AM server time
+  cron.schedule('0 6 1 * *', async () => {
+    try {
+      const { sent, failed } = await sendMonthlyReportDigests();
+      console.log(`[cron] monthly_report_digest completed: sent=${sent} failed=${failed}`);
+    } catch (err) {
+      console.error('[cron] monthly_report_digest failed:', err);
     }
   });
 

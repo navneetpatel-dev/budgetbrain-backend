@@ -31,6 +31,7 @@ export interface UserAttributes {
   lastLoginAt: Date | null;
   isSuspended: boolean;
   weeklyDigestOptIn: boolean;
+  monthlyDigestOptIn: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -55,6 +56,7 @@ export type UserCreationAttributes = Optional<
   | 'lastLoginAt'
   | 'isSuspended'
   | 'weeklyDigestOptIn'
+  | 'monthlyDigestOptIn'
 >;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -79,6 +81,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare lastLoginAt: Date | null;
   declare isSuspended: boolean;
   declare weeklyDigestOptIn: boolean;
+  declare monthlyDigestOptIn: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -182,6 +185,11 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
         field: 'weekly_digest_opt_in',
+      },
+      monthlyDigestOptIn: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'monthly_digest_opt_in',
       },
     },
     {

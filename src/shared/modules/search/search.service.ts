@@ -2,6 +2,25 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '@database/models';
 import { resolvePagination } from '@shared/pagination';
 
+const TRIGRAM_FALLBACK_THRESHOLD = 3;
+const TRIGRAM_SIMILARITY_CUTOFF = 0.3;
+
+let pgTrgmAvailable: boolean | null = null;
+
+async function isPgTrgmAvailable(): Promise<boolean> {
+  if (pgTrgmAvailable !== null) return pgTrgmAvailable;
+  try {
+    const rows = await sequelize.query<{ extname: string }>(
+      `SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'`,
+      { type: QueryTypes.SELECT }
+    );
+    pgTrgmAvailable = rows.length > 0;
+  } catch {
+    pgTrgmAvailable = false;
+  }
+  return pgTrgmAvailable;
+}
+
 export interface GlobalSearchResults {
   query: string;
   transactions: Array<{
@@ -37,6 +56,63 @@ export interface GlobalSearchResults {
   total: number;
   page: number;
   limit: number;
+}
+
+interface TrigramFallbackRow {
+  id: string;
+  type: string;
+  amount: number;
+  currency: string;
+  merchant: string | null;
+  notes: string | null;
+  date: string;
+  tags: string[] | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryIcon: string | null;
+  categoryColor: string | null;
+  similarity: number;
+}
+
+async function executeMerchantTrigramFallback(
+  userId: string,
+  query: string,
+  limit: number
+): Promise<TrigramFallbackRow[]> {
+  const trgmSql = `
+    SELECT
+      t.id,
+      t.type,
+      CAST(t.amount AS DOUBLE PRECISION) AS amount,
+      t.currency,
+      t.merchant,
+      t.notes,
+      t.date,
+      t.tags,
+      c.id AS "categoryId",
+      c.name AS "categoryName",
+      c.icon AS "categoryIcon",
+      c.color AS "categoryColor",
+      similarity(t.merchant, :query) AS similarity
+    FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
+    WHERE t.user_id = :userId
+      AND t.merchant IS NOT NULL
+      AND similarity(t.merchant, :query) > :cutoff
+    ORDER BY similarity DESC, t.date DESC
+    LIMIT :limit;
+  `;
+
+  try {
+    return await sequelize.query<TrigramFallbackRow>(trgmSql, {
+      replacements: { userId, query, cutoff: TRIGRAM_SIMILARITY_CUTOFF, limit },
+      type: QueryTypes.SELECT,
+    });
+  } catch {
+    // pg_trgm not installed, or the query otherwise failed — degrade to no fallback
+    // results rather than breaking search entirely.
+    return [];
+  }
 }
 
 export async function executeGlobalSearch(
@@ -148,7 +224,7 @@ export async function executeGlobalSearch(
 
   const total = parseInt(countRows[0]?.total ?? '0', 10);
 
-  const transactions = txRows.map((row) => ({
+  let transactions = txRows.map((row) => ({
     id: row.id,
     type: row.type,
     amount: Number(row.amount),
@@ -167,6 +243,44 @@ export async function executeGlobalSearch(
       : null,
     rank: Number(row.rank ?? 0),
   }));
+
+  // Typo-tolerant fallback: when exact full-text matching returns few/no results overall
+  // (not just on this page — gate on `total`, not the current page's row count, so a
+  // legitimately large result set never triggers this on later pages), fall back to
+  // trigram similarity on merchant name (e.g. "Nteflix" -> "Netflix"). Only applies to
+  // page 1, since injecting extra unpaginated fallback rows into an arbitrary later page
+  // doesn't make sense. Fallback rows always rank below every real FTS match.
+  if (page === 1 && total < TRIGRAM_FALLBACK_THRESHOLD && (await isPgTrgmAvailable())) {
+    const existingIds = new Set(transactions.map((t) => t.id));
+    const lowestFtsRank = transactions.length
+      ? Math.min(...transactions.map((t) => t.rank))
+      : 0;
+    const fallbackRows = await executeMerchantTrigramFallback(userId, trimmed, limit);
+    const fallbackTransactions = fallbackRows
+      .filter((row) => !existingIds.has(row.id))
+      .map((row) => ({
+        id: row.id,
+        type: row.type,
+        amount: Number(row.amount),
+        currency: row.currency,
+        merchant: row.merchant,
+        notes: row.notes,
+        date: row.date,
+        tags: row.tags ?? [],
+        category: row.categoryId
+          ? {
+              id: row.categoryId,
+              name: row.categoryName,
+              icon: row.categoryIcon,
+              color: row.categoryColor,
+            }
+          : null,
+        // Synthetic rank strictly below the weakest real FTS match (or below 0 when
+        // there were no FTS matches at all) so fallback results always sort last.
+        rank: lowestFtsRank - 1 + Number(row.similarity ?? 0) * 0.001,
+      }));
+    transactions = [...transactions, ...fallbackTransactions];
+  }
 
   const categories = catRows.map((row) => ({
     id: row.id,

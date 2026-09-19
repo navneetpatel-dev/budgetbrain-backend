@@ -73,13 +73,13 @@ export async function convertAmount(amount: number, fromCurrency: string, toCurr
   return roundMoney(amount * rate);
 }
 
-export async function seedInitialExchangeRates(): Promise<void> {
-  const currencies = Object.keys(BASELINE_RATES_TO_INR);
+async function upsertRatesToInrTable(ratesToInr: Record<string, number>): Promise<void> {
+  const currencies = Object.keys(ratesToInr);
 
   for (const from of currencies) {
     for (const to of currencies) {
       if (from === to) continue;
-      const rate = roundMoney(BASELINE_RATES_TO_INR[from] / BASELINE_RATES_TO_INR[to], 6);
+      const rate = roundMoney(ratesToInr[from] / ratesToInr[to], 6);
 
       const existing = await ExchangeRate.findOne({
         where: { fromCurrency: from, toCurrency: to },
@@ -98,4 +98,51 @@ export async function seedInitialExchangeRates(): Promise<void> {
   }
 
   inMemoryRateCache = null;
+}
+
+export async function seedInitialExchangeRates(): Promise<void> {
+  await upsertRatesToInrTable(BASELINE_RATES_TO_INR);
+}
+
+interface FrankfurterResponse {
+  amount: number;
+  base: string;
+  date: string;
+  rates: Record<string, number>;
+}
+
+/**
+ * Frankfurter (ECB-sourced, no API key) doesn't publish AED — those currencies
+ * stay pinned to BASELINE_RATES_TO_INR while everything the API does return
+ * gets a live-derived INR rate for this upsert pass.
+ */
+export async function fetchAndUpsertLiveRates(): Promise<{ updated: string[]; skipped: string[] }> {
+  const targets = SUPPORTED_CURRENCIES.filter((c) => c !== 'INR');
+  const response = await fetch(
+    `https://api.frankfurter.app/latest?from=INR&to=${targets.join(',')}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Frankfurter API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as FrankfurterResponse;
+  const liveRatesToInr: Record<string, number> = { INR: 1.0 };
+  const updated: string[] = ['INR'];
+  const skipped: string[] = [];
+
+  for (const currency of targets) {
+    // data.rates[currency] is "1 INR = X currency", so 1 currency = 1/X INR.
+    const inrPerCurrency = data.rates[currency];
+    if (typeof inrPerCurrency === 'number' && inrPerCurrency > 0) {
+      liveRatesToInr[currency] = 1 / inrPerCurrency;
+      updated.push(currency);
+    } else {
+      liveRatesToInr[currency] = BASELINE_RATES_TO_INR[currency] ?? 1.0;
+      skipped.push(currency);
+    }
+  }
+
+  await upsertRatesToInrTable(liveRatesToInr);
+  return { updated, skipped };
 }

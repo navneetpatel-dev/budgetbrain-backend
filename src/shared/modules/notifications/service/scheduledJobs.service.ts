@@ -5,6 +5,7 @@ import { createNotification } from './notification.service';
 import { getWeeklySpendComparison } from '@shared/modules/expenses/service/transaction.service';
 import { sendBillDueReminders } from '@shared/modules/recurring/service/recurringSeries.service';
 import { detectRecurringPatternsForAllUsers } from '@shared/modules/recurring/service/recurringDetection.service';
+import { fetchAndUpsertLiveRates } from '@shared/currency/currency.engine';
 
 
 export function startScheduledJobs(): void {
@@ -157,6 +158,16 @@ export function startScheduledJobs(): void {
       console.log(`[cron] recurring detection completed: ${count} series detected`);
     } catch (err) {
       console.error('[cron] recurring_detection failed:', err);
+    }
+  });
+
+  // Live exchange rate ingestion — daily 3:00 AM server time
+  cron.schedule('0 3 * * *', async () => {
+    try {
+      const { updated, skipped } = await fetchAndUpsertLiveRates();
+      console.log(`[cron] exchange_rate_sync completed: updated=${updated.join(',')} skipped=${skipped.join(',')}`);
+    } catch (err) {
+      console.error('[cron] exchange_rate_sync failed:', err);
     }
   });
 

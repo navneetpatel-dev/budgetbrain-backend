@@ -7,6 +7,7 @@ import {
   roundMoney,
   isSupportedCurrency,
   fetchAndUpsertLiveRates,
+  seedInitialExchangeRates,
 } from '../currency.engine';
 
 describe('Currency Engine', () => {
@@ -40,8 +41,12 @@ describe('Currency Engine', () => {
   });
 
   describe('fetchAndUpsertLiveRates', () => {
-    afterEach(() => {
+    // This function writes real rows into the shared dev-DB exchange_rates table — every
+    // test in this block must restore the static baseline afterward so it doesn't leak
+    // fabricated rates into every other test/run that reads real exchange rate data.
+    afterEach(async () => {
       vi.unstubAllGlobals();
+      await seedInitialExchangeRates();
     });
 
     it('upserts rates for currencies the API returns and skips AED (not published by the provider)', async () => {

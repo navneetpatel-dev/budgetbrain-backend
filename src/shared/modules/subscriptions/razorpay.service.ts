@@ -4,6 +4,7 @@ import { env } from '@config/env';
 import { AppError } from '@shared/errors';
 import { PLAN_PRICES_INR } from './subscriptions.constants';
 import { applySubscriptionState } from './subscriptions.service';
+import * as repo from './subscriptions.repository';
 import type { SubscriptionPlan, SubscriptionStatus } from '@database/models';
 
 function isRazorpayConfigured(): boolean {
@@ -98,7 +99,9 @@ interface RazorpayNotes {
 interface RazorpayWebhookPayload {
   event: string;
   payload: {
-    payment?: { entity?: { id: string; order_id?: string; notes?: RazorpayNotes } };
+    payment?: {
+      entity?: { id: string; order_id?: string; subscription_id?: string; notes?: RazorpayNotes };
+    };
     order?: { entity?: { id: string; notes?: RazorpayNotes } };
     subscription?: {
       entity?: {
@@ -131,13 +134,53 @@ export async function upsertFromRazorpayEvent(payload: RazorpayWebhookPayload) {
   switch (event) {
     case 'payment.captured': {
       const entity = payload.payload.payment?.entity;
-      const notes = entity?.notes ?? payload.payload.order?.entity?.notes;
+      if (!entity) {
+        console.warn('[Razorpay Webhook] payment.captured missing payment entity');
+        return null;
+      }
+
+      // Recurring-subscription charges also fire payment.captured alongside
+      // subscription.charged — the latter is the authoritative renewal handler (notes
+      // are reliably present on the subscription entity there). Skip here to avoid
+      // double-processing AND ever having to guess a plan for an event that isn't the
+      // source of truth for subscription renewals.
+      if (entity.subscription_id) {
+        console.warn(
+          '[Razorpay Webhook] payment.captured for a subscription charge — deferring to subscription.charged',
+          { paymentId: entity.id, subscriptionId: entity.subscription_id }
+        );
+        return null;
+      }
+
+      const notes = entity.notes ?? payload.payload.order?.entity?.notes;
       const userId = notes?.userId;
-      if (!userId || !entity) {
+      if (!userId) {
         console.warn('[Razorpay Webhook] payment.captured missing userId in notes');
         return null;
       }
-      const plan = notes?.plan ?? 'lifetime';
+
+      let plan = notes?.plan;
+      if (!plan && entity.order_id) {
+        // Fall back to the order's own notes, set at creation time by createCheckoutOrder.
+        try {
+          const order = await getClient().orders.fetch(entity.order_id);
+          plan = (order.notes as RazorpayNotes | undefined)?.plan;
+        } catch (err) {
+          console.warn('[Razorpay Webhook] failed to fetch order for plan lookup', {
+            orderId: entity.order_id,
+            err,
+          });
+        }
+      }
+
+      if (!plan) {
+        // Never assume the highest-privilege plan for an ambiguous event.
+        console.warn('[Razorpay Webhook] payment.captured: could not resolve plan, refusing to guess', {
+          paymentId: entity.id,
+        });
+        return null;
+      }
+
       const isLifetime = plan === 'lifetime';
       const now = new Date();
       return applySubscriptionState({
@@ -148,7 +191,7 @@ export async function upsertFromRazorpayEvent(payload: RazorpayWebhookPayload) {
         store: 'razorpay',
         isLifetime,
         currentPeriodStart: now,
-        currentPeriodEnd: isLifetime ? null : null,
+        currentPeriodEnd: null,
         originalPurchaseDate: now,
         razorpayOrderId: entity.order_id ?? payload.payload.order?.entity?.id ?? null,
         razorpayPaymentId: entity.id,
@@ -215,10 +258,40 @@ export async function upsertFromRazorpayEvent(payload: RazorpayWebhookPayload) {
     case 'payment.failed': {
       // A single failed charge attempt (e.g. a renewal retry) — Razorpay itself retries
       // and eventually fires subscription.cancelled/halted on terminal failure, which is
-      // handled above. Don't downgrade entitlement on a single failure; just record it.
+      // handled above. Don't downgrade entitlement on a single failure; just make it
+      // visible in admin monitoring, mirroring RevenueCat's BILLING_ISSUE handling.
       const entity = payload.payload.payment?.entity;
-      console.warn('[Razorpay Webhook] payment.failed', { paymentId: entity?.id, notes: entity?.notes });
-      return null;
+      const subscriptionId = entity?.subscription_id;
+      if (!subscriptionId) {
+        // A one-time (lifetime) order payment failure — no existing subscription state
+        // to mark as at-risk.
+        console.warn('[Razorpay Webhook] payment.failed (one-time order)', { paymentId: entity?.id });
+        return null;
+      }
+
+      const existing = await repo.findByRazorpaySubscriptionId(subscriptionId);
+      if (!existing) {
+        console.warn('[Razorpay Webhook] payment.failed for unknown subscription', { subscriptionId });
+        return null;
+      }
+
+      return applySubscriptionState({
+        userId: existing.userId,
+        entitlementId: existing.entitlementId,
+        productId: existing.productId,
+        status: 'in_billing_retry',
+        plan: existing.plan,
+        store: existing.store,
+        isLifetime: existing.isLifetime,
+        currentPeriodStart: existing.currentPeriodStart,
+        currentPeriodEnd: existing.currentPeriodEnd,
+        originalPurchaseDate: existing.originalPurchaseDate,
+        razorpaySubscriptionId: existing.razorpaySubscriptionId,
+        razorpayOrderId: existing.razorpayOrderId,
+        razorpayPaymentId: entity?.id ?? existing.razorpayPaymentId,
+        billingIssuesDetectedAt: new Date(),
+        eventLabel: event,
+      });
     }
 
     default:

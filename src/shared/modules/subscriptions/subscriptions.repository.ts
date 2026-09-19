@@ -44,6 +44,14 @@ export async function findByRcAppUserId(revenuecatAppUserId: string): Promise<Su
   });
 }
 
+export async function findByRazorpaySubscriptionId(
+  razorpaySubscriptionId: string
+): Promise<Subscription | null> {
+  return Subscription.findOne({
+    where: { razorpaySubscriptionId },
+  });
+}
+
 export async function upsertSubscription(
   data: Omit<SubscriptionAttributes, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Subscription> {

@@ -28,6 +28,8 @@ export interface SubscriptionAttributes {
   razorpayOrderId: string | null;
   razorpaySubscriptionId: string | null;
   razorpayPaymentId: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,6 +50,8 @@ export type SubscriptionCreationAttributes = Optional<
   | 'razorpayOrderId'
   | 'razorpaySubscriptionId'
   | 'razorpayPaymentId'
+  | 'stripeCustomerId'
+  | 'stripeSubscriptionId'
 >;
 
 export class Subscription
@@ -71,6 +75,8 @@ export class Subscription
   declare razorpayOrderId: string | null;
   declare razorpaySubscriptionId: string | null;
   declare razorpayPaymentId: string | null;
+  declare stripeCustomerId: string | null;
+  declare stripeSubscriptionId: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -163,6 +169,16 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
         type: DataTypes.STRING(255),
         allowNull: true,
         field: 'razorpay_payment_id',
+      },
+      stripeCustomerId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'stripe_customer_id',
+      },
+      stripeSubscriptionId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'stripe_subscription_id',
       },
     },
     {

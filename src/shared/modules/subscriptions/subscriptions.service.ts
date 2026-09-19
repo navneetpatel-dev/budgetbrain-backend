@@ -113,6 +113,8 @@ export interface SubscriptionStateInput {
   razorpayOrderId?: string | null;
   razorpaySubscriptionId?: string | null;
   razorpayPaymentId?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
   /** True when this event represents a recurring renewal (fires the renewal notification). */
   isRenewalEvent?: boolean;
   /** Free-form label stored on the audit log only (e.g. RevenueCat's raw event type). */
@@ -150,6 +152,8 @@ export async function applySubscriptionState(input: SubscriptionStateInput) {
     razorpayOrderId: input.razorpayOrderId ?? null,
     razorpaySubscriptionId: input.razorpaySubscriptionId ?? null,
     razorpayPaymentId: input.razorpayPaymentId ?? null,
+    stripeCustomerId: input.stripeCustomerId ?? null,
+    stripeSubscriptionId: input.stripeSubscriptionId ?? null,
   });
 
   // Keep User.role in sync: if active and lifetime -> 'lifetime', active -> 'premium', expired -> 'free'

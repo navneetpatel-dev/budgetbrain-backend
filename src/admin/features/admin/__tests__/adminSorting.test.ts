@@ -96,11 +96,14 @@ describe('Admin list sorting (plan item 26)', () => {
       priority: 'high',
     } as never);
 
-    const asc = await listSupportTickets(1, 100, undefined, 'priority', 'ASC');
+    // Large limit — the dev DB accumulates tickets across every test run in this session,
+    // so a small page cap can't reliably contain both freshly created rows once the total
+    // count grows past it (same root cause as the earlier user-email-sort test fix).
+    const asc = await listSupportTickets(1, 10000, undefined, 'priority', 'ASC');
     const ids = asc.tickets.map((t) => t.id);
     expect(ids.indexOf(low.id)).toBeLessThan(ids.indexOf(high.id));
 
-    const desc = await listSupportTickets(1, 100, undefined, 'priority', 'DESC');
+    const desc = await listSupportTickets(1, 10000, undefined, 'priority', 'DESC');
     const descIds = desc.tickets.map((t) => t.id);
     expect(descIds.indexOf(high.id)).toBeLessThan(descIds.indexOf(low.id));
   });

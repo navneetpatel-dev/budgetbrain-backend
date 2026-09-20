@@ -7,6 +7,7 @@ import type {
   CreateSourceInput,
   ListIncomeInput,
   UpdateIncomeInput,
+  IncomeAllocationInput,
 } from '@shared/modules/income/types';
 import type { PaginationInput } from '@shared/types';
 
@@ -64,4 +65,14 @@ export async function duplicateIncome(req: Request, res: Response) {
   const { id } = req.params as { id: string };
   const income = await incomeService.duplicateIncome((req as AuthRequest).userId!, id);
   successResponse(res, income, 201);
+}
+
+export async function allocateIncome(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const allocations = await incomeService.allocateIncomeToAccounts(
+    (req as AuthRequest).userId!,
+    id,
+    req.body as IncomeAllocationInput
+  );
+  successResponse(res, allocations);
 }

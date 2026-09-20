@@ -43,6 +43,17 @@ export const updateIncomeSchema = z.object({
   taxWithheld: optionalMoneyValueField(),
 });
 
+export const allocateIncomeSchema = z.object({
+  allocations: z
+    .array(
+      z.object({
+        financialAccountId: uuidField(),
+        amount: amountField(),
+      })
+    )
+    .min(1, 'At least one allocation is required'),
+});
+
 export const createSourceSchema = z.object({
   name: requiredText('entityName'),
   type: enumField(['salary', 'freelancing', 'investments', 'rental', 'other'] as const),

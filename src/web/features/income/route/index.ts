@@ -9,6 +9,7 @@ import {
   createSourceSchema,
   listIncomeSchema,
   updateIncomeSchema,
+  allocateIncomeSchema,
 } from '@shared/modules/income/validator/income.validation';
 
 const router = Router();
@@ -23,6 +24,12 @@ router.post(
   '/:id/duplicate',
   validateParams(uuidParamSchema),
   asyncHandler(controller.duplicateIncome)
+);
+router.post(
+  '/:id/allocate',
+  validateParams(uuidParamSchema),
+  validateBody(allocateIncomeSchema),
+  asyncHandler(controller.allocateIncome)
 );
 router.patch(
   '/:id',

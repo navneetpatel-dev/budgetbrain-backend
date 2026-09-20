@@ -38,6 +38,8 @@ import { initSubscriptionModel, Subscription, associateSubscription } from './su
 import { initExchangeRate, ExchangeRate } from './exchangeRate.model';
 import { initAiUsageQuotaModel, AiUsageQuota, associateAiUsageQuota } from './aiUsageQuota.model';
 import { initWebauthnCredentialModel, WebauthnCredential } from './webauthnCredential.model';
+import { initIncomeAllocationModel, IncomeAllocation } from './incomeAllocation.model';
+import { initFamilyInviteModel, FamilyInvite } from './familyInvite.model';
 import { initAssociations } from './associations';
 
 export function initModels(db: Sequelize = sequelize): void {
@@ -72,6 +74,8 @@ export function initModels(db: Sequelize = sequelize): void {
   initExchangeRate(db);
   initAiUsageQuotaModel(db);
   initWebauthnCredentialModel(db);
+  initFamilyInviteModel(db);
+  initIncomeAllocationModel(db);
 
   initAssociations();
 }
@@ -110,6 +114,8 @@ export {
   ExchangeRate,
   AiUsageQuota,
   WebauthnCredential,
+  FamilyInvite,
+  IncomeAllocation,
 };
 
 export type { TokenType, NotificationType };

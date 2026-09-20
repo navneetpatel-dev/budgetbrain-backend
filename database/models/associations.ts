@@ -27,6 +27,8 @@ import { RecurringSeries } from './recurringSeries.model';
 import { Subscription } from './subscription.model';
 import { AiUsageQuota } from './aiUsageQuota.model';
 import { WebauthnCredential } from './webauthnCredential.model';
+import { IncomeAllocation } from './incomeAllocation.model';
+import { FamilyInvite } from './familyInvite.model';
 
 export function initAssociations(): void {
   // User associations
@@ -118,8 +120,12 @@ export function initAssociations(): void {
   Transaction.hasMany(TransactionAttachment, { foreignKey: 'transactionId', as: 'attachments' });
   Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
   Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
+  Transaction.hasMany(IncomeAllocation, { foreignKey: 'transactionId', as: 'incomeAllocations' });
   TransactionAttachment.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
   ExpenseSplitParticipant.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+  IncomeAllocation.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
+  IncomeAllocation.belongsTo(FinancialAccount, { foreignKey: 'financialAccountId', as: 'financialAccount' });
+  FinancialAccount.hasMany(IncomeAllocation, { foreignKey: 'financialAccountId', as: 'incomeAllocations' });
 
   // AiUsageQuota
   AiUsageQuota.belongsTo(User, { foreignKey: 'userId', as: 'user' });
@@ -128,4 +134,9 @@ export function initAssociations(): void {
   // WebauthnCredential
   WebauthnCredential.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   User.hasMany(WebauthnCredential, { foreignKey: 'userId', as: 'webauthnCredentials' });
+
+  // FamilyInvite
+  FamilyInvite.belongsTo(User, { foreignKey: 'invitedByUserId', as: 'invitedBy' });
+  FamilyInvite.belongsTo(FamilyGroup, { foreignKey: 'groupId', as: 'group' });
+  FamilyGroup.hasMany(FamilyInvite, { foreignKey: 'groupId', as: 'invites' });
 }

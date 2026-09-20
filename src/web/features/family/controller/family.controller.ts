@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { successResponse } from '../../../shared/utils/errors';
 import { AuthRequest } from '@shared/types';
 import * as familyService from '@shared/modules/family/service/family.service';
-import type { CreateGroupInput, CreateSplitInput, JoinGroupInput } from '@shared/modules/family/types';
+import type {
+  CreateGroupInput,
+  CreateSplitInput,
+  JoinGroupInput,
+  CreateFamilyInviteInput,
+  AcceptFamilyInviteInput,
+} from '@shared/modules/family/types';
 import type { PaginationInput } from '@shared/types';
 
 export async function createGroup(req: Request, res: Response) {
@@ -81,4 +87,22 @@ export async function updateMemberRole(req: Request, res: Response) {
   const { role } = req.body as { role: 'owner' | 'admin' | 'contributor' | 'read_only' };
   const result = await familyService.updateMemberRole((req as AuthRequest).userId!, groupId, userId, role);
   successResponse(res, result);
+}
+
+export async function createInvite(req: Request, res: Response) {
+  const { groupId } = req.params as { groupId: string };
+  const { invitedEmail, role } = req.body as CreateFamilyInviteInput;
+  const result = await familyService.createFamilyInvite(
+    (req as AuthRequest).userId!,
+    groupId,
+    invitedEmail,
+    role
+  );
+  successResponse(res, result, 201);
+}
+
+export async function acceptInvite(req: Request, res: Response) {
+  const { token } = req.body as AcceptFamilyInviteInput;
+  const result = await familyService.acceptFamilyInvite(token);
+  successResponse(res, result, 201);
 }

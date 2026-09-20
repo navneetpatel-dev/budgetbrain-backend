@@ -36,6 +36,8 @@ export const AuditAction = {
   FAMILY_MEMBER_REMOVE: 'family.member_remove',
   FAMILY_SPLIT_CREATE: 'family.split_create',
   FAMILY_SPLIT_SETTLE: 'family.split_settle',
+  FAMILY_INVITE_CREATE: 'family.invite_create',
+  FAMILY_INVITE_ACCEPT: 'family.invite_accept',
 
   SUPPORT_TICKET_UPDATE: 'support_ticket.update',
 
@@ -65,6 +67,7 @@ export const AuditResource = {
   FAMILY_GROUP: 'family_group',
   FAMILY_MEMBER: 'family_member',
   FAMILY_SPLIT: 'family_split',
+  FAMILY_INVITE: 'family_invite',
   SUPPORT_TICKET: 'support_ticket',
   PARSED_TRANSACTION: 'parsed_transaction',
   LOAN: 'loan',

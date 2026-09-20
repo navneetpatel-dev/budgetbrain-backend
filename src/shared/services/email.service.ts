@@ -63,3 +63,18 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
     `<p>Click <a href="${link}">here</a> to reset your password. Link expires in 1 hour.</p>`
   );
 }
+
+export async function sendFamilyInviteEmail(
+  to: string,
+  token: string,
+  groupName: string,
+  inviterName: string
+): Promise<void> {
+  const link = `${env.APP_URL}/family/accept-invite?token=${token}`;
+  await sendEmail(
+    to,
+    `${inviterName} invited you to join "${groupName}" on BudgetBrain`,
+    `<p>${inviterName} has invited you to join their family group "${groupName}" on BudgetBrain.</p>` +
+      `<p>Click <a href="${link}">here</a> to accept. This invite expires in 7 days.</p>`
+  );
+}

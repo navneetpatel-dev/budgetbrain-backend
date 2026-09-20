@@ -4,6 +4,7 @@ import {
   inviteCodeField,
   uuidField,
   moneyValueField,
+  emailField,
   ValidationMessages as M,
 } from '@shared/validation';
 
@@ -39,5 +40,14 @@ export const removeMemberParamSchema = z.object({
 
 export const updateMemberRoleSchema = z.object({
   role: z.enum(['owner', 'admin', 'contributor', 'read_only']),
+});
+
+export const createFamilyInviteSchema = z.object({
+  invitedEmail: emailField(),
+  role: z.enum(['admin', 'contributor', 'read_only']).default('contributor'),
+});
+
+export const acceptFamilyInviteSchema = z.object({
+  token: requiredText('token'),
 });
 

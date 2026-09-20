@@ -28,7 +28,7 @@ function sanitizeUser(user: User) {
   return safe;
 }
 
-async function createDefaultCategories(userId: string, transaction?: DbTransaction): Promise<void> {
+export async function createDefaultCategories(userId: string, transaction?: DbTransaction): Promise<void> {
   await Category.bulkCreate(
     DEFAULT_CATEGORIES.map((cat, index) => ({
       userId,

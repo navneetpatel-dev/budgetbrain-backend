@@ -11,9 +11,20 @@ import {
   joinGroupSchema,
   removeMemberParamSchema,
   updateMemberRoleSchema,
+  createFamilyInviteSchema,
+  acceptFamilyInviteSchema,
 } from '@shared/modules/family/validator/family.validation';
 
 const router = Router();
+
+// Public — the invite token itself is the credential, no session required. Must be mounted
+// before `router.use(authenticate)` below, which gates every other route in this file.
+router.post(
+  '/invites/accept',
+  validateBody(acceptFamilyInviteSchema),
+  asyncHandler(controller.acceptInvite)
+);
+
 router.use(authenticate);
 
 router.post('/groups', validateBody(createGroupSchema), asyncHandler(controller.createGroup));
@@ -61,6 +72,12 @@ router.post(
   '/splits/:id/settle',
   validateParams(uuidParamSchema),
   asyncHandler(controller.settleSplit)
+);
+router.post(
+  '/groups/:groupId/invites',
+  validateParams(groupIdParamSchema),
+  validateBody(createFamilyInviteSchema),
+  asyncHandler(controller.createInvite)
 );
 
 export default router;

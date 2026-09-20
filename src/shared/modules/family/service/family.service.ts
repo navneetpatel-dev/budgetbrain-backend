@@ -1,17 +1,24 @@
+import { randomBytes } from 'crypto';
 import {
   FamilyGroup,
   FamilyMember,
+  FamilyInvite,
   ExpenseSplitParticipant,
   Transaction,
   User,
   sequelize,
 } from '@database/models';
+import type { FamilyInviteRole } from '@database/models/familyInvite.model';
 import { AppError } from '@shared/errors';
-import { generateInviteCode } from '@shared/utils/jwt';
+import { generateInviteCode, hashToken } from '@shared/utils/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
+import { createDefaultCategories, issueTokens } from '@shared/modules/auth/service/auth.service';
+import { sendFamilyInviteEmail } from '@shared/services/email.service';
 import type { PaginationInput } from '@shared/types';
 import type { CreateSplitInput } from '../types';
+
+const FAMILY_INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function createGroup(ownerId: string, name: string) {
   return sequelize.transaction(async (t) => {
@@ -318,6 +325,114 @@ export async function deleteGroup(actorId: string, groupId: string) {
     });
 
     return { deleted: true, groupId };
+  });
+}
+
+/** Owner or admin may invite; matches the same permission tier removeMember() already enforces. */
+async function assertCanInvite(userId: string, groupId: string) {
+  const membership = await FamilyMember.findOne({ where: { userId, groupId } });
+  if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+    throw new AppError(403, 'Only group owners and admins can invite members');
+  }
+}
+
+export async function createFamilyInvite(
+  inviterId: string,
+  groupId: string,
+  invitedEmail: string,
+  role: FamilyInviteRole
+) {
+  await assertCanInvite(inviterId, groupId);
+
+  const group = await FamilyGroup.findByPk(groupId);
+  if (!group) throw new AppError(404, 'Family group not found');
+
+  const existingMember = await FamilyMember.findOne({
+    where: { groupId },
+    include: [{ model: User, as: 'user', where: { email: invitedEmail }, attributes: [] }],
+  });
+  if (existingMember) throw new AppError(409, 'This email is already a member of the group');
+
+  const inviter = await User.findByPk(inviterId);
+
+  const rawToken = randomBytes(32).toString('hex');
+  const invite = await FamilyInvite.create({
+    groupId,
+    invitedEmail,
+    invitedByUserId: inviterId,
+    tokenHash: hashToken(rawToken),
+    role,
+    expiresAt: new Date(Date.now() + FAMILY_INVITE_EXPIRY_MS),
+  });
+
+  await sendFamilyInviteEmail(invitedEmail, rawToken, group.name, inviter?.name ?? 'A family member');
+
+  await writeAuditLog({
+    action: AuditAction.FAMILY_INVITE_CREATE,
+    resource: AuditResource.FAMILY_INVITE,
+    resourceId: invite.id,
+    actorUserId: inviterId,
+    afterState: { groupId, invitedEmail, role },
+  });
+
+  return { id: invite.id, invitedEmail, role, expiresAt: invite.expiresAt };
+}
+
+export async function acceptFamilyInvite(token: string) {
+  const tokenHash = hashToken(token);
+
+  return sequelize.transaction(async (t) => {
+    const invite = await FamilyInvite.findOne({ where: { tokenHash }, transaction: t, lock: t.LOCK.UPDATE });
+    if (!invite) throw new AppError(404, 'Invalid invite link', 'INVALID_INVITE');
+    if (invite.acceptedAt) throw new AppError(409, 'This invite has already been used', 'INVITE_ALREADY_USED');
+    if (invite.expiresAt < new Date()) throw new AppError(410, 'This invite has expired', 'INVITE_EXPIRED');
+
+    let user = await User.findOne({ where: { email: invite.invitedEmail }, transaction: t });
+    let isNewUser = false;
+
+    if (!user) {
+      // No password set on creation — accepting the invite proves email ownership (same trust
+      // level as social login), so the account is created passwordless and the user can set one
+      // later via the existing forgot-password flow, mirroring how socialLogin() already
+      // creates passwordless accounts rather than inventing new account-state machinery.
+      user = await User.create(
+        {
+          email: invite.invitedEmail,
+          name: null,
+          authProvider: 'email',
+          emailVerified: true,
+        },
+        { transaction: t }
+      );
+      await createDefaultCategories(user.id, t);
+      isNewUser = true;
+    }
+
+    const existingMembership = await FamilyMember.findOne({
+      where: { groupId: invite.groupId, userId: user.id },
+      transaction: t,
+    });
+    if (existingMembership) throw new AppError(409, 'Already a member of this group');
+
+    const member = await FamilyMember.create(
+      { groupId: invite.groupId, userId: user.id, role: invite.role },
+      { transaction: t }
+    );
+
+    await invite.update({ acceptedAt: new Date() }, { transaction: t });
+
+    const tokens = await issueTokens(user, undefined, t);
+
+    await writeAuditLog({
+      action: AuditAction.FAMILY_INVITE_ACCEPT,
+      resource: AuditResource.FAMILY_INVITE,
+      resourceId: invite.id,
+      actorUserId: user.id,
+      afterState: { groupId: invite.groupId, role: invite.role, isNewUser },
+      transaction: t,
+    });
+
+    return { ...tokens, membership: member, isNewUser };
   });
 }
 

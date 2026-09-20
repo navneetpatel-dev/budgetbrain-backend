@@ -5,6 +5,8 @@ import {
   TransactionAttachment,
   Category,
   IncomeSource,
+  IncomeAllocation,
+  FinancialAccount,
   User,
   sequelize,
 } from '@database/models';
@@ -374,6 +376,14 @@ export async function getTransaction(userId: string, id: string) {
     include: [
       { model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] },
       { model: IncomeSource, as: 'incomeSource', attributes: ['id', 'name', 'type'] },
+      {
+        model: IncomeAllocation,
+        as: 'incomeAllocations',
+        attributes: ['id', 'financialAccountId', 'amount'],
+        include: [
+          { model: FinancialAccount, as: 'financialAccount', attributes: ['id', 'name', 'currency'] },
+        ],
+      },
     ],
   });
   if (!transaction) throw new AppError(404, 'Transaction not found');

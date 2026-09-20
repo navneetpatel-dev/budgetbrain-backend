@@ -52,22 +52,6 @@ export async function findByRazorpaySubscriptionId(
   });
 }
 
-export async function findByStripeSubscriptionId(
-  stripeSubscriptionId: string
-): Promise<Subscription | null> {
-  return Subscription.findOne({
-    where: { stripeSubscriptionId },
-  });
-}
-
-export async function findByStripeCustomerId(
-  stripeCustomerId: string
-): Promise<Subscription | null> {
-  return Subscription.findOne({
-    where: { stripeCustomerId },
-  });
-}
-
 export async function upsertSubscription(
   data: Omit<SubscriptionAttributes, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Subscription> {

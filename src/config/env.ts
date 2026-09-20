@@ -51,11 +51,6 @@ export const envSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   RAZORPAY_PLAN_ID_MONTHLY: z.string().optional(),
   RAZORPAY_PLAN_ID_YEARLY: z.string().optional(),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PRICE_ID_MONTHLY: z.string().optional(),
-  STRIPE_PRICE_ID_YEARLY: z.string().optional(),
-  STRIPE_PRICE_ID_LIFETIME: z.string().optional(),
   APP_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('*'),
 });

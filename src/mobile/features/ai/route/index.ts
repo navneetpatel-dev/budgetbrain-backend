@@ -18,5 +18,6 @@ router.get(
   asyncHandler(controller.getConversation)
 );
 router.post('/chat', validateBody(chatSchema), asyncHandler(controller.chat));
+router.post('/chat/stream', validateBody(chatSchema), asyncHandler(controller.chatStream));
 
 export default router;

@@ -9,8 +9,10 @@ import {
   buildFinanceContext,
   buildFinanceContextMessage,
   chatCompletion,
+  streamChatCompletion,
   generateCoachFallback,
 } from '@shared/ai';
+import type { ChatMessage } from '@shared/ai';
 import { runAnomalyDetection } from '@shared/ai/anomalyDetection.engine';
 import { checkAiQuota, incrementAiQuota } from './aiQuota.service';
 
@@ -252,9 +254,13 @@ function titleFromMessage(message: string): string {
   return cleaned.length > 60 ? `${cleaned.slice(0, 57)}...` : cleaned;
 }
 
-export async function chatWithCoach(userId: string, message: string, conversationId?: string) {
-  await checkAiQuota(userId);
-
+/**
+ * Shared setup for both the non-streaming and streaming coach paths: resolves the
+ * finance context + conversation + trimmed history, and builds the exact message list
+ * sent to OpenAI. Keeping this in one place is what guarantees streaming and
+ * non-streaming replies are grounded in identical context.
+ */
+async function prepareCoachTurn(userId: string, message: string, conversationId?: string) {
   const [context, existingConversation] = await Promise.all([
     buildFinanceContext(userId),
     conversationId
@@ -276,29 +282,58 @@ export async function chatWithCoach(userId: string, message: string, conversatio
   );
   const historyForModel = priorMessages.slice(-AI_COACH_CONFIG.historyLimit);
 
+  const openAiMessages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: buildCoachSystemPrompt({
+        currency: context.currency,
+        userName: context.userName,
+      }),
+    },
+    { role: 'system', content: buildFinanceContextMessage(context.text) },
+    ...historyForModel.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
+    { role: 'user', content: message },
+  ];
+
+  return { context, conversation, userMessage, priorMessages, openAiMessages };
+}
+
+/** Persists the assistant's reply onto the conversation, shared by both coach paths. */
+async function finalizeCoachTurn(
+  conversation: AiConversation,
+  priorMessages: AiMessage[],
+  userMessage: AiMessage,
+  assistantContent: string,
+  originalMessage: string
+) {
+  const assistantMessage: AiMessage = {
+    role: 'assistant',
+    content: assistantContent,
+    timestamp: new Date().toISOString(),
+  };
+
+  const messages = [...priorMessages, userMessage, assistantMessage];
+  const shouldTitle = !conversation.title || conversation.title === 'New Conversation';
+
+  await conversation.update({
+    messages,
+    ...(shouldTitle ? { title: titleFromMessage(originalMessage) } : {}),
+  });
+
+  return { assistantMessage, messages };
+}
+
+export async function chatWithCoach(userId: string, message: string, conversationId?: string) {
+  await checkAiQuota(userId);
+
+  const { context, conversation, userMessage, priorMessages, openAiMessages } =
+    await prepareCoachTurn(userId, message, conversationId);
+
   let assistantContent: string;
 
   if (env.OPENAI_API_KEY) {
-    await checkAiQuota(userId);
     try {
-      const completion = await chatCompletion({
-        apiKey: env.OPENAI_API_KEY,
-        messages: [
-          {
-            role: 'system',
-            content: buildCoachSystemPrompt({
-              currency: context.currency,
-              userName: context.userName,
-            }),
-          },
-          {
-            role: 'system',
-            content: buildFinanceContextMessage(context.text),
-          },
-          ...historyForModel.map((m) => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message },
-        ],
-      });
+      const completion = await chatCompletion({ apiKey: env.OPENAI_API_KEY, messages: openAiMessages });
       assistantContent = completion.content;
       await incrementAiQuota(userId, completion.usage.totalTokens);
     } catch (err) {
@@ -309,20 +344,78 @@ export async function chatWithCoach(userId: string, message: string, conversatio
     assistantContent = generateCoachFallback(message, context);
   }
 
-  const assistantMessage: AiMessage = {
-    role: 'assistant',
-    content: assistantContent,
-    timestamp: new Date().toISOString(),
-  };
+  const { assistantMessage, messages } = await finalizeCoachTurn(
+    conversation,
+    priorMessages,
+    userMessage,
+    assistantContent,
+    message
+  );
 
-  const messages = [...priorMessages, userMessage, assistantMessage];
-  const shouldTitle =
-    !conversation.title || conversation.title === 'New Conversation';
-
-  await conversation.update({
+  return {
+    conversationId: conversation.id,
+    message: assistantMessage,
+    reply: assistantContent,
     messages,
-    ...(shouldTitle ? { title: titleFromMessage(message) } : {}),
-  });
+  };
+}
+
+/**
+ * Streaming variant of chatWithCoach: invokes `onToken` per content delta as it arrives,
+ * then persists the fully-assembled reply exactly like the non-streaming path once the
+ * stream completes. Falls back to the non-streaming coach fallback (no fake streaming of
+ * a canned reply) when OpenAI isn't configured or the request fails before any tokens
+ * were emitted.
+ */
+export async function streamChatWithCoach(
+  userId: string,
+  message: string,
+  conversationId: string | undefined,
+  onToken: (delta: string) => void
+) {
+  await checkAiQuota(userId);
+
+  const { context, conversation, userMessage, priorMessages, openAiMessages } =
+    await prepareCoachTurn(userId, message, conversationId);
+
+  let assistantContent: string;
+
+  if (env.OPENAI_API_KEY) {
+    try {
+      const { deltas, done } = await streamChatCompletion({
+        apiKey: env.OPENAI_API_KEY,
+        messages: openAiMessages,
+      });
+      let emittedAny = false;
+      for await (const delta of deltas) {
+        emittedAny = true;
+        onToken(delta);
+      }
+      const completion = await done;
+      assistantContent = completion.content;
+      await incrementAiQuota(userId, completion.usage.totalTokens);
+      if (!emittedAny) {
+        // Defensive: shouldn't happen if `done` resolved, but never silently persist
+        // an empty reply.
+        throw new AppError(502, 'AI Coach returned an empty streamed response', 'AI_EMPTY_RESPONSE');
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      assistantContent = generateCoachFallback(message, context);
+      onToken(assistantContent);
+    }
+  } else {
+    assistantContent = generateCoachFallback(message, context);
+    onToken(assistantContent);
+  }
+
+  const { assistantMessage, messages } = await finalizeCoachTurn(
+    conversation,
+    priorMessages,
+    userMessage,
+    assistantContent,
+    message
+  );
 
   return {
     conversationId: conversation.id,

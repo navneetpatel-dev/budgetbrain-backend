@@ -7,6 +7,16 @@ import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
 import type { ConfirmParsedInput } from '../types';
 
+/** Extracts a Date's own calendar day without a UTC round-trip — `toISOString().split('T')[0]`
+ *  shifts the date backward for any positive-offset local time (e.g. IST), which is wrong here
+ *  since `parsedDate` and `new Date()` both already represent a specific *local* calendar day. */
+function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export async function parseSms(userId: string, content: string) {
   const parsed = parseSmsContent(content);
 
@@ -73,8 +83,8 @@ export async function confirmParsed(
         merchant,
         date:
           data.date ??
-          parsed.parsedDate?.toISOString().split('T')[0] ??
-          new Date().toISOString().split('T')[0],
+          (parsed.parsedDate ? toLocalIsoDate(parsed.parsedDate) : null) ??
+          toLocalIsoDate(new Date()),
       },
       { transaction: t }
     );

@@ -21,7 +21,16 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/__tests__/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    setupFiles: ['./src/testHelpers/setup.ts'],
+    setupFiles: ['./src/testHelpers/envSetup.ts', './src/testHelpers/setup.ts'],
+    env: {
+      NODE_ENV: 'test',
+      TZ: 'UTC',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'sk-test-ci-not-a-real-key',
+      JWT_ACCESS_SECRET:
+        process.env.JWT_ACCESS_SECRET || 'test_access_secret_32_characters_minimum!',
+      JWT_REFRESH_SECRET:
+        process.env.JWT_REFRESH_SECRET || 'test_refresh_secret_32_characters_minimum!',
+    },
     testTimeout: 30000,
     hookTimeout: 30000,
   },

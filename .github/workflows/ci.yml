@@ -88,5 +88,6 @@ jobs:
           DB_PASSWORD: testpassword
           JWT_ACCESS_SECRET: test_access_secret_32_characters_minimum!
           JWT_REFRESH_SECRET: test_refresh_secret_32_characters_minimum!
+          OPENAI_API_KEY: sk-test-ci-not-a-real-key
           TZ: UTC
         run: npm test

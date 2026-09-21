@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, afterEach, afterAll, beforeAll } from 'vitest';
+import { env } from '@config/env';
 import { setupTestDb, createTestUser } from '@testHelpers';
 import { AiConversation, AiUsageQuota } from '@database/models';
 import { streamChatWithCoach } from '../service/ai.service';
@@ -23,8 +24,16 @@ function mockStreamingResponse(chunks: unknown[]): Response {
 }
 
 describe('streamChatWithCoach', () => {
+  const previousOpenAiKey = env.OPENAI_API_KEY;
+
   beforeAll(async () => {
     await setupTestDb();
+    // The streaming path is skipped when no key is configured (CI has none).
+    env.OPENAI_API_KEY = previousOpenAiKey || 'sk-test-ci-not-a-real-key';
+  });
+
+  afterAll(() => {
+    env.OPENAI_API_KEY = previousOpenAiKey;
   });
 
   afterEach(() => {

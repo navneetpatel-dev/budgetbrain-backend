@@ -48,6 +48,7 @@ jobs:
           DB_NAME: budgetbrain_test
           DB_USER: budgetbrain
           DB_PASSWORD: testpassword
+          TZ: UTC
         run: npm run db:migrate
       - name: Run Tests
         env:
@@ -59,6 +60,8 @@ jobs:
           DB_PASSWORD: testpassword
           JWT_ACCESS_SECRET: test_access_secret_32_characters_minimum!
           JWT_REFRESH_SECRET: test_refresh_secret_32_characters_minimum!
+          OPENAI_API_KEY: sk-test-ci-not-a-real-key
+          TZ: UTC
         run: npm test
       - run: npm run build
       - name: Verify entrypoints

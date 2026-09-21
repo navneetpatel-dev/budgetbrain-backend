@@ -1,6 +1,6 @@
 import { User } from '@database/models';
 import { generateExcelReport } from './report.service';
-import { sendEmail } from '@shared/services/email.service';
+import { sendMonthlyReportEmail } from '@shared/services/email.service';
 
 function previousMonthRange(): { startDate: string; endDate: string; label: string } {
   const now = new Date();
@@ -29,18 +29,11 @@ export async function sendMonthlyReportDigests(): Promise<{ sent: number; failed
   for (const user of users) {
     try {
       const buffer = await generateExcelReport(user.id, { startDate, endDate });
-      await sendEmail(
-        user.email,
-        `Your BudgetBrain report for ${label}`,
-        `<p>Hi${user.name ? ` ${user.name}` : ''},</p><p>Attached is your BudgetBrain spending report for ${label}.</p>`,
-        [
-          {
-            filename: `budgetbrain-report-${startDate}-to-${endDate}.xlsx`,
-            content: buffer,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          },
-        ]
-      );
+      await sendMonthlyReportEmail(user.email, user.name, label, {
+        filename: `budgetbrain-report-${startDate}-to-${endDate}.xlsx`,
+        content: buffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
       sent += 1;
     } catch (err) {
       console.error(`[reportDigest] failed to send monthly digest to user ${user.id}:`, err);

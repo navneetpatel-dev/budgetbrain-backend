@@ -19,31 +19,31 @@ describe('sendMonthlyReportDigests', () => {
   });
 
   it('emails an Excel attachment to an opted-in user', async () => {
-    const sendEmailSpy = vi.spyOn(emailService, 'sendEmail').mockResolvedValue(undefined);
+    const sendSpy = vi.spyOn(emailService, 'sendMonthlyReportEmail').mockResolvedValue(undefined);
 
     const optedIn = await createTestUser({ monthlyDigestOptIn: true });
     await createTestTransaction(optedIn.id, { type: 'expense', amount: 500 });
 
     await sendMonthlyReportDigests();
 
-    const callForUser = sendEmailSpy.mock.calls.find(([to]) => to === optedIn.email);
+    const callForUser = sendSpy.mock.calls.find(([to]) => to === optedIn.email);
     expect(callForUser).toBeDefined();
 
-    const [, subject, , attachments] = callForUser!;
-    expect(subject).toContain('BudgetBrain report');
-    expect(attachments).toHaveLength(1);
-    expect(attachments![0].filename).toMatch(/\.xlsx$/);
-    expect(Buffer.isBuffer(attachments![0].content)).toBe(true);
-    expect(attachments![0].content.length).toBeGreaterThan(0);
+    const [, , periodLabel, attachment] = callForUser!;
+    expect(typeof periodLabel).toBe('string');
+    expect(periodLabel.length).toBeGreaterThan(0);
+    expect(attachment.filename).toMatch(/\.xlsx$/);
+    expect(Buffer.isBuffer(attachment.content)).toBe(true);
+    expect(attachment.content.length).toBeGreaterThan(0);
   });
 
   it('never emails a user who has not opted in', async () => {
-    const sendEmailSpy = vi.spyOn(emailService, 'sendEmail').mockResolvedValue(undefined);
+    const sendSpy = vi.spyOn(emailService, 'sendMonthlyReportEmail').mockResolvedValue(undefined);
     const notOptedIn = await createTestUser({ monthlyDigestOptIn: false });
 
     await sendMonthlyReportDigests();
 
-    const callForUser = sendEmailSpy.mock.calls.find(([to]) => to === notOptedIn.email);
+    const callForUser = sendSpy.mock.calls.find(([to]) => to === notOptedIn.email);
     expect(callForUser).toBeUndefined();
   });
 
@@ -51,7 +51,7 @@ describe('sendMonthlyReportDigests', () => {
     const failing = await createTestUser({ monthlyDigestOptIn: true });
     const succeeding = await createTestUser({ monthlyDigestOptIn: true });
 
-    vi.spyOn(emailService, 'sendEmail').mockImplementation(async (to) => {
+    vi.spyOn(emailService, 'sendMonthlyReportEmail').mockImplementation(async (to) => {
       if (to === failing.email) throw new Error('SMTP down');
     });
 

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { Op, Transaction as DbTransaction } from 'sequelize';
 import {
   User,
@@ -141,7 +142,10 @@ export async function register(email: string, password: string, name?: string) {
 
     await createDefaultCategories(user.id, t);
 
-    const verifyToken = generateAccessToken({ userId: user.id, email, role: user.role });
+    // A random opaque token, not a JWT — consumeToken() only ever compares it for equality
+    // against the stored value, never decodes it, and a signed JWT here easily overflows the
+    // verification_tokens.token column (VARCHAR(255)) for longer emails.
+    const verifyToken = randomBytes(32).toString('hex');
     await storeToken(email, 'email_verify', verifyToken, user.id, 24 * 60 * 60 * 1000, t);
 
     const tokens = await issueTokens(user, undefined, t);
@@ -384,7 +388,8 @@ export async function forgotPassword(email: string) {
   const user = await User.findOne({ where: { email } });
   if (!user) return;
 
-  const token = generateAccessToken({ userId: user.id, email, role: user.role });
+  // Same reasoning as register()'s verifyToken — an opaque random token, not a JWT.
+  const token = randomBytes(32).toString('hex');
   await sequelize.transaction(async (t) => {
     await storeToken(email, 'password_reset', token, user.id, 60 * 60 * 1000, t);
     await writeAuditLog({

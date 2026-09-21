@@ -1,6 +1,7 @@
-import { Op, fn, col } from 'sequelize';
+import { Op } from 'sequelize';
 import { User, Transaction, Category, Budget, Goal } from '../../models';
 import { AI_COACH_CONFIG } from '../config';
+import { convertAndSum } from '../../currency/currency.engine';
 
 export interface FinanceContextResult {
   currency: string;
@@ -38,10 +39,9 @@ export async function buildFinanceContext(userId: string): Promise<FinanceContex
 
   const [
     user,
-    incomeThisMonth,
-    expensesThisMonth,
-    expensesLastMonth,
-    byCategory,
+    incomeRows,
+    expenseRows,
+    lastMonthExpenseRows,
     budgets,
     goals,
     recentTransactions,
@@ -49,24 +49,23 @@ export async function buildFinanceContext(userId: string): Promise<FinanceContex
     User.findByPk(userId, {
       attributes: ['name', 'currency', 'country', 'monthlySavingsTarget', 'salaryRange', 'financialGoals'],
     }),
-    Transaction.sum('amount', {
+    Transaction.findAll({
       where: { userId, type: 'income', date: { [Op.gte]: thisMonthStart } },
+      attributes: ['amount', 'currency'],
+      raw: true,
     }),
-    Transaction.sum('amount', {
+    Transaction.findAll({
       where: { userId, type: 'expense', date: { [Op.gte]: thisMonthStart } },
+      attributes: ['amount', 'currency', 'categoryId'],
+      include: [{ model: Category, as: 'category', attributes: ['name'] }],
     }),
-    Transaction.sum('amount', {
+    Transaction.findAll({
       where: {
         userId,
         type: 'expense',
         date: { [Op.gte]: lastMonthStart, [Op.lte]: lastMonthEnd },
       },
-    }),
-    Transaction.findAll({
-      where: { userId, type: 'expense', date: { [Op.gte]: thisMonthStart } },
-      attributes: ['categoryId', [fn('SUM', col('amount')), 'total']],
-      include: [{ model: Category, as: 'category', attributes: ['name'] }],
-      group: ['categoryId', 'category.id', 'category.name'],
+      attributes: ['amount', 'currency'],
       raw: true,
     }),
     Budget.findAll({
@@ -95,25 +94,22 @@ export async function buildFinanceContext(userId: string): Promise<FinanceContex
 
   const currency = user?.currency || 'INR';
   const userName = user?.name ?? null;
-  const income = Number(incomeThisMonth ?? 0);
-  const expenses = Number(expensesThisMonth ?? 0);
-  const previousExpenses = Number(expensesLastMonth ?? 0);
+  const income = await convertAndSum(incomeRows, currency);
+  const expenses = await convertAndSum(expenseRows, currency);
+  const previousExpenses = await convertAndSum(lastMonthExpenseRows, currency);
   const net = income - expenses;
   const expenseChangePercent =
     previousExpenses > 0 ? ((expenses - previousExpenses) / previousExpenses) * 100 : 0;
 
-  const topCategories = [...byCategory]
-    .map((row) => {
-      const r = row as unknown as {
-        total: string;
-        'category.name'?: string;
-        category?: { name?: string };
-      };
-      return {
-        name: r['category.name'] || r.category?.name || 'Uncategorized',
-        total: Number(r.total ?? 0),
-      };
-    })
+  const categoryTotals = new Map<string, number>();
+  for (const row of expenseRows) {
+    const name =
+      (row as Transaction & { category?: { name?: string } }).category?.name || 'Uncategorized';
+    const converted = await convertAndSum([{ amount: row.amount, currency: row.currency }], currency);
+    categoryTotals.set(name, (categoryTotals.get(name) ?? 0) + converted);
+  }
+  const topCategories = [...categoryTotals.entries()]
+    .map(([name, total]) => ({ name, total }))
     .sort((a, b) => b.total - a.total)
     .slice(0, AI_COACH_CONFIG.topCategoriesLimit);
 

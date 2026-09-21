@@ -1,4 +1,4 @@
-import type { Transaction as DbTransaction } from 'sequelize';
+import { UniqueConstraintError, type Transaction as DbTransaction } from 'sequelize';
 import { Notification, NotificationType, Device } from '@database/models';
 import { AppError } from '@shared/errors';
 import { sendPushToUser } from './push.service';
@@ -56,21 +56,34 @@ export async function markAsRead(userId: string, id: string) {
 }
 
 export async function registerDevice(userId: string, data: RegisterDeviceInput) {
-  let device = await Device.findOne({ where: { userId, pushToken: data.pushToken } });
-  if (device) {
-    await device.update({
+  const existingByToken = await Device.findOne({ where: { pushToken: data.pushToken } });
+  if (existingByToken) {
+    await existingByToken.update({
+      userId,
       lastActiveAt: new Date(),
       deviceName: data.deviceName,
       platform: data.platform,
     });
-  } else {
-    device = await Device.create({
+    return existingByToken;
+  }
+
+  try {
+    return await Device.create({
       userId,
       pushToken: data.pushToken,
       deviceName: data.deviceName,
       platform: data.platform,
     });
+  } catch (err) {
+    if (!(err instanceof UniqueConstraintError)) throw err;
+    const raced = await Device.findOne({ where: { pushToken: data.pushToken } });
+    if (!raced) throw err;
+    await raced.update({
+      userId,
+      lastActiveAt: new Date(),
+      deviceName: data.deviceName,
+      platform: data.platform,
+    });
+    return raced;
   }
-
-  return device;
 }

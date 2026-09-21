@@ -3,8 +3,6 @@ import { Op, Transaction as DbTransaction } from 'sequelize';
 import {
   User,
   RefreshToken,
-  Category,
-  DEFAULT_CATEGORIES,
   VerificationToken,
   TokenType,
   sequelize,
@@ -22,30 +20,27 @@ import {
 } from '../../../shared/utils/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import { AppError } from '../../../shared/utils/errors';
-import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
-import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
+import { sendOtpEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
+import {
+  verifyGoogleIdToken,
+  verifyAppleIdToken,
+  type GoogleTokenInput,
+} from '@shared/modules/auth/service/socialAuth.service';
 import { verifyTotpCode } from '@shared/modules/auth/service/totp.service';
+
+function assertAdminUser(user: User): void {
+  if (user.role !== 'admin') {
+    throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
+  }
+}
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user.toJSON();
   return safe;
 }
 
-async function createDefaultCategories(userId: string, transaction?: DbTransaction): Promise<void> {
-  await Category.bulkCreate(
-    DEFAULT_CATEGORIES.map((cat, index) => ({
-      userId,
-      name: cat.name,
-      icon: cat.icon,
-      color: cat.color,
-      isDefault: true,
-      sortOrder: index,
-    })),
-    { transaction }
-  );
-}
-
 async function issueTokens(user: User, deviceId?: string, transaction?: DbTransaction) {
+  assertAdminUser(user);
   const payload = { userId: user.id, email: user.email, role: user.role };
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken(payload);
@@ -121,49 +116,12 @@ async function consumeToken(
   return stored;
 }
 
-export async function register(email: string, password: string, name?: string) {
-  const existing = await User.findOne({ where: { email } });
-  if (existing) {
-    throw new AppError(409, 'Email already registered', 'EMAIL_EXISTS');
-  }
-
-  const passwordHash = await hashPassword(password);
-
-  const { tokens, verifyToken } = await sequelize.transaction(async (t) => {
-    const user = await User.create(
-      {
-        email,
-        passwordHash,
-        name: name ?? null,
-        authProvider: 'email',
-      },
-      { transaction: t }
-    );
-
-    await createDefaultCategories(user.id, t);
-
-    // A random opaque token, not a JWT — consumeToken() only ever compares it for equality
-    // against the stored value, never decodes it, and a signed JWT here easily overflows the
-    // verification_tokens.token column (VARCHAR(255)) for longer emails.
-    const verifyToken = randomBytes(32).toString('hex');
-    await storeToken(email, 'email_verify', verifyToken, user.id, 24 * 60 * 60 * 1000, t);
-
-    const tokens = await issueTokens(user, undefined, t);
-
-    await writeAuditLog({
-      action: AuditAction.AUTH_REGISTER,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      afterState: { email: user.email, authProvider: 'email' },
-      transaction: t,
-    });
-
-    return { tokens, verifyToken };
-  });
-
-  await sendVerificationEmail(email, verifyToken);
-  return tokens;
+export async function register(_email: string, _password: string, _name?: string): Promise<never> {
+  throw new AppError(
+    403,
+    'Admin accounts are invite-only and cannot be self-registered',
+    'ADMIN_REGISTER_DISABLED'
+  );
 }
 
 export async function login(email: string, password: string, deviceId?: string) {
@@ -195,6 +153,8 @@ export async function login(email: string, password: string, deviceId?: string) 
   if (user.isSuspended) {
     throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
+
+  assertAdminUser(user);
 
   if (user.totpEnabled) {
     await writeAuditLog({
@@ -239,6 +199,8 @@ export async function loginMfa(mfaToken: string, code: string, deviceId?: string
   if (user.isSuspended) {
     throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
+
+  assertAdminUser(user);
 
   await verifyTotpCode(user.id, code);
 
@@ -287,6 +249,8 @@ export async function refresh(refreshToken: string) {
       throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
     }
 
+    assertAdminUser(user);
+
     const tokens = await issueTokens(user, stored.deviceId ?? undefined, t);
 
     await writeAuditLog({
@@ -317,7 +281,7 @@ export async function logout(refreshToken: string) {
 
 export async function requestOtp(email: string) {
   const user = await User.findOne({ where: { email } });
-  if (!user) {
+  if (!user || user.role !== 'admin') {
     return;
   }
   if (user.totpEnabled) {
@@ -475,43 +439,33 @@ export async function socialLogin(
 
   return sequelize.transaction(async (t) => {
     let user = await User.findOne({ where: { [idField]: providerId }, transaction: t });
-    let isNew = false;
 
     if (!user) {
       user = await User.findOne({ where: { email }, transaction: t });
-      if (user) {
-        await user.update(
-          {
-            [idField]: providerId,
-            emailVerified: true,
-            ...(name && !user.name ? { name } : {}),
-          },
-          { transaction: t }
-        );
-      } else {
-        user = await User.create(
-          {
-            email,
-            name: name ?? null,
-            authProvider: provider,
-            [idField]: providerId,
-            emailVerified: true,
-          },
-          { transaction: t }
-        );
-        await createDefaultCategories(user.id, t);
-        isNew = true;
+      if (!user) {
+        throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
       }
+      assertAdminUser(user);
+      await user.update(
+        {
+          [idField]: providerId,
+          emailVerified: true,
+          ...(name && !user.name ? { name } : {}),
+        },
+        { transaction: t }
+      );
+    } else {
+      assertAdminUser(user);
     }
 
     const tokens = await issueTokens(user, undefined, t);
 
     await writeAuditLog({
-      action: isNew ? AuditAction.AUTH_REGISTER : AuditAction.AUTH_SOCIAL_LOGIN,
+      action: AuditAction.AUTH_SOCIAL_LOGIN,
       resource: AuditResource.USER,
       resourceId: user.id,
       actorUserId: user.id,
-      metadata: { provider, isNew },
+      metadata: { provider, isNew: false },
       transaction: t,
     });
 

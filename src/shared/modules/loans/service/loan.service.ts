@@ -121,12 +121,15 @@ export async function payLoan(userId: string, loanId: string, amount: number, no
     if (!loan) throw new AppError(404, 'Loan not found');
     if (loan.closed) throw new AppError(409, 'Loan is already paid off');
 
+    const remainingBalance = Number(loan.remainingBalance);
+    const appliedAmount = Math.min(amount, remainingBalance);
+
     const payment = await LoanPayment.create(
-      { loanId: loan.id, userId, amount, notes: notes ?? null, paidAt: new Date() },
+      { loanId: loan.id, userId, amount: appliedAmount, notes: notes ?? null, paidAt: new Date() },
       { transaction: t }
     );
 
-    const newBalance = Math.max(0, Number(loan.remainingBalance) - amount);
+    const newBalance = Math.max(0, remainingBalance - appliedAmount);
     const justClosed = newBalance <= 0 && !loan.closed;
 
     await loan.update({ remainingBalance: newBalance, closed: newBalance <= 0 }, { transaction: t });
@@ -136,7 +139,7 @@ export async function payLoan(userId: string, loanId: string, amount: number, no
       resource: AuditResource.LOAN,
       resourceId: loanId,
       actorUserId: userId,
-      afterState: { amount, remainingBalance: newBalance, closed: justClosed },
+      afterState: { amount: appliedAmount, remainingBalance: newBalance, closed: justClosed },
       transaction: t,
     });
 

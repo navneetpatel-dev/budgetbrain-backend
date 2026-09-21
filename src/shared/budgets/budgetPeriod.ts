@@ -1,50 +1,54 @@
 import type { Budget } from '@database/models';
 
+function utcYmd(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function utcDate(year: number, monthIndex: number, day: number): Date {
+  return new Date(Date.UTC(year, monthIndex, day));
+}
+
 /** Sequelize DATEONLY may come back as a string or Date. */
 export function toDateOnly(value: Date | string | null | undefined, fallback: string): string {
   if (value == null) return fallback;
   if (typeof value === 'string') return value.slice(0, 10);
-  return value.toISOString().slice(0, 10);
+  return utcYmd(value);
 }
 
 /**
  * Resolve the active tracking window for a budget.
- * - weekly: current calendar week (Sun–Sat)
- * - monthly: current calendar month
+ * - weekly: current calendar week (Sun–Sat) in UTC
+ * - monthly: current calendar month in UTC
  * - custom: stored startDate–endDate (endDate required at create time)
  */
-export function getBudgetDateRange(budget: Pick<Budget, 'type' | 'startDate' | 'endDate'>): {
+export function getBudgetDateRange(
+  budget: Pick<Budget, 'type' | 'startDate' | 'endDate'>,
+  now = new Date()
+): {
   startDate: string;
   endDate: string;
 } {
-  const now = new Date();
-
   if (budget.type === 'weekly') {
-    const day = now.getDay();
-    const start = new Date(now);
-    start.setDate(now.getDate() - day);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return {
-      startDate: start.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
-    };
+    const day = now.getUTCDay();
+    const start = utcDate(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day);
+    const end = utcDate(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day + 6);
+    return { startDate: utcYmd(start), endDate: utcYmd(end) };
   }
 
   if (budget.type === 'custom') {
-    const fallbackStart = now.toISOString().slice(0, 10);
+    const fallbackStart = utcYmd(now);
     const startDate = toDateOnly(budget.startDate, fallbackStart);
     const endDate = toDateOnly(budget.endDate, startDate);
     return { startDate, endDate };
   }
 
   // monthly (and any legacy unknown period)
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return {
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
-  };
+  const start = utcDate(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const end = utcDate(now.getUTCFullYear(), now.getUTCMonth() + 1, 0);
+  return { startDate: utcYmd(start), endDate: utcYmd(end) };
 }
 
 /**
@@ -52,31 +56,29 @@ export function getBudgetDateRange(budget: Pick<Budget, 'type' | 'startDate' | '
  * Not meaningful for `custom` budgets (one-off range), so callers should skip rollover for those.
  */
 export function getPreviousBudgetDateRange(
-  budget: Pick<Budget, 'type' | 'startDate' | 'endDate'>
+  budget: Pick<Budget, 'type' | 'startDate' | 'endDate'>,
+  now = new Date()
 ): { startDate: string; endDate: string } {
-  const now = new Date();
-
   if (budget.type === 'weekly') {
-    const day = now.getDay();
-    const currentStart = new Date(now);
-    currentStart.setDate(now.getDate() - day);
-    const prevStart = new Date(currentStart);
-    prevStart.setDate(currentStart.getDate() - 7);
-    const prevEnd = new Date(currentStart);
-    prevEnd.setDate(currentStart.getDate() - 1);
-    return {
-      startDate: prevStart.toISOString().slice(0, 10),
-      endDate: prevEnd.toISOString().slice(0, 10),
-    };
+    const day = now.getUTCDay();
+    const currentStart = utcDate(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day);
+    const prevStart = utcDate(
+      currentStart.getUTCFullYear(),
+      currentStart.getUTCMonth(),
+      currentStart.getUTCDate() - 7
+    );
+    const prevEnd = utcDate(
+      currentStart.getUTCFullYear(),
+      currentStart.getUTCMonth(),
+      currentStart.getUTCDate() - 1
+    );
+    return { startDate: utcYmd(prevStart), endDate: utcYmd(prevEnd) };
   }
 
   // monthly (and any legacy unknown period)
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), 0);
-  return {
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
-  };
+  const start = utcDate(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+  const end = utcDate(now.getUTCFullYear(), now.getUTCMonth(), 0);
+  return { startDate: utcYmd(start), endDate: utcYmd(end) };
 }
 
 /**
@@ -105,26 +107,23 @@ export function getPeriodsBetween(
 
     if (budget.type === 'weekly') {
       const day = cursorEnd.getUTCDay();
-      periodStart = new Date(cursorEnd);
-      periodStart.setUTCDate(cursorEnd.getUTCDate() - day);
-      periodEnd = new Date(periodStart);
-      periodEnd.setUTCDate(periodStart.getUTCDate() + 6);
+      periodStart = utcDate(cursorEnd.getUTCFullYear(), cursorEnd.getUTCMonth(), cursorEnd.getUTCDate() - day);
+      periodEnd = utcDate(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), periodStart.getUTCDate() + 6);
     } else {
       // monthly (and any legacy unknown period)
-      periodStart = new Date(Date.UTC(cursorEnd.getUTCFullYear(), cursorEnd.getUTCMonth(), 1));
-      periodEnd = new Date(Date.UTC(cursorEnd.getUTCFullYear(), cursorEnd.getUTCMonth() + 1, 0));
+      periodStart = utcDate(cursorEnd.getUTCFullYear(), cursorEnd.getUTCMonth(), 1);
+      periodEnd = utcDate(cursorEnd.getUTCFullYear(), cursorEnd.getUTCMonth() + 1, 0);
     }
 
     if (periodEnd < from) break;
 
     periods.push({
-      startDate: periodStart.toISOString().slice(0, 10),
-      endDate: periodEnd.toISOString().slice(0, 10),
+      startDate: utcYmd(periodStart),
+      endDate: utcYmd(periodEnd),
     });
 
     // Step the cursor into the period immediately before this one.
-    cursorEnd = new Date(periodStart);
-    cursorEnd.setUTCDate(periodStart.getUTCDate() - 1);
+    cursorEnd = utcDate(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), periodStart.getUTCDate() - 1);
   }
 
   return periods;

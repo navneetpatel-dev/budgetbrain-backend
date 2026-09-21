@@ -1,4 +1,4 @@
-import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
+import { DataTypes, Model, Optional, Op, Sequelize } from 'sequelize';
 
 export interface DeviceAttributes {
   id: string;
@@ -63,7 +63,18 @@ export function initDeviceModel(sequelize: Sequelize): typeof Device {
         field: 'last_active_at',
       },
     },
-    { sequelize, tableName: 'devices' }
+    {
+      sequelize,
+      tableName: 'devices',
+      indexes: [
+        {
+          unique: true,
+          name: 'devices_push_token_unique',
+          fields: ['push_token'],
+          where: { push_token: { [Op.ne]: null } },
+        },
+      ],
+    }
   );
   return Device;
 }

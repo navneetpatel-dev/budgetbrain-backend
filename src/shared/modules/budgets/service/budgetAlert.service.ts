@@ -1,7 +1,8 @@
-import { Op, fn, col, Transaction as DbTransaction } from 'sequelize';
-import { Budget, BudgetAlert, Transaction } from '@database/models';
+import { Op, UniqueConstraintError, Transaction as DbTransaction } from 'sequelize';
+import { Budget, BudgetAlert, Transaction, User } from '@database/models';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
+import { convertAndSum } from '@shared/currency/currency.engine';
 
 /** Fixed progressive alert tiers, per requirements.md's budget-alert granularity gap. */
 const ALERT_TIERS = [50, 80, 90, 100] as const;
@@ -30,19 +31,19 @@ export async function checkBudgetAlertsAfterExpense(
 
     const { startDate, endDate } = getBudgetDateRange(budget);
 
-    const spentResult = await Transaction.findOne({
+    const spendRows = await Transaction.findAll({
       where: {
         userId,
         type: 'expense',
         date: { [Op.gte]: startDate, [Op.lte]: endDate },
         ...(budget.categoryId ? { categoryId: budget.categoryId } : {}),
       },
-      attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+      attributes: ['amount', 'currency'],
       raw: true,
       ...txOpts,
     });
-
-    const spent = Number((spentResult as unknown as { total: string })?.total ?? 0);
+    const user = await User.findByPk(userId, { attributes: ['currency'], ...txOpts });
+    const spent = await convertAndSum(spendRows, user?.currency ?? 'INR');
     const budgetAmount = Number(budget.amount);
     if (budgetAmount <= 0) continue;
 
@@ -52,27 +53,31 @@ export async function checkBudgetAlertsAfterExpense(
     for (const threshold of tiersToCheck) {
       if (percentUsed < threshold) continue;
 
-      const existingAlert = await BudgetAlert.findOne({
-        where: {
-          budgetId: budget.id,
-          userId,
-          threshold,
-          triggeredAt: { [Op.gte]: startDate },
-        },
-        ...txOpts,
-      });
+      let created = false;
+      try {
+        const [, wasCreated] = await BudgetAlert.findOrCreate({
+          where: {
+            budgetId: budget.id,
+            userId,
+            threshold,
+            periodStart: startDate,
+          },
+          defaults: {
+            budgetId: budget.id,
+            userId,
+            threshold,
+            periodStart: startDate,
+            triggeredAt: new Date(),
+          },
+          ...txOpts,
+        });
+        created = wasCreated;
+      } catch (err) {
+        if (err instanceof UniqueConstraintError) continue;
+        throw err;
+      }
 
-      if (existingAlert) continue;
-
-      await BudgetAlert.create(
-        {
-          budgetId: budget.id,
-          userId,
-          threshold,
-          triggeredAt: new Date(),
-        },
-        txOpts
-      );
+      if (!created) continue;
 
       const exceeded = threshold >= 100;
       await createNotification(

@@ -280,10 +280,15 @@ export async function refresh(refreshToken: string) {
 
 export async function logout(refreshToken: string) {
   const tokenHash = hashToken(refreshToken);
+  const stored = await RefreshToken.findOne({ where: { tokenHash, revokedAt: null } });
   const [count] = await RefreshToken.update(
     { revokedAt: new Date() },
     { where: { tokenHash, revokedAt: null } }
   );
+
+  if (stored?.deviceId) {
+    await Device.update({ pushToken: null }, { where: { id: stored.deviceId } });
+  }
 
   if (count > 0) {
     await writeAuditLog({

@@ -1,9 +1,32 @@
 import { Op } from 'sequelize';
 import ExcelJS from 'exceljs';
-import { Transaction, Category, IncomeSource, Budget } from '@database/models';
+import { Transaction, Category, IncomeSource, Budget, User } from '@database/models';
 import { getNoSpendStreak } from '@shared/modules/expenses/service/transaction.service';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
+import { convertAmount, convertAndSum, roundMoney } from '@shared/currency/currency.engine';
 import type { ReportFilters } from '../types';
+
+async function resolveUserCurrency(userId: string): Promise<string> {
+  const user = await User.findByPk(userId, { attributes: ['currency'] });
+  return user?.currency ?? 'INR';
+}
+
+/** Convert mixed-currency report rows into the user's display currency, then sum. */
+export async function sumConvertedIncomeAndExpense(
+  userId: string,
+  transactions: Array<{ type: string; amount: unknown; currency?: string | null }>
+): Promise<{ currency: string; totalIncome: number; totalExpenses: number }> {
+  const currency = await resolveUserCurrency(userId);
+  const totalIncome = await convertAndSum(
+    transactions.filter((t) => t.type === 'income'),
+    currency
+  );
+  const totalExpenses = await convertAndSum(
+    transactions.filter((t) => t.type === 'expense'),
+    currency
+  );
+  return { currency, totalIncome, totalExpenses };
+}
 
 /**
  * Shared data-fetcher for all report formats (CSV, PDF, Excel).
@@ -134,13 +157,13 @@ export async function generateExcelReport(
   headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
   headerRow.height = 24;
 
-  let totalExpenses = 0;
-  let totalIncome = 0;
+  const { currency, totalIncome, totalExpenses } = await sumConvertedIncomeAndExpense(
+    userId,
+    transactions
+  );
 
   for (const t of transactions) {
     const amountNum = Number(t.amount);
-    if (t.type === 'expense') totalExpenses += amountNum;
-    else if (t.type === 'income') totalIncome += amountNum;
 
     const row = worksheet.addRow({
       date: t.date ? new Date(t.date).toISOString().slice(0, 10) : '',
@@ -169,6 +192,7 @@ export async function generateExcelReport(
   const summaryIncomeRow = worksheet.addRow({
     date: 'TOTAL INCOME',
     amount: totalIncome,
+    currency,
   });
   summaryIncomeRow.font = { bold: true };
   summaryIncomeRow.getCell('amount').numFmt = '#,##0.00';
@@ -177,6 +201,7 @@ export async function generateExcelReport(
   const summaryExpenseRow = worksheet.addRow({
     date: 'TOTAL EXPENSES',
     amount: totalExpenses,
+    currency,
   });
   summaryExpenseRow.font = { bold: true };
   summaryExpenseRow.getCell('amount').numFmt = '#,##0.00';
@@ -186,6 +211,7 @@ export async function generateExcelReport(
   const summaryNetRow = worksheet.addRow({
     date: 'NET SAVINGS',
     amount: netSavings,
+    currency,
   });
   summaryNetRow.font = { bold: true };
   summaryNetRow.getCell('amount').numFmt = '#,##0.00';
@@ -211,22 +237,36 @@ export async function getMonthlyRecap(userId: string) {
     include: [{ model: Category, as: 'category', attributes: ['name'] }],
   });
 
-  const totalSpent = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+  const currency = await resolveUserCurrency(userId);
+  const convertedRows: Array<{
+    merchant: string | null;
+    categoryName: string;
+    amount: number;
+  }> = [];
+  for (const t of transactions) {
+    convertedRows.push({
+      merchant: t.merchant,
+      categoryName: (t as Transaction & { category?: Category }).category?.name ?? 'Uncategorized',
+      amount: await convertAmount(Number(t.amount), t.currency || currency, currency),
+    });
+  }
+
+  const totalSpent = roundMoney(convertedRows.reduce((sum, row) => sum + row.amount, 0));
 
   const byCategory = new Map<string, number>();
-  for (const t of transactions) {
-    const categoryName = (t as Transaction & { category?: Category }).category?.name ?? 'Uncategorized';
-    byCategory.set(categoryName, (byCategory.get(categoryName) ?? 0) + Number(t.amount));
+  for (const row of convertedRows) {
+    byCategory.set(row.categoryName, (byCategory.get(row.categoryName) ?? 0) + row.amount);
   }
   let topCategory: { name: string; amount: number } | null = null;
   for (const [name, amount] of byCategory) {
-    if (!topCategory || amount > topCategory.amount) topCategory = { name, amount };
+    const rounded = roundMoney(amount);
+    if (!topCategory || rounded > topCategory.amount) topCategory = { name, amount: rounded };
   }
 
   let biggestExpense: { merchant: string | null; amount: number } | null = null;
-  for (const t of transactions) {
-    if (!biggestExpense || Number(t.amount) > biggestExpense.amount) {
-      biggestExpense = { merchant: t.merchant, amount: Number(t.amount) };
+  for (const row of convertedRows) {
+    if (!biggestExpense || row.amount > biggestExpense.amount) {
+      biggestExpense = { merchant: row.merchant, amount: row.amount };
     }
   }
 

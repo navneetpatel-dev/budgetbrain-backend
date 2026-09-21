@@ -16,6 +16,7 @@ import { upsertMerchantCategoryRule } from '@shared/modules/categories/service/m
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { resolvePagination, paginatedResult } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
+import { convertAndSum } from '@shared/currency/currency.engine';
 import type { PaginationInput } from '@shared/types';
 import type {
   CreateTransactionInput,
@@ -30,22 +31,28 @@ function buildSearchVector(data: {
   return [data.notes, data.merchant, data.amount?.toString()].filter(Boolean).join(' ');
 }
 
-export async function getTotalIncome(userId: string, _user: User): Promise<number> {
-  const result = await Transaction.findOne({
-    where: { userId, type: 'income' },
-    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
-    raw: true,
-  });
-  return Number((result as unknown as { total: string })?.total ?? 0);
+async function resolveUserCurrency(userId: string, user?: User | null): Promise<string> {
+  if (user?.currency) return user.currency;
+  const row = await User.findByPk(userId, { attributes: ['currency'] });
+  return row?.currency ?? 'INR';
 }
 
-export async function getTotalExpenses(userId: string, _user: User): Promise<number> {
-  const result = await Transaction.findOne({
-    where: { userId, type: 'expense' },
-    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+export async function getTotalIncome(userId: string, user: User): Promise<number> {
+  const rows = await Transaction.findAll({
+    where: { userId, type: 'income' },
+    attributes: ['amount', 'currency'],
     raw: true,
   });
-  return Number((result as unknown as { total: string })?.total ?? 0);
+  return convertAndSum(rows, user.currency);
+}
+
+export async function getTotalExpenses(userId: string, user: User): Promise<number> {
+  const rows = await Transaction.findAll({
+    where: { userId, type: 'expense' },
+    attributes: ['amount', 'currency'],
+    raw: true,
+  });
+  return convertAndSum(rows, user.currency);
 }
 
 export async function getRecentTransactions(userId: string, _user: User, limit: number) {
@@ -57,16 +64,33 @@ export async function getRecentTransactions(userId: string, _user: User, limit: 
   });
 }
 
-export async function getCategoryBreakdown(userId: string, _user: User, limit = 2) {
-  return Transaction.findAll({
+export async function getCategoryBreakdown(userId: string, user: User, limit = 2) {
+  const rows = await Transaction.findAll({
     where: { userId, type: 'expense' },
-    attributes: ['categoryId', [fn('SUM', col('amount')), 'total']],
+    attributes: ['categoryId', 'amount', 'currency'],
     include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] }],
-    group: ['category_id', 'category.id', 'category.name', 'category.icon', 'category.color'],
-    order: [[fn('SUM', col('amount')), 'DESC']],
-    limit,
-    subQuery: false,
   });
+
+  const totals = new Map<string, { total: number; category: Category | null }>();
+  for (const row of rows) {
+    const key = row.categoryId ?? 'uncategorized';
+    const converted = await convertAndSum([{ amount: row.amount, currency: row.currency }], user.currency);
+    const existing = totals.get(key);
+    if (existing) {
+      existing.total += converted;
+    } else {
+      totals.set(key, { total: converted, category: (row as Transaction & { category?: Category }).category ?? null });
+    }
+  }
+
+  return [...totals.entries()]
+    .map(([categoryId, value]) => ({
+      categoryId: categoryId === 'uncategorized' ? null : categoryId,
+      total: value.total,
+      category: value.category,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
 }
 
 export interface TransactionFilters {
@@ -145,7 +169,7 @@ export async function listTransactions(userId: string, filters: TransactionFilte
 }
 
 /**
- * True SUM(amount) for the given filter set, computed entirely in SQL (never by fetching
+ * Converted expense/income totals for the given filter set, never a raw mixed-currency SQL SUM (never by fetching
  * matching rows into memory and reducing client- or server-side) — the fix for the
  * paginated-list "total silently undercounts past page 1" bug (see
  * implementation-plan/backend/14-loan-budget-fields-and-expense-summary.md). `type` is
@@ -164,15 +188,22 @@ export async function getTransactionsSummary(
 
   const rows = await Transaction.findAll({
     where,
-    attributes: ['type', [fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
-    group: ['type'],
+    attributes: ['type', 'amount', 'currency'],
     raw: true,
   });
 
-  const byType = new Map((rows as unknown as { type: string; total: string }[]).map((r) => [r.type, Number(r.total)]));
+  const currency = await resolveUserCurrency(userId);
+  let totalExpense = 0;
+  let totalIncome = 0;
+  for (const row of rows as unknown as { type: string; amount: unknown; currency?: string }[]) {
+    const converted = await convertAndSum([row], currency);
+    if (row.type === 'expense') totalExpense += converted;
+    else if (row.type === 'income') totalIncome += converted;
+  }
+
   return {
-    totalExpense: byType.get('expense') ?? 0,
-    totalIncome: byType.get('income') ?? 0,
+    totalExpense,
+    totalIncome,
   };
 }
 
@@ -484,12 +515,13 @@ export async function getWeeklySpendComparison(
 }
 
 async function sumExpensesBetween(userId: string, startDate: string, endDate: string): Promise<number> {
-  const result = await Transaction.findOne({
+  const rows = await Transaction.findAll({
     where: { userId, type: 'expense', date: { [Op.gte]: startDate, [Op.lte]: endDate } },
-    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+    attributes: ['amount', 'currency'],
     raw: true,
   });
-  return Number((result as unknown as { total: string })?.total ?? 0);
+  const currency = await resolveUserCurrency(userId);
+  return convertAndSum(rows, currency);
 }
 
 function todayIso(): string {
@@ -528,9 +560,10 @@ export async function getSpendingTrends(userId: string): Promise<SpendingTrends>
       type: 'expense',
       date: { [Op.gte]: sixMonthsIso },
     },
-    attributes: ['amount', 'date'],
+    attributes: ['amount', 'currency', 'date'],
     raw: true,
   });
+  const currency = await resolveUserCurrency(userId);
 
   // 1. Daily trends: last 14 days ending today
   const dailyBuckets = new Map<string, number>();
@@ -573,7 +606,7 @@ export async function getSpendingTrends(userId: string): Promise<SpendingTrends>
 
   // Populate buckets from transactions
   for (const t of transactions) {
-    const amt = Number(t.amount);
+    const amt = await convertAndSum([{ amount: t.amount, currency: (t as { currency?: string }).currency }], currency);
     const txDate = new Date(t.date);
     const dayIso = txDate.toISOString().slice(0, 10);
     const monthIso = txDate.toISOString().slice(0, 7);

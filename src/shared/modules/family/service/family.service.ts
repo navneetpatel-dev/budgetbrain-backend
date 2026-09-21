@@ -135,6 +135,14 @@ export async function createSplit(userId: string, groupId: string, data: CreateS
     }
   }
 
+  const seenParticipantIds = new Set<string>();
+  for (const participant of data.participants) {
+    if (seenParticipantIds.has(participant.userId)) {
+      throw new AppError(400, 'Duplicate participant in split', 'DUPLICATE_SPLIT_PARTICIPANT');
+    }
+    seenParticipantIds.add(participant.userId);
+  }
+
   const totalShares = data.participants.reduce((sum, p) => sum + p.shareAmount, 0);
   if (totalShares > Number(transaction.amount)) {
     throw new AppError(400, 'Split amounts cannot exceed the transaction amount');
@@ -458,12 +466,29 @@ export async function updateMemberRole(
       );
     }
 
+    const previousRole = targetMembership.role;
+
     if (newRole === 'owner') {
       await actorMembership.update({ role: 'admin' }, { transaction: t });
       await FamilyGroup.update({ ownerId: targetUserId }, { where: { id: groupId }, transaction: t });
     }
 
     await targetMembership.update({ role: newRole }, { transaction: t });
+
+    await writeAuditLog({
+      action: newRole === 'owner' ? AuditAction.FAMILY_OWNERSHIP_TRANSFER : AuditAction.FAMILY_ROLE_CHANGE,
+      resource: AuditResource.FAMILY_MEMBER,
+      resourceId: targetMembership.id,
+      actorUserId: actorId,
+      beforeState: { targetUserId, role: previousRole, ownerId: newRole === 'owner' ? actorId : undefined },
+      afterState: {
+        targetUserId,
+        role: newRole,
+        ownerId: newRole === 'owner' ? targetUserId : undefined,
+      },
+      transaction: t,
+    });
+
     return targetMembership;
   });
 }

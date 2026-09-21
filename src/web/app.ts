@@ -9,6 +9,7 @@ import { createRequestContextMiddleware } from '../shared/audit';
 import { createCorsOptions } from '../shared/http/cors';
 import { jsonNotFound, registerApiAliases, registerApiIndex } from '../shared/http/routes';
 import { sequelize } from '@database/models';
+import { setUploadStaticHeaders } from '../shared/uploads/sniffFileType';
 import { registerWebRoutes } from './routes';
 
 const app = express();
@@ -34,8 +35,8 @@ app.use(
 app.use(createRequestContextMiddleware('web'));
 app.use(globalRateLimiter);
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/web/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), { setHeaders: setUploadStaticHeaders }));
+app.use('/web/uploads', express.static(path.join(process.cwd(), 'uploads'), { setHeaders: setUploadStaticHeaders }));
 
 async function health(_req: express.Request, res: express.Response) {
   try {

@@ -8,21 +8,12 @@ import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
 import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '../types';
+import { shiftByCadence, shiftDaysIso } from '../shiftByCadence';
+
+export { shiftByCadence } from '../shiftByCadence';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function shiftDaysIso(iso: string, days: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-}
-
-function shiftByCadence(iso: string, cadence: RecurringCadence): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (cadence === 'weekly') return shiftDaysIso(iso, 7);
-  if (cadence === 'yearly') return new Date(Date.UTC(y + 1, m - 1, d)).toISOString().slice(0, 10);
-  return new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10); // monthly
 }
 
 /**

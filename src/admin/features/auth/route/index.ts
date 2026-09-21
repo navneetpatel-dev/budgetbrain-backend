@@ -59,8 +59,8 @@ router.post(
   asyncHandler(controller.resetPassword)
 );
 router.post('/verify-email', validateBody(tokenSchema), asyncHandler(controller.verifyEmail));
-router.post('/google', validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
-router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
+router.post('/google', authRateLimiter, validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
+router.post('/apple', authRateLimiter, validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
 router.post(
   '/login/mfa',
   authRateLimiter,

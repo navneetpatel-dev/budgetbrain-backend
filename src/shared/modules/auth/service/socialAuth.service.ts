@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { AppError } from '@shared/errors';
 import { env } from '@config/env';
+import { logger } from '@shared/logging/logger';
 
 interface GoogleTokenInfo {
   sub: string;
@@ -55,13 +56,6 @@ async function getAppleSigningKey(kid: string): Promise<crypto.KeyObject | null>
   }
 }
 
-function decodeJwtPayload(token: string): Record<string, unknown> {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new AppError(401, 'Invalid token format', 'INVALID_TOKEN');
-  const payload = Buffer.from(parts[1], 'base64url').toString('utf8');
-  return JSON.parse(payload) as Record<string, unknown>;
-}
-
 function allowedAppleClientIds(): string[] {
   return (env.APPLE_CLIENT_ID ?? '')
     .split(',')
@@ -69,18 +63,33 @@ function allowedAppleClientIds(): string[] {
     .filter(Boolean);
 }
 
-function audienceMatches(aud: string | string[] | undefined, allowed: string[]): boolean {
-  if (!allowed.length) return true;
-  if (!aud) return false;
-  const values = Array.isArray(aud) ? aud : [aud];
-  return values.some((value) => allowed.includes(value));
-}
-
 function allowedGoogleClientIds(): string[] {
   return (env.GOOGLE_CLIENT_ID ?? '')
     .split(',')
     .map((id) => id.trim().replace(/^['"]|['"]$/g, ''))
     .filter(Boolean);
+}
+
+function audienceMatches(
+  aud: string | string[] | undefined,
+  allowed: string[],
+  envVarName: string
+): boolean {
+  if (!allowed.length) {
+    logger.error(
+      `${envVarName} is not configured; rejecting social-login token (fail closed)`
+    );
+    return false;
+  }
+  if (!aud) return false;
+  const values = Array.isArray(aud) ? aud : [aud];
+  return values.some((value) => allowed.includes(value));
+}
+
+/** Test-only: drop the in-memory Apple JWKS cache so mocked keys are fetched. */
+export function resetAppleJwksCache(): void {
+  appleKeysCache = null;
+  appleKeysCacheExpiry = 0;
 }
 
 export type GoogleTokenInput =
@@ -192,14 +201,12 @@ export async function verifyGoogleIdToken(
     }
   }
 
-  // 5. Audience check
+  // 5. Audience check — fail closed when GOOGLE_CLIENT_ID is unset.
   const allowed = allowedGoogleClientIds();
-  if (allowed.length > 0) {
-    const matchesAud = audienceMatches(data.aud, allowed);
-    const matchesAzp = data.azp ? allowed.includes(data.azp) : false;
-    if (!matchesAud && !matchesAzp) {
-      throw new AppError(401, 'Google token audience mismatch', 'INVALID_GOOGLE_TOKEN');
-    }
+  const matchesAud = audienceMatches(data.aud, allowed, 'GOOGLE_CLIENT_ID');
+  const matchesAzp = data.azp ? allowed.includes(data.azp) : false;
+  if (!matchesAud && !matchesAzp) {
+    throw new AppError(401, 'Google token audience mismatch', 'INVALID_GOOGLE_TOKEN');
   }
 
   return { googleId: data.sub, email: data.email, name: resolvedName };
@@ -224,17 +231,11 @@ export async function verifyAppleIdToken(
       } catch (err: any) {
         throw new AppError(401, `Apple token verification failed: ${err.message}`, 'INVALID_APPLE_TOKEN');
       }
-    } else if (process.env.NODE_ENV === 'test') {
-      payload = decodeJwtPayload(idToken) as unknown as AppleIdTokenPayload;
     } else {
       throw new AppError(401, 'Apple signing key not found', 'INVALID_APPLE_TOKEN');
     }
   } else {
-    if (process.env.NODE_ENV === 'test') {
-      payload = decodeJwtPayload(idToken) as unknown as AppleIdTokenPayload;
-    } else {
-      throw new AppError(401, 'Invalid Apple token header', 'INVALID_APPLE_TOKEN');
-    }
+    throw new AppError(401, 'Invalid Apple token header', 'INVALID_APPLE_TOKEN');
   }
 
   if (payload.iss !== 'https://appleid.apple.com') {
@@ -250,7 +251,7 @@ export async function verifyAppleIdToken(
   }
 
   const allowed = allowedAppleClientIds();
-  if (!audienceMatches(payload.aud, allowed)) {
+  if (!audienceMatches(payload.aud, allowed, 'APPLE_CLIENT_ID')) {
     throw new AppError(401, 'Apple token audience mismatch', 'INVALID_APPLE_TOKEN');
   }
 

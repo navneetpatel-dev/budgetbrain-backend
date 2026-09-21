@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { Transaction, Category, IncomeSource } from '@database/models';
-import { fetchReportTransactions } from './report.service';
+import { fetchReportTransactions, sumConvertedIncomeAndExpense } from './report.service';
 import type { ReportFilters } from '../types';
 
 export async function generatePdfReport(
@@ -16,9 +16,10 @@ export async function generatePdfReport(
   }
 
   const transactions = await fetchReportTransactions(userId, filters);
-
-  let totalExpenses = 0;
-  let totalIncome = 0;
+  const { currency, totalIncome, totalExpenses } = await sumConvertedIncomeAndExpense(
+    userId,
+    transactions
+  );
 
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
   const chunks: Buffer[] = [];
@@ -50,9 +51,6 @@ export async function generatePdfReport(
       const label = cat || inc || '-';
       const amountNum = Number(t.amount);
 
-      if (t.type === 'expense') totalExpenses += amountNum;
-      else totalIncome += amountNum;
-
       const y = doc.y;
       if (y > 720) {
         doc.addPage();
@@ -71,9 +69,9 @@ export async function generatePdfReport(
 
     doc.moveDown();
     doc.fontSize(12).fillColor('#000');
-    doc.text(`Total Income: ${totalIncome.toFixed(2)}`);
-    doc.text(`Total Expenses: ${totalExpenses.toFixed(2)}`);
-    doc.text(`Net Savings: ${(totalIncome - totalExpenses).toFixed(2)}`);
+    doc.text(`Total Income: ${currency} ${totalIncome.toFixed(2)}`);
+    doc.text(`Total Expenses: ${currency} ${totalExpenses.toFixed(2)}`);
+    doc.text(`Net Savings: ${currency} ${(totalIncome - totalExpenses).toFixed(2)}`);
 
     doc.end();
   });

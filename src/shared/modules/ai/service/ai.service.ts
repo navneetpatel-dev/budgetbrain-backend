@@ -1,8 +1,9 @@
-import { AiConversation, Transaction, Category, RecurringSeries, Budget } from '@database/models';
+import { convertAndSum } from '@shared/currency/currency.engine';
+import { AiConversation, Transaction, Category, RecurringSeries, Budget, User } from '@database/models';
 import type { AiMessage } from '@database/models';
 import { AppError } from '@shared/errors';
 import { env } from '@config/env';
-import { Op, fn, col } from 'sequelize';
+import { Op } from 'sequelize';
 import {
   AI_COACH_CONFIG,
   buildCoachSystemPrompt,
@@ -14,8 +15,7 @@ import {
 } from '@shared/ai';
 import type { ChatMessage } from '@shared/ai';
 import { runAnomalyDetection } from '@shared/ai/anomalyDetection.engine';
-import { checkAiQuota, incrementAiQuota } from './aiQuota.service';
-
+import { reserveAiQuota, adjustAiQuota } from './aiQuota.service';
 
 export interface StructuredInsight {
   kind: 'monthly_comparison' | 'top_category' | 'saving_opportunity' | 'budget_recommendation';
@@ -79,23 +79,28 @@ export async function getSpendingInsights(userId: string) {
   const daysPassed = now.getDate();
   const daysRemaining = daysInMonth - daysPassed;
 
-  const [thisMonth, lastMonth, byCategory, budgets, recurringSeries] = await Promise.all([
-    Transaction.sum('amount', {
+  const user = await User.findByPk(userId, { attributes: ['currency'] });
+  const currency = user?.currency ?? 'INR';
+
+  const [thisMonthRows, lastMonthRows, expenseRows, budgets, recurringSeries] = await Promise.all([
+    Transaction.findAll({
       where: { userId, type: 'expense', date: { [Op.gte]: thisMonthStart } },
+      attributes: ['amount', 'currency'],
+      raw: true,
     }),
-    Transaction.sum('amount', {
+    Transaction.findAll({
       where: {
         userId,
         type: 'expense',
         date: { [Op.gte]: lastMonthStart, [Op.lte]: lastMonthEnd },
       },
+      attributes: ['amount', 'currency'],
+      raw: true,
     }),
     Transaction.findAll({
       where: { userId, type: 'expense', date: { [Op.gte]: thisMonthStart } },
-      attributes: ['categoryId', [fn('SUM', col('amount')), 'total']],
+      attributes: ['categoryId', 'amount', 'currency'],
       include: [{ model: Category, as: 'category', attributes: ['name'] }],
-      group: ['categoryId', 'category.id', 'category.name'],
-      raw: true,
     }),
     Budget.findAll({
       where: { userId },
@@ -106,9 +111,25 @@ export async function getSpendingInsights(userId: string) {
     }),
   ]);
 
-  const current = Number(thisMonth ?? 0);
-  const previous = Number(lastMonth ?? 0);
+  const current = await convertAndSum(thisMonthRows, currency);
+  const previous = await convertAndSum(lastMonthRows, currency);
   const changePercent = previous > 0 ? ((current - previous) / previous) * 100 : 0;
+
+  const byCategoryMap = new Map<string, { categoryId: string | null; total: number; category?: { name: string } }>();
+  for (const row of expenseRows) {
+    const key = row.categoryId ?? 'uncategorized';
+    const converted = await convertAndSum([{ amount: row.amount, currency: row.currency }], currency);
+    const existing = byCategoryMap.get(key);
+    if (existing) existing.total += converted;
+    else {
+      byCategoryMap.set(key, {
+        categoryId: row.categoryId,
+        total: converted,
+        category: (row as Transaction & { category?: { name: string } }).category,
+      });
+    }
+  }
+  const byCategory = [...byCategoryMap.values()];
 
   const insights: string[] = [];
   const structuredInsights: StructuredInsight[] = [];
@@ -147,15 +168,11 @@ export async function getSpendingInsights(userId: string) {
   }
 
   // 2. Top spending category
-  const topCategory = [...byCategory].sort(
-    (a, b) =>
-      Number((b as unknown as { total: string }).total) -
-      Number((a as unknown as { total: string }).total)
-  )[0] as unknown as { category?: { name: string }; total: string } | undefined;
+  const topCategory = [...byCategory].sort((a, b) => b.total - a.total)[0];
 
   if (topCategory?.category) {
     const catName = topCategory.category.name;
-    const catTotal = Number(topCategory.total);
+    const catTotal = topCategory.total;
     const msg = `Your top spending category this month is ${catName} at ₹${catTotal.toFixed(0)}.`;
     insights.push(msg);
     structuredInsights.push({
@@ -172,10 +189,8 @@ export async function getSpendingInsights(userId: string) {
   if (budgets.length > 0) {
     for (const b of budgets) {
       const budgetAmount = Number(b.amount);
-      const catSpendItem = byCategory.find(
-        (c: any) => c.categoryId === b.categoryId
-      ) as unknown as { total?: string } | undefined;
-      const catSpent = catSpendItem?.total ? Number(catSpendItem.total) : 0;
+      const catSpendItem = byCategory.find((c) => c.categoryId === b.categoryId);
+      const catSpent = catSpendItem?.total ?? 0;
       const percentUsed = budgetAmount > 0 ? (catSpent / budgetAmount) * 100 : 0;
 
       if (percentUsed >= 80 && percentUsed <= 100 && daysRemaining > 5) {
@@ -196,7 +211,7 @@ export async function getSpendingInsights(userId: string) {
   }
 
   if (!savingOpportunityAdded && recurringSeries.length > 0) {
-    const totalRecurring = recurringSeries.reduce((sum, r) => sum + Number(r.amount), 0);
+    const totalRecurring = await convertAndSum(recurringSeries, currency);
     const msg = `You have ${recurringSeries.length} active recurring subscriptions totaling ₹${totalRecurring.toFixed(0)}/mo. Reviewing inactive services could free up cash flow.`;
     insights.push(msg);
     structuredInsights.push({
@@ -219,10 +234,8 @@ export async function getSpendingInsights(userId: string) {
   // budget-amount adjustment for next month based on this month's actual pace, reusing the
   // same budgets/byCategory data already fetched above (no re-summing).
   for (const b of budgets) {
-    const catSpendItem = byCategory.find(
-      (c: any) => c.categoryId === b.categoryId
-    ) as unknown as { total?: string } | undefined;
-    const catSpent = catSpendItem?.total ? Number(catSpendItem.total) : 0;
+    const catSpendItem = byCategory.find((c) => c.categoryId === b.categoryId);
+    const catSpent = catSpendItem?.total ?? 0;
     const catName = (b as any).category?.name || b.name;
 
     const recommendation = buildBudgetRecommendation({
@@ -324,7 +337,7 @@ async function finalizeCoachTurn(
 }
 
 export async function chatWithCoach(userId: string, message: string, conversationId?: string) {
-  await checkAiQuota(userId);
+  const { reserved } = await reserveAiQuota(userId);
 
   const { context, conversation, userMessage, priorMessages, openAiMessages } =
     await prepareCoachTurn(userId, message, conversationId);
@@ -335,12 +348,14 @@ export async function chatWithCoach(userId: string, message: string, conversatio
     try {
       const completion = await chatCompletion({ apiKey: env.OPENAI_API_KEY, messages: openAiMessages });
       assistantContent = completion.content;
-      await incrementAiQuota(userId, completion.usage.totalTokens);
+      await adjustAiQuota(userId, (completion.usage.totalTokens ?? 0) - reserved);
     } catch (err) {
+      await adjustAiQuota(userId, -reserved);
       if (err instanceof AppError) throw err;
       assistantContent = generateCoachFallback(message, context);
     }
   } else {
+    await adjustAiQuota(userId, -reserved);
     assistantContent = generateCoachFallback(message, context);
   }
 
@@ -373,7 +388,7 @@ export async function streamChatWithCoach(
   conversationId: string | undefined,
   onToken: (delta: string) => void
 ) {
-  await checkAiQuota(userId);
+  const { reserved } = await reserveAiQuota(userId);
 
   const { context, conversation, userMessage, priorMessages, openAiMessages } =
     await prepareCoachTurn(userId, message, conversationId);
@@ -393,18 +408,25 @@ export async function streamChatWithCoach(
       }
       const completion = await done;
       assistantContent = completion.content;
-      await incrementAiQuota(userId, completion.usage.totalTokens);
+      await adjustAiQuota(userId, (completion.usage.totalTokens ?? 0) - reserved);
       if (!emittedAny) {
         // Defensive: shouldn't happen if `done` resolved, but never silently persist
         // an empty reply.
         throw new AppError(502, 'AI Coach returned an empty streamed response', 'AI_EMPTY_RESPONSE');
       }
     } catch (err) {
-      if (err instanceof AppError) throw err;
+      if (err instanceof AppError) {
+        if (err.code !== 'AI_EMPTY_RESPONSE') {
+          await adjustAiQuota(userId, -reserved);
+        }
+        throw err;
+      }
+      await adjustAiQuota(userId, -reserved);
       assistantContent = generateCoachFallback(message, context);
       onToken(assistantContent);
     }
   } else {
+    await adjustAiQuota(userId, -reserved);
     assistantContent = generateCoachFallback(message, context);
     onToken(assistantContent);
   }

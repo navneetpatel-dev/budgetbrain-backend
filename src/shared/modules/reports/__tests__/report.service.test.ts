@@ -277,6 +277,31 @@ describe('generateExcelReport', () => {
     expect(sheet.getRow(4).getCell(3).value).toBe(0);
     expect(sheet.getRow(5).getCell(3).value).toBe(0);
   });
+
+  it('converts mixed-currency rows before writing TOTAL INCOME / EXPENSES / NET SAVINGS', async () => {
+    const user = await createTestUser({ currency: 'INR' });
+    await createTestTransaction(user.id, { type: 'expense', amount: 8300, currency: 'INR' });
+    await createTestTransaction(user.id, { type: 'expense', amount: 100, currency: 'USD' });
+    await createTestTransaction(user.id, { type: 'income', amount: 1000, currency: 'INR' });
+
+    const buffer = await generateExcelReport(user.id, {});
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+    const sheet = workbook.getWorksheet('Transactions Report')!;
+
+    const { convertAmount } = await import('@shared/currency/currency.engine');
+    const usdInInr = await convertAmount(100, 'USD', 'INR');
+    const expectedExpenses = 8300 + usdInInr;
+
+    const incomeRow = sheet.getRow(6);
+    const expenseRow = sheet.getRow(7);
+    const netRow = sheet.getRow(8);
+
+    expect(incomeRow.getCell(3).value).toBe(1000);
+    expect(expenseRow.getCell(3).value).toBe(expectedExpenses);
+    expect(netRow.getCell(3).value).toBe(1000 - expectedExpenses);
+    expect(expenseRow.getCell(4).value).toBe('INR');
+  });
 });
 
 describe('getMonthlyRecap', () => {
@@ -393,5 +418,31 @@ describe('getMonthlyRecap', () => {
 
     const recap = await getMonthlyRecap(user.id);
     expect(recap.totalSpent).toBe(25);
+  });
+
+  it('converts foreign-currency expenses into the user base currency before totaling', async () => {
+    const user = await createTestUser({ currency: 'INR' });
+    await createTestTransaction(user.id, {
+      type: 'expense',
+      amount: 8300,
+      currency: 'INR',
+      merchant: 'Local',
+      date: thisMonthDate(3),
+    });
+    await createTestTransaction(user.id, {
+      type: 'expense',
+      amount: 100,
+      currency: 'USD',
+      merchant: 'Imported',
+      date: thisMonthDate(4),
+    });
+
+    const recap = await getMonthlyRecap(user.id);
+    const { convertAmount } = await import('@shared/currency/currency.engine');
+    const usdInInr = await convertAmount(100, 'USD', 'INR');
+
+    expect(recap.totalSpent).toBe(8300 + usdInInr);
+    expect(recap.biggestExpense?.merchant).toBe('Imported');
+    expect(recap.biggestExpense?.amount).toBe(usdInInr);
   });
 });

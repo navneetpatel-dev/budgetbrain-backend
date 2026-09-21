@@ -97,20 +97,44 @@ export function startScheduledJobs(): void {
   // Recurring expense check — 1st of month at 8:00 AM
   cron.schedule('0 8 1 * *', async () => {
     try {
-      const recurring = await Transaction.findAll({
-        where: { isRecurring: true, type: 'expense' },
-        limit: 500,
-      });
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const batchSize = 500;
+      const fetchBatch = (offset: number) =>
+        Transaction.findAll({
+          where: { isRecurring: true, type: 'expense' },
+          limit: batchSize,
+          offset,
+          order: [['id', 'ASC']],
+        });
 
-      for (const tx of recurring) {
-        await createNotification(
-          tx.userId,
-          'recurring_expense',
-          'Recurring expense due',
-          `Don't forget: ${tx.merchant ?? 'Recurring expense'} — ₹${tx.amount}`,
-          { transactionId: tx.id },
-          true
-        );
+      let offset = 0;
+      let recurring = await fetchBatch(offset);
+
+      while (recurring.length) {
+        for (const tx of recurring) {
+          const existing = await Notification.findOne({
+            where: {
+              userId: tx.userId,
+              type: 'recurring_expense',
+              sentAt: { [Op.gte]: todayStart },
+            },
+          });
+          if (existing) continue;
+
+          await createNotification(
+            tx.userId,
+            'recurring_expense',
+            'Recurring expense due',
+            `Don't forget: ${tx.merchant ?? 'Recurring expense'} — ₹${tx.amount}`,
+            { transactionId: tx.id },
+            true
+          );
+        }
+
+        if (recurring.length < batchSize) break;
+        offset += batchSize;
+        recurring = await fetchBatch(offset);
       }
     } catch (err) {
       console.error('[cron] recurring_expense failed:', err);

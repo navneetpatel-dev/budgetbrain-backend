@@ -1,4 +1,7 @@
 import { ExchangeRate } from '@database/models';
+import { logger } from '@shared/logging/logger';
+
+const STALE_RATE_MS = 48 * 60 * 60 * 1000;
 
 export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'] as const;
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
@@ -47,6 +50,12 @@ export async function getExchangeRate(fromCurrency: string, toCurrency: string):
 
     for (const row of dbRows) {
       inMemoryRateCache.set(`${row.fromCurrency}_${row.toCurrency}`, Number(row.rate));
+      const ageMs = now - new Date(row.updatedAt).getTime();
+      if (ageMs > STALE_RATE_MS) {
+        logger.warn(
+          `Exchange rate ${row.fromCurrency}->${row.toCurrency} is stale (updated ${row.updatedAt.toISOString()}); serving last known rate`
+        );
+      }
     }
     lastCacheRefresh = now;
 
@@ -71,6 +80,19 @@ export async function convertAmount(amount: number, fromCurrency: string, toCurr
 
   const rate = await getExchangeRate(fromCurrency, toCurrency);
   return roundMoney(amount * rate);
+}
+
+/** Convert each row into `targetCurrency` then sum. Used instead of SQL SUM(amount) across mixed currencies. */
+export async function convertAndSum(
+  rows: Array<{ amount: unknown; currency?: string | null }>,
+  targetCurrency: string
+): Promise<number> {
+  let total = 0;
+  for (const row of rows) {
+    const from = row.currency || targetCurrency;
+    total += await convertAmount(Number(row.amount) || 0, from, targetCurrency);
+  }
+  return roundMoney(total);
 }
 
 async function upsertRatesToInrTable(ratesToInr: Record<string, number>): Promise<void> {
@@ -123,6 +145,7 @@ export async function fetchAndUpsertLiveRates(): Promise<{ updated: string[]; sk
   );
 
   if (!response.ok) {
+    logger.error(`Frankfurter API request failed: ${response.status} ${response.statusText}`);
     throw new Error(`Frankfurter API request failed: ${response.status} ${response.statusText}`);
   }
 

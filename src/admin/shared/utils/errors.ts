@@ -2,19 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { createLogger } from '../../../shared/logging';
 import { getAuditContext } from '../../../shared/audit';
+import { AppError, ValidationError, NotFoundError, ForbiddenError, UnauthorizedError } from '../../../shared/errors';
 
 const log = createLogger('admin');
 
-export class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-    public code?: string
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
+export { AppError, ValidationError, NotFoundError, ForbiddenError, UnauthorizedError };
 
 export function errorHandler(
   err: Error,

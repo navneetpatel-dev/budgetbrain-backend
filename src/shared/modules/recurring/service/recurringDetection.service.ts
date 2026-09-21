@@ -3,6 +3,7 @@ import { Transaction, RecurringSeries, User } from '@database/models';
 import type { RecurringCadence } from '@database/models';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
+import { shiftByCadenceDate } from '../shiftByCadence';
 
 interface TransactionSummary {
   id: string;
@@ -17,18 +18,6 @@ function computeCadence(intervalDays: number): RecurringCadence | null {
   if (intervalDays >= 25 && intervalDays <= 35) return 'monthly';
   if (intervalDays >= 350 && intervalDays <= 380) return 'yearly';
   return null;
-}
-
-function shiftByCadence(date: Date, cadence: RecurringCadence): Date {
-  const d = new Date(date);
-  if (cadence === 'weekly') {
-    d.setDate(d.getDate() + 7);
-  } else if (cadence === 'yearly') {
-    d.setFullYear(d.getFullYear() + 1);
-  } else {
-    d.setMonth(d.getMonth() + 1);
-  }
-  return d;
 }
 
 export async function detectRecurringPatternsForUser(userId: string): Promise<RecurringSeries[]> {
@@ -89,7 +78,7 @@ export async function detectRecurringPatternsForUser(userId: string): Promise<Re
 
         if (!existingSeries) {
           const latest = history[history.length - 1];
-          const nextDueDate = shiftByCadence(latest.date, cadence);
+          const nextDueDate = shiftByCadenceDate(latest.date, cadence);
 
           const series = await RecurringSeries.create({
             userId,

@@ -62,8 +62,8 @@ router.post('/verify-email', validateBody(tokenSchema), asyncHandler(controller.
 // Public — the handoff token itself is the credential (minted by the mobile app so its user
 // can continue to web checkout already signed in). See ssoHandoff.service.ts.
 router.post('/sso/exchange', validateBody(tokenSchema), asyncHandler(controller.exchangeSso));
-router.post('/google', validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
-router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
+router.post('/google', authRateLimiter, validateBody(socialLoginSchema), asyncHandler(controller.googleLogin));
+router.post('/apple', authRateLimiter, validateBody(socialLoginSchema), asyncHandler(controller.appleLogin));
 
 router.get('/devices', authenticate, asyncHandler(controller.getDevices));
 router.delete('/devices/:id', authenticate, asyncHandler(controller.revokeDevice));

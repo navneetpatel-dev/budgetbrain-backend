@@ -463,6 +463,7 @@ export async function runSeed() {
     budgetId: foodBudget.id,
     userId: adminId,
     threshold: 80,
+    periodStart: daysAgo(2).toISOString().slice(0, 10),
     triggeredAt: daysAgo(2),
     acknowledged: false,
   });

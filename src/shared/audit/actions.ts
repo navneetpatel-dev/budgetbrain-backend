@@ -38,6 +38,8 @@ export const AuditAction = {
   FAMILY_SPLIT_SETTLE: 'family.split_settle',
   FAMILY_INVITE_CREATE: 'family.invite_create',
   FAMILY_INVITE_ACCEPT: 'family.invite_accept',
+  FAMILY_ROLE_CHANGE: 'family.role_change',
+  FAMILY_OWNERSHIP_TRANSFER: 'family.ownership_transfer',
 
   SUPPORT_TICKET_UPDATE: 'support_ticket.update',
 

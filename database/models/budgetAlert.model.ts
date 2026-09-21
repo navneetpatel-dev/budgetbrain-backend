@@ -7,6 +7,7 @@ export interface BudgetAlertAttributes {
   threshold: number;
   triggeredAt: Date;
   acknowledged: boolean;
+  periodStart: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -26,6 +27,7 @@ export class BudgetAlert
   declare threshold: number;
   declare triggeredAt: Date;
   declare acknowledged: boolean;
+  declare periodStart: string;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -61,8 +63,23 @@ export function initBudgetAlertModel(sequelize: Sequelize): typeof BudgetAlert {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      periodStart: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+        field: 'period_start',
+      },
     },
-    { sequelize, tableName: 'budget_alerts' }
+    {
+      sequelize,
+      tableName: 'budget_alerts',
+      indexes: [
+        {
+          unique: true,
+          name: 'budget_alerts_dedup_idx',
+          fields: ['budget_id', 'user_id', 'threshold', 'period_start'],
+        },
+      ],
+    }
   );
   return BudgetAlert;
 }

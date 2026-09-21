@@ -9,6 +9,7 @@ import {
   Subscription,
   sequelize,
 } from '@database/models';
+import { convertAndSum } from '@shared/currency/currency.engine';
 import { AppError } from '../../../shared/utils/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
 import type { TicketStatus } from '@database/models';
@@ -194,11 +195,16 @@ export async function getAuditLog(id: string) {
 }
 
 export async function getTransactionStats() {
-  const [totalTransactions, totalExpenses] = await Promise.all([
+  const [totalTransactions, expenseRows] = await Promise.all([
     Transaction.count(),
-    Transaction.sum('amount', { where: { type: 'expense' } }),
+    Transaction.findAll({
+      where: { type: 'expense' },
+      attributes: ['amount', 'currency'],
+      raw: true,
+    }),
   ]);
-  return { totalTransactions, totalExpenseVolume: Number(totalExpenses ?? 0) };
+  const totalExpenseVolume = await convertAndSum(expenseRows, 'INR');
+  return { totalTransactions, totalExpenseVolume };
 }
 
 export async function listAiUsage(page = 1, limit = 20) {

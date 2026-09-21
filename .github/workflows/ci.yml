@@ -75,6 +75,7 @@ jobs:
           DB_NAME: budgetbrain_test
           DB_USER: budgetbrain
           DB_PASSWORD: testpassword
+          TZ: UTC
         run: npm run db:migrate
 
       - name: Run Test Suite
@@ -87,4 +88,5 @@ jobs:
           DB_PASSWORD: testpassword
           JWT_ACCESS_SECRET: test_access_secret_32_characters_minimum!
           JWT_REFRESH_SECRET: test_refresh_secret_32_characters_minimum!
+          TZ: UTC
         run: npm test

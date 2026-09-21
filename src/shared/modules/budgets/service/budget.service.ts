@@ -1,4 +1,4 @@
-import { Op, fn, col } from 'sequelize';
+import { Op } from 'sequelize';
 import { Budget, BudgetAlert, Category, Transaction, User, sequelize } from '@database/models';
 import {
   getBudgetDateRange,
@@ -10,8 +10,14 @@ import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
+import { convertAndSum } from '@shared/currency/currency.engine';
 import type { PaginationInput } from '@shared/types';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
+
+async function resolveUserCurrency(userId: string): Promise<string> {
+  const user = await User.findByPk(userId, { attributes: ['currency'] });
+  return user?.currency ?? 'INR';
+}
 
 async function sumExpensesInRange(
   userId: string,
@@ -28,12 +34,12 @@ async function sumExpensesInRange(
     where.categoryId = categoryId;
   }
 
-  const result = await Transaction.findOne({
+  const rows = await Transaction.findAll({
     where,
-    attributes: [[fn('COALESCE', fn('SUM', col('amount')), 0), 'total']],
+    attributes: ['amount', 'currency'],
     raw: true,
   });
-  return Number((result as unknown as { total: string })?.total ?? 0);
+  return convertAndSum(rows, await resolveUserCurrency(userId));
 }
 
 async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {

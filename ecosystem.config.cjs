@@ -7,6 +7,7 @@
 const cwd = __dirname;
 const sharedEnv = {
   NODE_ENV: 'production',
+  TZ: 'UTC',
 };
 
 module.exports = {

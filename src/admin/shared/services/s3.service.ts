@@ -1,4 +1,6 @@
 import type { UploadResult } from '../types';
+import { sniffReceiptFileType } from '@shared/uploads/sniffFileType';
+import { AppError } from '../utils/errors';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -52,8 +54,11 @@ export async function uploadFile(
   file: Express.Multer.File,
   folder = 'budgetbrain/receipts'
 ): Promise<UploadResult> {
-  const ext = path.extname(file.originalname) || '.bin';
-  const key = `${folder}/${uuidv4()}${ext}`;
+  const sniffed = sniffReceiptFileType(file.buffer);
+  if (!sniffed) {
+    throw new AppError(400, 'Only JPG, PNG, and PDF files are allowed', 'INVALID_FILE_TYPE');
+  }
+  const key = `${folder}/${uuidv4()}${sniffed.ext}`;
 
   if (usesS3()) {
     const { PutObjectCommand } = await import('@aws-sdk/client-s3');
@@ -64,12 +69,12 @@ export async function uploadFile(
         Bucket: env.S3_BUCKET,
         Key: key,
         Body: file.buffer,
-        ContentType: file.mimetype,
+        ContentType: sniffed.mime,
       })
     );
 
     const url = `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
-    return { key, url, fileName: file.originalname, fileType: file.mimetype, fileSize: file.size };
+    return { key, url, fileName: file.originalname, fileType: sniffed.mime, fileSize: file.size };
   }
 
   ensureUploadDir();
@@ -77,5 +82,5 @@ export async function uploadFile(
   fs.writeFileSync(localPath, file.buffer);
   const url = `${env.APP_URL}/uploads/${path.basename(key)}`;
 
-  return { key, url, fileName: file.originalname, fileType: file.mimetype, fileSize: file.size };
+  return { key, url, fileName: file.originalname, fileType: sniffed.mime, fileSize: file.size };
 }

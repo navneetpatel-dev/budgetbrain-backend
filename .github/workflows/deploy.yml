@@ -70,6 +70,12 @@ jobs:
           test -f dist/src/web/index.js
           test -f dist/src/admin/index.js
           test -f dist/src/scripts/migrate.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
 
   deploy:
     name: Deploy
@@ -78,6 +84,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: dist
+
       - name: Require deploy secrets
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -93,6 +104,10 @@ jobs:
             echo "Add these in GitHub → Settings → Secrets and variables → Actions"
             exit 1
           fi
+          test -f dist/src/mobile/index.js
+          test -f dist/src/web/index.js
+          test -f dist/src/admin/index.js
+          test -f dist/src/scripts/migrate.js
 
       - name: Write SSH key
         env:
@@ -149,17 +164,37 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_PORT: ${{ secrets.EC2_PORT }}
           APP_DIR: ${{ secrets.EC2_APP_DIR }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           PORT="${EC2_PORT:-22}"
           DIR="${APP_DIR:-/var/www/budgetbrain-api}"
           USER="${EC2_USER:-ec2-user}"
           USER_HOST="${USER}@${EC2_HOST}"
+          SSH=(ssh -n -4 -i ~/.ssh/budgetbrain.pem -p "$PORT"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=accept-new
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=10)
 
-          ssh -4 -i ~/.ssh/budgetbrain.pem -p "$PORT" \
+          echo "==> SSH probe"
+          "${SSH[@]}" "$USER_HOST" 'echo SSH_OK; hostname; free -m; df -h / | tail -1; node -v || true'
+
+          echo "==> Updating repo to this commit (picks up new deploy.sh without installing npm)"
+          "${SSH[@]}" "$USER_HOST" \
+            "cd '${DIR}' && git fetch --prune origin && git checkout main && git reset --hard '${DEPLOY_SHA}'"
+
+          echo "==> Syncing already-built dist (avoids tsc OOM on the instance)"
+          tar -C dist -czf - . | ssh -4 -i ~/.ssh/budgetbrain.pem -p "$PORT" \
+            -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=10 \
+            -o ConnectTimeout=20 \
             "$USER_HOST" \
-            "export APP_DIR='${DIR}' DEPLOY_BRANCH='main' && bash '${DIR}/scripts/deploy.sh'"
+            "mkdir -p '${DIR}/dist' && tar -C '${DIR}/dist' -xzf -"
+
+          echo "==> Running deploy.sh"
+          "${SSH[@]}" "$USER_HOST" \
+            "export APP_DIR='${DIR}' DEPLOY_BRANCH='main' DEPLOY_SHA='${DEPLOY_SHA}' SKIP_BUILD=1 && bash '${DIR}/scripts/deploy.sh'"

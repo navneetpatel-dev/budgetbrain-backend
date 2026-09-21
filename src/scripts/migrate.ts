@@ -57,9 +57,13 @@ async function runMigrations(): Promise<number> {
     await ensureMigrationTable(sequelize);
     const applied = await getAppliedMigrations(sequelize);
 
-    const migrationsDir = path.resolve(__dirname, '../../database/migrations');
-    if (!existsSync(migrationsDir)) {
-      console.log(`No migrations directory found at ${migrationsDir}`);
+    const migrationsDir = [
+      path.resolve(process.cwd(), 'database/migrations'),
+      path.resolve(__dirname, '../../database/migrations'),
+      path.resolve(__dirname, '../../../database/migrations'),
+    ].find((dir) => existsSync(dir));
+    if (!migrationsDir) {
+      console.log(`No migrations directory found relative to cwd=${process.cwd()} or ${__dirname}`);
       return 0;
     }
 

@@ -145,8 +145,8 @@ describe('Razorpay webhook & checkout', () => {
 
     expect(result!.status).toBe('cancelled');
     const refreshed = await User.findByPk(user.id);
-    // Matches existing RevenueCat behavior: cancellation demotes immediately (no separate
-    // grace-period handling distinguishes "cancelled" from "expired" in role sync today).
+    // Cancellation demotes immediately — no separate grace-period handling distinguishes
+    // "cancelled" from "expired" in role sync today.
     expect(refreshed!.role).toBe('free');
   });
 

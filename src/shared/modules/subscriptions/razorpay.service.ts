@@ -124,9 +124,9 @@ function resolvePlanFromNotesOrPlanId(notes: RazorpayNotes | undefined, planId?:
 }
 
 /**
- * Applies a verified Razorpay webhook event via the same `applySubscriptionState` sync
- * point RevenueCat uses, so `User.role` (and therefore entitlement on mobile AND web)
- * ends up identical regardless of which platform/provider the user paid through.
+ * Applies a verified Razorpay webhook event via the shared `applySubscriptionState` sync
+ * point, so `User.role` (and therefore entitlement on mobile AND web) is updated the same
+ * way regardless of which webhook event triggered it.
  */
 export async function upsertFromRazorpayEvent(payload: RazorpayWebhookPayload) {
   const { event } = payload;
@@ -259,7 +259,7 @@ export async function upsertFromRazorpayEvent(payload: RazorpayWebhookPayload) {
       // A single failed charge attempt (e.g. a renewal retry) — Razorpay itself retries
       // and eventually fires subscription.cancelled/halted on terminal failure, which is
       // handled above. Don't downgrade entitlement on a single failure; just make it
-      // visible in admin monitoring, mirroring RevenueCat's BILLING_ISSUE handling.
+      // visible in admin monitoring via the 'in_billing_retry' status.
       const entity = payload.payload.payment?.entity;
       const subscriptionId = entity?.subscription_id;
       if (!subscriptionId) {

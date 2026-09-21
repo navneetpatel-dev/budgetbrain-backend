@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import type { AuthRequest } from '@shared/types';
 import { AppError, successResponse } from '../../../shared/utils/errors';
 import * as authService from '@shared/modules/auth/service/auth.service';
+import * as ssoHandoffService from '@shared/modules/auth/service/ssoHandoff.service';
 import type {
   EmailInput,
   LoginInput,
@@ -91,4 +92,9 @@ export async function getDevices(req: AuthRequest, res: Response) {
 export async function revokeDevice(req: AuthRequest, res: Response) {
   await authService.revokeDevice(req.userId!, String(req.params.id));
   successResponse(res, { message: 'Device revoked successfully' });
+}
+
+export async function createWebHandoff(req: AuthRequest, res: Response) {
+  const result = await ssoHandoffService.createSsoHandoffToken(req.userId!);
+  successResponse(res, result, 201);
 }

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import type { AuthRequest } from '@shared/types';
 import { AppError, successResponse } from '../../../shared/utils/errors';
 import * as authService from '@shared/modules/auth/service/auth.service';
+import * as ssoHandoffService from '@shared/modules/auth/service/ssoHandoff.service';
 import * as webauthnService from '@shared/modules/auth/service/webauthn.service';
 import type {
   EmailInput,
@@ -72,6 +73,12 @@ export async function resetPassword(req: Request, res: Response) {
 export async function verifyEmail(req: Request, res: Response) {
   const { token } = req.body as TokenInput;
   const result = await authService.verifyEmail(token);
+  successResponse(res, result);
+}
+
+export async function exchangeSso(req: Request, res: Response) {
+  const { token } = req.body as TokenInput;
+  const result = await ssoHandoffService.exchangeSsoHandoffToken(token);
   successResponse(res, result);
 }
 

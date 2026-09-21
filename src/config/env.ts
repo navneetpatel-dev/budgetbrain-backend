@@ -44,7 +44,6 @@ export const envSchema = z.object({
   EXPO_ACCESS_TOKEN: z.string().optional(),
   POSTHOG_API_KEY: z.string().optional(),
   CLOUDFRONT_DOMAIN: z.string().optional(),
-  REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
   EXCHANGE_RATE_API_KEY: z.string().optional(),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),

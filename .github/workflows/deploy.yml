@@ -31,9 +31,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -43,7 +43,7 @@ jobs:
       - name: Run Database Migrations for Test
         env:
           NODE_ENV: test
-          DB_HOST: localhost
+          DB_HOST: 127.0.0.1
           DB_PORT: 5432
           DB_NAME: budgetbrain_test
           DB_USER: budgetbrain
@@ -52,7 +52,7 @@ jobs:
       - name: Run Tests
         env:
           NODE_ENV: test
-          DB_HOST: localhost
+          DB_HOST: 127.0.0.1
           DB_PORT: 5432
           DB_NAME: budgetbrain_test
           DB_USER: budgetbrain

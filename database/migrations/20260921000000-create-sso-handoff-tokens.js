@@ -3,34 +3,22 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     const sequelize = queryInterface.sequelize;
-    // Initial schema uses sequelize.sync() against current models, so a fresh CI
-    // database already has this table before this migration runs.
     const existing = await sequelize.query(
       `SELECT EXISTS (
          SELECT 1 FROM information_schema.tables
-         WHERE table_schema = 'public' AND table_name = 'family_invites'
+         WHERE table_schema = 'public' AND table_name = 'sso_handoff_tokens'
        ) AS exists`,
       { type: Sequelize.QueryTypes.SELECT }
     );
     if (existing[0]?.exists) return;
 
-    await queryInterface.createTable('family_invites', {
+    await queryInterface.createTable('sso_handoff_tokens', {
       id: {
         type: Sequelize.UUID,
         defaultValue: Sequelize.UUIDV4,
         primaryKey: true,
       },
-      group_id: {
-        type: Sequelize.UUID,
-        allowNull: false,
-        references: { model: 'family_groups', key: 'id' },
-        onDelete: 'CASCADE',
-      },
-      invited_email: {
-        type: Sequelize.STRING(255),
-        allowNull: false,
-      },
-      invited_by_user_id: {
+      user_id: {
         type: Sequelize.UUID,
         allowNull: false,
         references: { model: 'users', key: 'id' },
@@ -41,16 +29,11 @@ module.exports = {
         allowNull: false,
         unique: true,
       },
-      role: {
-        type: Sequelize.ENUM('admin', 'contributor', 'read_only'),
-        allowNull: false,
-        defaultValue: 'contributor',
-      },
       expires_at: {
         type: Sequelize.DATE,
         allowNull: false,
       },
-      accepted_at: {
+      used_at: {
         type: Sequelize.DATE,
         allowNull: true,
       },
@@ -66,11 +49,10 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex('family_invites', ['invited_email']);
-    await queryInterface.addIndex('family_invites', ['group_id']);
+    await queryInterface.addIndex('sso_handoff_tokens', ['user_id']);
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable('family_invites');
+    await queryInterface.dropTable('sso_handoff_tokens');
   },
 };

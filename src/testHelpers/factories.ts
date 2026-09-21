@@ -47,12 +47,11 @@ export async function createTestSubscription(
 ): Promise<Subscription> {
   return Subscription.create({
     userId,
-    revenuecatAppUserId: userId,
     productId: 'pro_monthly',
     entitlementId: 'pro',
     status: 'active',
     plan: 'monthly',
-    store: 'app_store',
+    store: 'razorpay',
     isLifetime: false,
     currentPeriodStart: new Date(),
     currentPeriodEnd: new Date(Date.now() + 30 * 86400000),

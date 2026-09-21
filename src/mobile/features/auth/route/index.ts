@@ -62,4 +62,8 @@ router.post('/apple', validateBody(socialLoginSchema), asyncHandler(controller.a
 router.get('/devices', authenticate, asyncHandler(controller.getDevices));
 router.delete('/devices/:id', authenticate, asyncHandler(controller.revokeDevice));
 
+// Mints a one-time token so the app can hand the signed-in user off to a web browser for
+// checkout — subscriptions are never purchased in-app, only on web (see ssoHandoff.service.ts).
+router.post('/sso/handoff', authenticate, asyncHandler(controller.createWebHandoff));
+
 export default router;

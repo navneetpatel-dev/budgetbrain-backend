@@ -40,6 +40,7 @@ import { initAiUsageQuotaModel, AiUsageQuota, associateAiUsageQuota } from './ai
 import { initWebauthnCredentialModel, WebauthnCredential } from './webauthnCredential.model';
 import { initIncomeAllocationModel, IncomeAllocation } from './incomeAllocation.model';
 import { initFamilyInviteModel, FamilyInvite } from './familyInvite.model';
+import { initSsoHandoffTokenModel, SsoHandoffToken } from './ssoHandoffToken.model';
 import { initAssociations } from './associations';
 
 export function initModels(db: Sequelize = sequelize): void {
@@ -76,6 +77,7 @@ export function initModels(db: Sequelize = sequelize): void {
   initWebauthnCredentialModel(db);
   initFamilyInviteModel(db);
   initIncomeAllocationModel(db);
+  initSsoHandoffTokenModel(db);
 
   initAssociations();
 }
@@ -116,6 +118,7 @@ export {
   WebauthnCredential,
   FamilyInvite,
   IncomeAllocation,
+  SsoHandoffToken,
 };
 
 export type { TokenType, NotificationType };

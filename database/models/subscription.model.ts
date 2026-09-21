@@ -8,12 +8,11 @@ export type SubscriptionStatus =
   | 'in_billing_retry';
 
 export type SubscriptionPlan = 'monthly' | 'yearly' | 'lifetime';
-export type SubscriptionStore = 'app_store' | 'play_store' | 'razorpay' | 'promotional';
+export type SubscriptionStore = 'razorpay' | 'promotional';
 
 export interface SubscriptionAttributes {
   id: string;
   userId: string;
-  revenuecatAppUserId: string | null;
   productId: string;
   entitlementId: string;
   status: SubscriptionStatus;
@@ -35,7 +34,6 @@ export interface SubscriptionAttributes {
 export type SubscriptionCreationAttributes = Optional<
   SubscriptionAttributes,
   | 'id'
-  | 'revenuecatAppUserId'
   | 'entitlementId'
   | 'status'
   | 'currentPeriodStart'
@@ -56,7 +54,6 @@ export class Subscription
 {
   declare id: string;
   declare userId: string;
-  declare revenuecatAppUserId: string | null;
   declare productId: string;
   declare entitlementId: string;
   declare status: SubscriptionStatus;
@@ -87,11 +84,6 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
         type: DataTypes.UUID,
         allowNull: false,
         field: 'user_id',
-      },
-      revenuecatAppUserId: {
-        type: DataTypes.STRING(255),
-        allowNull: true,
-        field: 'revenuecat_app_user_id',
       },
       productId: {
         type: DataTypes.STRING(255),
@@ -126,7 +118,7 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
       store: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        defaultValue: 'app_store',
+        defaultValue: 'razorpay',
       },
       isLifetime: {
         type: DataTypes.BOOLEAN,
@@ -176,9 +168,6 @@ export function initSubscriptionModel(sequelize: Sequelize): typeof Subscription
         },
         {
           fields: ['status'],
-        },
-        {
-          fields: ['revenuecat_app_user_id'],
         },
       ],
     }

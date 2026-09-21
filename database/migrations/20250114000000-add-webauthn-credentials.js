@@ -15,6 +15,17 @@ module.exports = {
       } catch {}
     }
 
+    // Initial schema uses sequelize.sync() against current models, so a fresh CI
+    // database already has this table before this migration runs.
+    const existing = await sequelize.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'webauthn_credentials'
+       ) AS exists`,
+      { type: Sequelize.QueryTypes.SELECT }
+    );
+    if (existing[0]?.exists) return;
+
     await queryInterface.createTable('webauthn_credentials', {
       id: {
         type: Sequelize.UUID,

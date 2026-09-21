@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RecurringSeries, Notification, Category } from '@database/models';
+import { RecurringSeries, Notification } from '@database/models';
 import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import { sendBillDueReminders } from '../service/recurringSeries.service';
 

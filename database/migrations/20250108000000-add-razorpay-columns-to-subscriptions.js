@@ -37,10 +37,13 @@ module.exports = {
     }
 
     // revenuecat_app_user_id is RevenueCat-specific; Razorpay-originated rows have none.
-    await queryInterface.changeColumn('subscriptions', 'revenuecat_app_user_id', {
-      type: Sequelize.STRING(255),
-      allowNull: true,
-    });
+    // Skip if the column is gone (fresh DBs whose models no longer include it).
+    if (await columnExists(sequelize, 'subscriptions', 'revenuecat_app_user_id')) {
+      await queryInterface.changeColumn('subscriptions', 'revenuecat_app_user_id', {
+        type: Sequelize.STRING(255),
+        allowNull: true,
+      });
+    }
 
     await queryInterface
       .addIndex('subscriptions', ['razorpay_subscription_id'], {

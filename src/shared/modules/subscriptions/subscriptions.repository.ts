@@ -38,12 +38,6 @@ export async function findByUserId(userId: string): Promise<Subscription[]> {
   });
 }
 
-export async function findByRcAppUserId(revenuecatAppUserId: string): Promise<Subscription | null> {
-  return Subscription.findOne({
-    where: { revenuecatAppUserId },
-  });
-}
-
 export async function findByRazorpaySubscriptionId(
   razorpaySubscriptionId: string
 ): Promise<Subscription | null> {

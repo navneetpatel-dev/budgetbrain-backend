@@ -1415,12 +1415,11 @@ export async function runSeed() {
   const subsToSeed = [
     {
       userId: navneet.id,
-      revenuecatAppUserId: navneet.id,
       productId: 'budgetbrain_pro_yearly',
       entitlementId: 'pro',
       status: 'active' as const,
       plan: 'yearly' as const,
-      store: 'app_store' as const,
+      store: 'razorpay' as const,
       isLifetime: false,
       currentPeriodStart: daysAgo(30),
       currentPeriodEnd: daysAhead(335),
@@ -1428,12 +1427,11 @@ export async function runSeed() {
     },
     {
       userId: priya.id,
-      revenuecatAppUserId: priya.id,
       productId: 'budgetbrain_pro_monthly',
       entitlementId: 'pro',
       status: 'active' as const,
       plan: 'monthly' as const,
-      store: 'play_store' as const,
+      store: 'razorpay' as const,
       isLifetime: false,
       currentPeriodStart: daysAgo(10),
       currentPeriodEnd: daysAhead(20),
@@ -1441,7 +1439,6 @@ export async function runSeed() {
     },
     {
       userId: rahul.id,
-      revenuecatAppUserId: rahul.id,
       productId: 'budgetbrain_pro_monthly',
       entitlementId: 'pro',
       status: 'cancelled' as const,
@@ -1455,7 +1452,6 @@ export async function runSeed() {
     },
     {
       userId: vikram.id,
-      revenuecatAppUserId: vikram.id,
       productId: 'budgetbrain_pro_lifetime',
       entitlementId: 'pro',
       status: 'active' as const,
@@ -1468,12 +1464,11 @@ export async function runSeed() {
     },
     {
       userId: anita.id,
-      revenuecatAppUserId: anita.id,
       productId: 'budgetbrain_pro_monthly',
       entitlementId: 'pro',
       status: 'expired' as const,
       plan: 'monthly' as const,
-      store: 'play_store' as const,
+      store: 'promotional' as const,
       isLifetime: false,
       currentPeriodStart: daysAgo(60),
       currentPeriodEnd: daysAgo(30),

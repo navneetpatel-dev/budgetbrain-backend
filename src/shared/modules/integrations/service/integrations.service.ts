@@ -1,11 +1,11 @@
 import { ParsedTransaction, sequelize } from '@database/models';
 import { AppError } from '@shared/errors';
 import { parseSmsContent, parseEmailReceipt } from './parse.service';
-import * as transactionService from '@shared/modules/expenses/service/transaction.service';
+import * as transactionService from '@shared/modules/expenses/service/expenses.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
-import type { ConfirmParsedInput } from '../types';
+import type { ConfirmParsedInput } from '../integrations.types';
 
 /** Extracts a Date's own calendar day without a UTC round-trip — `toISOString().split('T')[0]`
  *  shifts the date backward for any positive-offset local time (e.g. IST), which is wrong here

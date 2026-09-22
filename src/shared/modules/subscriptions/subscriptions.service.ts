@@ -3,6 +3,7 @@ import * as repo from './subscriptions.repository';
 import type { SubscriptionPlan, SubscriptionStatus, SubscriptionStore } from '@database/models';
 import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
+import { hasPermission, isLifetimeAccount, Permissions } from '@core/permissions/permissions';
 
 export async function getEntitlementForUser(userId: string, entitlementId = 'pro') {
   const user = await User.findByPk(userId);
@@ -11,12 +12,13 @@ export async function getEntitlementForUser(userId: string, entitlementId = 'pro
   }
 
   // Admin and lifetime users are always entitled
-  if (user.role === 'admin' || user.role === 'lifetime') {
+  if (hasPermission(user.role, Permissions.ENTITLEMENT_PRO)) {
+    const lifetime = isLifetimeAccount(user.role);
     return {
       isEntitled: true,
-      plan: (user.role === 'lifetime' ? 'lifetime' : 'monthly') as SubscriptionPlan,
+      plan: (lifetime ? 'lifetime' : 'monthly') as SubscriptionPlan,
       status: 'active' as SubscriptionStatus,
-      isLifetime: user.role === 'lifetime',
+      isLifetime: lifetime,
       expiresAt: null,
     };
   }
@@ -98,7 +100,7 @@ export async function applySubscriptionState(input: SubscriptionStateInput) {
 
   // Keep User.role in sync: if active and lifetime -> 'lifetime', active -> 'premium', expired -> 'free'
   let updatedRole = user.role;
-  if (user.role !== 'admin') {
+  if (!hasPermission(user.role, Permissions.ADMIN_ACCESS)) {
     if (input.isLifetime) {
       updatedRole = 'lifetime';
     } else if (input.status === 'active' || input.status === 'in_grace_period') {

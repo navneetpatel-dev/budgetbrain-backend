@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createLoan, getLoan, payLoan } from '../service/loan.service';
+import { createLoan, getLoan, payLoan } from '../loans.service';
 
 describe('Loan.amountPaid / paidPercentage — server-computed virtual fields', () => {
   beforeAll(async () => {

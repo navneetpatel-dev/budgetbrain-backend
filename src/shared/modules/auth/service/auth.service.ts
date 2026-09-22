@@ -18,10 +18,10 @@ import {
   hashToken,
   verifyRefreshToken,
   generateOtp,
-} from '@shared/utils/jwt';
+} from '@core/auth/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { AppError } from '@shared/errors';
-import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '@shared/services/email.service';
+import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '@core/mail/email.service';
 import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
 
 function sanitizeUser(user: User) {

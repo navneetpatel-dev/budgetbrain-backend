@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser, createTestDevice } from '@testHelpers';
 import { refresh, listDevices, revokeDevice } from '../service/auth.service';
-import { generateRefreshToken, hashToken } from '@shared/utils/jwt';
+import { generateRefreshToken, hashToken } from '@core/auth/jwt';
 import { RefreshToken } from '@database/models';
 
 describe('Auth Security - Token Rotation & Device Revocation', () => {

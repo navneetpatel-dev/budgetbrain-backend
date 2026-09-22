@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { AuditLog } from '@database/models';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createGroup, joinGroup, updateMemberRole } from '../service/family.service';
+import { createGroup, joinGroup, updateMemberRole } from '../family.service';
 import { AuditAction } from '@shared/audit';
 
 describe('family role change audit', () => {

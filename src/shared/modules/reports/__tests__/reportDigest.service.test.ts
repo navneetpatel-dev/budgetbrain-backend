@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
-import * as emailService from '@shared/services/email.service';
+import * as emailService from '@core/mail/email.service';
 import { sendMonthlyReportDigests } from '../service/reportDigest.service';
 
 /**

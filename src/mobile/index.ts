@@ -2,9 +2,9 @@ import app from './app';
 import { initModels } from '@database/models';
 import { prepareDatabase, listenAndLog } from '../shared/startup';
 import { env } from './shared/config/env';
-import { initSentry } from './shared/config/sentry';
-import { validateProductionConfig } from './shared/config/production';
-import { startScheduledJobs } from '@shared/modules/notifications/service/scheduledJobs.service';
+import { initSentry } from '@config/sentry';
+import { validateProductionConfig } from '@config/production';
+import { start } from '@jobs/index';
 import { createLogger } from '../shared/logging';
 
 const log = createLogger('mobile');
@@ -19,7 +19,7 @@ async function bootstrap() {
     const dbConnected = await prepareDatabase(log);
 
     if (dbConnected && process.env.ENABLE_CRON === 'true') {
-      startScheduledJobs();
+      start();
     }
 
     listenAndLog(app, log, 'mobile', {

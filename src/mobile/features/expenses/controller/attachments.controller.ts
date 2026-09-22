@@ -1,114 +1,42 @@
 import { Request, Response } from 'express';
-import { successResponse, AppError } from '../../../shared/utils/errors';
+import { successResponse, AppError } from '@core/http/errors';
 import { AuthRequest } from '@shared/types';
-import { Transaction, TransactionAttachment } from '@database/models';
-import { uploadFile, withSignedDownloadUrl, getSignedDownloadUrl } from '../../../shared/services/s3.service';
-import { env } from '@config/env';
-import { extractReceiptData } from '@shared/ai';
-
-/**
- * Fire-and-forget: never awaited by the request handler. A slow or failing OpenAI Vision
- * call must not block or fail the upload response — extraction is best-effort, surfaced
- * later via GET .../suggestion.
- */
-function scheduleReceiptExtraction(attachmentId: string, s3Key: string, s3Url: string): void {
-  if (!env.OPENAI_API_KEY) return;
-  void (async () => {
-    try {
-      const imageUrl = await getSignedDownloadUrl(s3Key, s3Url);
-      const extracted = await extractReceiptData({ apiKey: env.OPENAI_API_KEY!, imageUrl });
-      if (extracted) {
-        await TransactionAttachment.update(
-          { extractedData: extracted },
-          { where: { id: attachmentId } }
-        );
-      }
-    } catch (err) {
-      console.warn('[attachments] receipt extraction failed:', err instanceof Error ? err.message : err);
-    }
-  })();
-}
+import {
+  createTransactionAttachment,
+  deleteTransactionAttachment,
+  getAttachmentSuggestion as loadAttachmentSuggestion,
+  getTransactionAttachment,
+  listTransactionAttachments,
+} from '@shared/modules/expenses/service/attachments.service';
 
 export async function createAttachment(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   const { id: transactionId } = req.params as { id: string };
-
-  const transaction = await Transaction.findOne({ where: { id: transactionId, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
   if (!req.file) throw new AppError(400, 'Receipt file is required');
 
-  const uploaded = await uploadFile(req.file);
-  const attachment = await TransactionAttachment.create({
-    transactionId,
-    fileName: uploaded.fileName,
-    fileType: uploaded.fileType,
-    fileSize: uploaded.fileSize,
-    s3Key: uploaded.key,
-    s3Url: uploaded.url,
-  });
-
-  successResponse(res, await withSignedDownloadUrl(attachment.toJSON()), 201);
-
-  scheduleReceiptExtraction(attachment.id, attachment.s3Key, attachment.s3Url);
+  const data = await createTransactionAttachment(userId, transactionId, req.file);
+  successResponse(res, data, 201);
 }
 
 export async function getAttachmentSuggestion(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   const { id, attachmentId } = req.params as { id: string; attachmentId: string };
-
-  const transaction = await Transaction.findOne({ where: { id, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
-
-  const attachment = await TransactionAttachment.findOne({
-    where: { id: attachmentId, transactionId: transaction.id },
-  });
-  if (!attachment) throw new AppError(404, 'Attachment not found');
-
-  successResponse(res, { extractedData: attachment.extractedData });
+  successResponse(res, await loadAttachmentSuggestion(userId, id, attachmentId));
 }
 
 export async function listAttachments(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
-  const transaction = await Transaction.findOne({
-    where: { id: String(req.params.id), userId },
-    include: [{ model: TransactionAttachment, as: 'attachments' }],
-  });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
-  const attachments =
-    (transaction as Transaction & { attachments?: TransactionAttachment[] }).attachments ?? [];
-  successResponse(
-    res,
-    await Promise.all(attachments.map((attachment) => withSignedDownloadUrl(attachment.toJSON())))
-  );
+  successResponse(res, await listTransactionAttachments(userId, String(req.params.id)));
 }
 
 export async function getAttachment(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   const { id, attachmentId } = req.params as { id: string; attachmentId: string };
-
-  const transaction = await Transaction.findOne({ where: { id, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
-
-  const attachment = await TransactionAttachment.findOne({
-    where: { id: attachmentId, transactionId: transaction.id },
-  });
-  if (!attachment) throw new AppError(404, 'Attachment not found');
-
-  successResponse(res, await withSignedDownloadUrl(attachment.toJSON()));
+  successResponse(res, await getTransactionAttachment(userId, id, attachmentId));
 }
 
 export async function deleteAttachment(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   const { id, attachmentId } = req.params as { id: string; attachmentId: string };
-
-  const transaction = await Transaction.findOne({ where: { id, userId } });
-  if (!transaction) throw new AppError(404, 'Transaction not found');
-
-  const attachment = await TransactionAttachment.findOne({
-    where: { id: attachmentId, transactionId: transaction.id },
-  });
-  if (!attachment) throw new AppError(404, 'Attachment not found');
-
-  await attachment.destroy();
-  successResponse(res, { message: 'Attachment deleted' });
+  successResponse(res, await deleteTransactionAttachment(userId, id, attachmentId));
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { listUsers, listSupportTickets } from '../service/admin.service';
+import { listUsers, listSupportTickets } from '../admin.service';
 import { usersQuerySchema, supportTicketsQuerySchema } from '../validator/admin.validation';
 import { SupportTicket } from '@database/models';
 

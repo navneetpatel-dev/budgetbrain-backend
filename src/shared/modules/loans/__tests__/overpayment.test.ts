@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { LoanPayment } from '@database/models';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createLoan, payLoan } from '../service/loan.service';
+import { createLoan, payLoan } from '../loans.service';
 
 describe('payLoan overpayment clamp', () => {
   beforeAll(async () => {

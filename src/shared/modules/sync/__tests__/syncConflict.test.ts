@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { resolveConflict, processBatchSync, mergeFields } from '../service/sync.service';
+import { resolveConflict, processBatchSync, mergeFields } from '../sync.service';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
 import { Transaction, Budget, Goal } from '@database/models';
 import { createBudget } from '@shared/modules/budgets/service/budget.service';
-import { createGoal } from '@shared/modules/goals/service/goal.service';
+import { createGoal } from '@shared/modules/goals/goals.service';
 
 describe('Sync Module - Conflict Resolution & Batch Sync', () => {
   beforeAll(async () => {

@@ -1,10 +1,10 @@
 import { Op } from 'sequelize';
 import ExcelJS from 'exceljs';
 import { Transaction, Category, IncomeSource, Budget, User } from '@database/models';
-import { getNoSpendStreak } from '@shared/modules/expenses/service/transaction.service';
+import { getNoSpendStreak } from '@shared/modules/expenses/service/expenses.service';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
 import { convertAmount, convertAndSum, roundMoney } from '@shared/currency/currency.engine';
-import type { ReportFilters } from '../types';
+import type { ReportFilters } from '../reports.types';
 
 async function resolveUserCurrency(userId: string): Promise<string> {
   const user = await User.findByPk(userId, { attributes: ['currency'] });

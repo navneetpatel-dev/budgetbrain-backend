@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createIncome, updateIncome } from '../service/income.service';
+import { createIncome, updateIncome } from '../income.service';
 import { IncomeSource } from '@database/models';
 
 describe('Income tax withholding — server-computed netAmount', () => {

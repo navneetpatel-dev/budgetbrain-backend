@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { User, SsoHandoffToken, sequelize } from '@database/models';
-import { hashToken } from '@shared/utils/jwt';
+import { hashToken } from '@core/auth/jwt';
 import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { issueTokens } from './auth.service';

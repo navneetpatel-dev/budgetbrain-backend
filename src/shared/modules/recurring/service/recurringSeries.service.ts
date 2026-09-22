@@ -3,11 +3,11 @@ import { sequelize, RecurringSeries, Transaction, Goal } from '@database/models'
 import type { RecurringCadence } from '@database/models';
 import { AppError } from '@shared/errors';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
-import { contributeToGoal } from '@shared/modules/goals/service/goal.service';
+import { contributeToGoal } from '@shared/modules/goals/goals.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
-import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '../types';
+import type { CreateRecurringSeriesInput, UpdateRecurringSeriesInput } from '../recurring.types';
 import { shiftByCadence, shiftDaysIso } from '../shiftByCadence';
 
 export { shiftByCadence } from '../shiftByCadence';

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createGoal, contributeToGoal, getGoal } from '../service/goal.service';
+import { createGoal, contributeToGoal, getGoal } from '../goals.service';
 import { GoalContribution } from '@database/models';
 
 describe('Goal Concurrency & Row Locking', () => {

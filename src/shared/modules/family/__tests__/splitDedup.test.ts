@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
-import { createGroup, joinGroup, createSplit } from '../service/family.service';
+import { createGroup, joinGroup, createSplit } from '../family.service';
 
 describe('createSplit participant dedup', () => {
   beforeAll(async () => {

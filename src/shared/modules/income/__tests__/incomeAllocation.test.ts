@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
 import { FinancialAccount, IncomeAllocation } from '@database/models';
-import { allocateIncomeToAccounts } from '../service/income.service';
+import { allocateIncomeToAccounts } from '../income.service';
 import { AppError } from '@shared/errors';
 
 async function createTestAccount(userId: string, overrides: Partial<{ balance: number; currency: string; name: string }> = {}) {

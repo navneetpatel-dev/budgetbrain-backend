@@ -12,7 +12,7 @@ import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import { convertAndSum } from '@shared/currency/currency.engine';
 import type { PaginationInput } from '@shared/types';
-import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../types';
+import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../budgets.types';
 
 async function resolveUserCurrency(userId: string): Promise<string> {
   const user = await User.findByPk(userId, { attributes: ['currency'] });

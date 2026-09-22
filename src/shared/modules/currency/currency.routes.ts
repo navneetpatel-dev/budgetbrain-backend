@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncHandler } from '@shared/utils/errors';
+import { asyncHandler } from '@core/http/errors';
 import * as controller from './currency.controller';
 
 const router = Router();

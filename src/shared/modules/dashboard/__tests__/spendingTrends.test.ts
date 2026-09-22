@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import { Transaction, Goal } from '@database/models';
-import { getSpendingTrends } from '../../expenses/service/transaction.service';
+import { getSpendingTrends } from '../../expenses/service/expenses.service';
 import { listCategories, archiveCategory, unarchiveCategory } from '../../categories/service/category.service';
-import { contributeToGoal, listGoalContributions, getGoal } from '../../goals/service/goal.service';
-import { listUsers } from '../../../../admin/features/admin/service/admin.service';
+import { contributeToGoal, listGoalContributions, getGoal } from '../../goals/goals.service';
+import { listUsers } from '../../../../admin/features/admin/admin.service';
 
 describe('Spending Trends, Categories & Goals Enhancements', () => {
   beforeEach(async () => {

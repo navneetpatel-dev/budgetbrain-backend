@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '@shared/types';
-import { successResponse } from '@shared/utils/errors';
+import { successResponse } from '@core/http/errors';
 import { AppError } from '@shared/errors';
 import {
   SUPPORTED_CURRENCIES,

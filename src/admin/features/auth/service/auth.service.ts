@@ -17,19 +17,20 @@ import {
   generateOtp,
   generateMfaToken,
   verifyMfaToken,
-} from '../../../shared/utils/jwt';
-import { writeAuditLog, AuditAction, AuditResource } from '../../../shared/services/audit.service';
-import { AppError } from '../../../shared/utils/errors';
-import { sendOtpEmail, sendPasswordResetEmail } from '../../../shared/services/email.service';
+} from '@core/auth/jwt';
+import { writeAuditLog, AuditAction, AuditResource } from '@core/audit/audit.service';
+import { AppError } from '@core/http/errors';
+import { sendOtpEmail, sendPasswordResetEmail } from '@core/mail/email.service';
 import {
   verifyGoogleIdToken,
   verifyAppleIdToken,
   type GoogleTokenInput,
 } from '@shared/modules/auth/service/socialAuth.service';
 import { verifyTotpCode } from '@shared/modules/auth/service/totp.service';
+import { hasPermission, Permissions } from '@core/permissions/permissions';
 
 function assertAdminUser(user: User): void {
-  if (user.role !== 'admin') {
+  if (!hasPermission(user.role, Permissions.ADMIN_ACCESS)) {
     throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
   }
 }
@@ -281,7 +282,7 @@ export async function logout(refreshToken: string) {
 
 export async function requestOtp(email: string) {
   const user = await User.findOne({ where: { email } });
-  if (!user || user.role !== 'admin') {
+  if (!user || !hasPermission(user.role, Permissions.ADMIN_ACCESS)) {
     return;
   }
   if (user.totpEnabled) {

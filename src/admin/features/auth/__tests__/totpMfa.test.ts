@@ -3,7 +3,7 @@ import { authenticator } from 'otplib';
 import { setupTestDb, createTestUser } from '@testHelpers';
 import { login, loginMfa, requestOtp } from '../service/auth.service';
 import { enrollTotp, confirmTotpEnrollment } from '@shared/modules/auth/service/totp.service';
-import { hashPassword, generateMfaToken } from '../../../shared/utils/jwt';
+import { hashPassword, generateMfaToken } from '@core/auth/jwt';
 
 const PASSWORD = 'CorrectHorseBattery9!';
 

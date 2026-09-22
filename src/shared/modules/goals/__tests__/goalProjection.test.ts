@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
 import { GoalContribution } from '@database/models';
-import { createGoal, contributeToGoal, getGoal, listGoals } from '../service/goal.service';
+import { createGoal, contributeToGoal, getGoal, listGoals } from '../goals.service';
 
 async function backdateContribution(id: string, daysAgo: number) {
   const contributedAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);

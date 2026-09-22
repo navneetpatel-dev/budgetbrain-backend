@@ -11,7 +11,7 @@ import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import type { PaginationInput } from '@shared/types';
-import type { CreateCategoryInput, UpdateCategoryInput } from '../types';
+import type { CreateCategoryInput, UpdateCategoryInput } from '../categories.types';
 
 export async function listCategories(
   userId: string,

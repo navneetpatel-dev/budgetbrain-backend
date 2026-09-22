@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
-import { getTransactionsSummary, listTransactions } from '../service/transaction.service';
+import { getTransactionsSummary, listTransactions } from '../service/expenses.service';
 
 describe('Transactions - filtered SQL summary (fixes paginated-list undercount bug)', () => {
   beforeAll(async () => {

@@ -2,8 +2,8 @@ import app from './app';
 import { initModels } from '@database/models';
 import { prepareDatabase, listenAndLog } from '../shared/startup';
 import { env } from './shared/config/env';
-import { initSentry } from './shared/config/sentry';
-import { validateProductionConfig } from './shared/config/production';
+import { initSentry } from '@config/sentry';
+import { validateProductionConfig } from '@config/production';
 import { createLogger } from '../shared/logging';
 
 const log = createLogger('admin');

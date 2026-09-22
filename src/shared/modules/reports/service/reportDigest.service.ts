@@ -1,6 +1,6 @@
 import { User } from '@database/models';
 import { generateExcelReport } from './report.service';
-import { sendMonthlyReportEmail } from '@shared/services/email.service';
+import { sendMonthlyReportEmail } from '@core/mail/email.service';
 
 function previousMonthRange(): { startDate: string; endDate: string; label: string } {
   const now = new Date();

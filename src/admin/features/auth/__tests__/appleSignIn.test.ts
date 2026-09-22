@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { env } from '@config/env';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { hashPassword } from '../../../shared/utils/jwt';
+import { hashPassword } from '@core/auth/jwt';
 import {
   resetAppleJwksCache,
   verifyAppleIdToken,

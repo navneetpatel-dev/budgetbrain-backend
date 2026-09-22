@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser, createTestTransaction } from '@testHelpers';
-import { getTransactionsSummary } from '../service/transaction.service';
+import { getTransactionsSummary } from '../service/expenses.service';
 import { convertAmount } from '@shared/currency/currency.engine';
 
 describe('Transactions summary converts mixed currencies', () => {

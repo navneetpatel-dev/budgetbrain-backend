@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { asyncHandler } from '../../../shared/utils/errors';
-import { authenticate } from '../../../shared/middleware/auth';
-import { validateParams } from '../../../shared/middleware/validate';
+import { asyncHandler } from '@core/http/errors';
+import { authenticate } from '@core/auth/authenticate';
+import { validateParams } from '@core/middleware/validate';
 import { uuidParamSchema } from '../../../shared/validation';
-import { upload } from '../../../shared/middleware/upload';
+import { upload } from '@core/middleware/upload';
 import * as controller from '../controller/attachments.controller';
-import { attachmentParamsSchema } from '@shared/modules/expenses/validator/transaction.validation';
+import { attachmentParamsSchema } from '@shared/modules/expenses/expenses.validator';
 
 const router = Router();
 router.use(authenticate);

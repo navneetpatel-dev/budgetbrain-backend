@@ -4,7 +4,7 @@ import { AppError } from '@shared/errors';
 import { sendPushToUser } from './push.service';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
-import type { RegisterDeviceInput } from '../types';
+import type { RegisterDeviceInput } from '../notifications.types';
 
 export async function createNotification(
   userId: string,

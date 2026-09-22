@@ -28,7 +28,7 @@ import {
   DEFAULT_CATEGORIES,
 } from '@database/models';
 
-import { hashPassword } from '../../src/mobile/shared/utils/jwt';
+import { hashPassword } from '@core/auth/jwt';
 
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@budgetbrain.app';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!';

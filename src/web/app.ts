@@ -3,8 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import { env } from './shared/config/env';
-import { errorHandler } from './shared/utils/errors';
-import { globalRateLimiter } from './shared/middleware/rateLimit';
+import { createErrorHandler } from '@core/http/errors';
+import { globalRateLimiter } from '@core/middleware/rateLimit';
 import { createRequestContextMiddleware } from '../shared/audit';
 import { createCorsOptions } from '../shared/http/cors';
 import { jsonNotFound, registerApiAliases, registerApiIndex } from '../shared/http/routes';
@@ -61,6 +61,6 @@ registerApiIndex(app, 'web', env.API_VERSION);
 registerApiAliases(app, 'web', env.API_VERSION, registerWebRoutes);
 
 app.use(jsonNotFound);
-app.use(errorHandler);
+app.use(createErrorHandler('web'));
 
 export default app;

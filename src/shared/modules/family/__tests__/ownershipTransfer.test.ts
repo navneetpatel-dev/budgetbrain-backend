@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createGroup, joinGroup, updateMemberRole } from '../service/family.service';
+import { createGroup, joinGroup, updateMemberRole } from '../family.service';
 import { FamilyGroup, FamilyMember } from '@database/models';
 
 describe('Family ownership self-demotion hole', () => {

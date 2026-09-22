@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { randomUUID } from 'crypto';
 import { setupTestDb, createTestUser } from '@testHelpers';
-import { createGroup, joinGroup, createFamilyInvite, acceptFamilyInvite } from '../service/family.service';
+import { createGroup, joinGroup, createFamilyInvite, acceptFamilyInvite } from '../family.service';
 import { FamilyInvite, FamilyMember, User } from '@database/models';
 
 // Real dev DB is persistent/shared across runs, so every invited email must be unique per
@@ -60,7 +60,7 @@ describe('Family invite tokens (plan item 19)', () => {
     // Create the invite, then read the raw token back the same way createFamilyInvite does
     // internally (hash + lookup) since the function itself only emails the raw token.
     const rawTokens: string[] = [];
-    const { hashToken } = await import('@shared/utils/jwt');
+    const { hashToken } = await import('@core/auth/jwt');
     const origCreate = FamilyInvite.create.bind(FamilyInvite);
     // Intercept is unnecessary — simplest is to read the DB row's hash and independently
     // regenerate is not possible (one-way hash), so instead directly test acceptFamilyInvite
@@ -98,7 +98,7 @@ describe('Family invite tokens (plan item 19)', () => {
     const group = await createGroup(owner.id, 'New User Family');
     const invitedEmail = uniqueEmail('brandnew');
 
-    const { hashToken } = await import('@shared/utils/jwt');
+    const { hashToken } = await import('@core/auth/jwt');
     const crypto = await import('crypto');
     const rawToken = crypto.randomBytes(32).toString('hex');
     await FamilyInvite.create({
@@ -127,7 +127,7 @@ describe('Family invite tokens (plan item 19)', () => {
   it('rejects an expired invite token', async () => {
     const owner = await createTestUser();
     const group = await createGroup(owner.id, 'Expired Family');
-    const { hashToken } = await import('@shared/utils/jwt');
+    const { hashToken } = await import('@core/auth/jwt');
     const crypto = await import('crypto');
     const rawToken = crypto.randomBytes(32).toString('hex');
     await FamilyInvite.create({
@@ -145,7 +145,7 @@ describe('Family invite tokens (plan item 19)', () => {
   it('rejects an already-accepted invite token from being reused', async () => {
     const owner = await createTestUser();
     const group = await createGroup(owner.id, 'Reuse Family');
-    const { hashToken } = await import('@shared/utils/jwt');
+    const { hashToken } = await import('@core/auth/jwt');
     const crypto = await import('crypto');
     const rawToken = crypto.randomBytes(32).toString('hex');
     await FamilyInvite.create({

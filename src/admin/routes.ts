@@ -1,5 +1,5 @@
-import authRoutes from './features/auth/route';
-import adminRoutes from './features/admin/route';
+import authRoutes from './features/auth/auth.routes';
+import adminRoutes from './features/admin/admin.routes';
 import type { Express } from 'express';
 
 export function registerAdminRoutes(app: Express, apiPrefix: string): void {

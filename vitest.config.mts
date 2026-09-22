@@ -11,6 +11,7 @@ export default defineConfig({
       '@database': path.resolve(__dirname, './database'),
       '@core': path.resolve(__dirname, './src/core'),
       '@config': path.resolve(__dirname, './src/config'),
+      '@jobs': path.resolve(__dirname, './src/jobs'),
       '@modules': path.resolve(__dirname, './src/shared/modules'),
       '@shared': path.resolve(__dirname, './src/shared'),
       '@testHelpers': path.resolve(__dirname, './src/testHelpers/index.ts'),

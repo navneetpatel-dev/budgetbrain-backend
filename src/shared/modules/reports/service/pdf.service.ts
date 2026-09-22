@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { Transaction, Category, IncomeSource } from '@database/models';
 import { fetchReportTransactions, sumConvertedIncomeAndExpense } from './report.service';
-import type { ReportFilters } from '../types';
+import type { ReportFilters } from '../reports.types';
 
 export async function generatePdfReport(
   userId: string,

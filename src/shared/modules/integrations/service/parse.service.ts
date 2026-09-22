@@ -1,4 +1,4 @@
-import type { ParsedData } from '../types';
+import type { ParsedData } from '../integrations.types';
 const SMS_PATTERNS = [
   /(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{2})?)/i,
   /debited.*?([\d,]+(?:\.\d{2})?)/i,

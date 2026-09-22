@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import type { AuthRequest } from '@shared/types';
 import { AppError } from '@shared/errors';
+import { hasPermission, Permissions } from '@core/permissions/permissions';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
 
 export function requireEntitlement(entitlementId = 'pro') {
@@ -10,7 +11,7 @@ export function requireEntitlement(entitlementId = 'pro') {
         throw new AppError(401, 'Authentication required', 'UNAUTHORIZED');
       }
 
-      if (req.user.role === 'admin' || req.user.role === 'lifetime') {
+      if (hasPermission(req.user.role, Permissions.ENTITLEMENT_PRO)) {
         next();
         return;
       }

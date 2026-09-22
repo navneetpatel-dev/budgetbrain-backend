@@ -21,6 +21,10 @@ const dbEnvSchema = z.object({
   DB_NAME: z.string().default('budgetbrain'),
   DB_USER: z.string().default('budgetbrain'),
   DB_PASSWORD: z.string().default('budgetbrain'),
+  DB_POOL_MAX: z.coerce.number().default(10),
+  DB_POOL_MIN: z.coerce.number().default(2),
+  DB_POOL_ACQUIRE_MS: z.coerce.number().default(30000),
+  DB_POOL_IDLE_MS: z.coerce.number().default(10000),
 });
 
 export const dbEnv = dbEnvSchema.parse(process.env);

@@ -23,7 +23,8 @@ async function sumExpensesInRange(
   userId: string,
   categoryId: string | null,
   startDate: string,
-  endDate: string
+  endDate: string,
+  userCurrency: string
 ): Promise<number> {
   const where: Record<string, unknown> = {
     userId,
@@ -39,12 +40,12 @@ async function sumExpensesInRange(
     attributes: ['amount', 'currency'],
     raw: true,
   });
-  return convertAndSum(rows, await resolveUserCurrency(userId));
+  return convertAndSum(rows, userCurrency);
 }
 
-async function computeBudgetSpent(userId: string, budget: Budget): Promise<number> {
+async function computeBudgetSpent(userId: string, budget: Budget, userCurrency: string): Promise<number> {
   const { startDate, endDate } = getBudgetDateRange(budget);
-  return sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+  return sumExpensesInRange(userId, budget.categoryId, startDate, endDate, userCurrency);
 }
 
 const MAX_COMPOUNDING_PERIODS = 24;
@@ -54,9 +55,9 @@ const MAX_COMPOUNDING_PERIODS = 24;
  * measured against the budget's nominal amount.
  * Not supported for `custom` budgets, which have a fixed one-off date range.
  */
-async function computeSingleRollover(userId: string, budget: Budget): Promise<number> {
+async function computeSingleRollover(userId: string, budget: Budget, userCurrency: string): Promise<number> {
   const { startDate, endDate } = getPreviousBudgetDateRange(budget);
-  const previousSpent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+  const previousSpent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate, userCurrency);
   return Number(budget.amount) - previousSpent;
 }
 
@@ -64,15 +65,44 @@ async function computeSingleRollover(userId: string, budget: Budget): Promise<nu
  * Compounding rollover: accumulates leftover/deficit across every period since
  * `rolloverStartedAt` (or the budget's `startDate` if rollover predates that timestamp),
  * capped at MAX_COMPOUNDING_PERIODS to bound query cost for long-lived budgets.
+ *
+ * Fetches every candidate transaction in ONE query spanning the whole walked range, then
+ * buckets rows into periods in memory — previously this issued one Transaction.findAll
+ * per period (up to 24 sequential DB round trips per budget).
  */
-async function computeCompoundingRollover(userId: string, budget: Budget): Promise<number> {
+async function computeCompoundingRollover(userId: string, budget: Budget, userCurrency: string): Promise<number> {
   const { endDate: previousPeriodEnd } = getPreviousBudgetDateRange(budget);
   const fromDate = toDateOnly(budget.rolloverStartedAt, toDateOnly(budget.startDate, previousPeriodEnd));
   const periods = getPeriodsBetween(budget, fromDate, previousPeriodEnd, MAX_COMPOUNDING_PERIODS);
+  if (periods.length === 0) return 0;
+
+  // getPeriodsBetween walks backward from `previousPeriodEnd`, so periods[0] is the newest
+  // and the last entry is the oldest — together they bound the one query we need.
+  const overallStart = periods[periods.length - 1].startDate;
+  const overallEnd = periods[0].endDate;
+
+  const where: Record<string, unknown> = {
+    userId,
+    type: 'expense',
+    date: { [Op.gte]: overallStart, [Op.lte]: overallEnd },
+  };
+  if (budget.categoryId) {
+    where.categoryId = budget.categoryId;
+  }
+
+  const rows = await Transaction.findAll({
+    where,
+    attributes: ['amount', 'currency', 'date'],
+    raw: true,
+  });
 
   const deltas = await Promise.all(
     periods.map(async ({ startDate, endDate }) => {
-      const spent = await sumExpensesInRange(userId, budget.categoryId, startDate, endDate);
+      const periodRows = rows.filter((row) => {
+        const d = String(row.date).slice(0, 10);
+        return d >= startDate && d <= endDate;
+      });
+      const spent = await convertAndSum(periodRows, userCurrency);
       return Number(budget.amount) - spent;
     })
   );
@@ -80,12 +110,12 @@ async function computeCompoundingRollover(userId: string, budget: Budget): Promi
   return deltas.reduce((sum, delta) => sum + delta, 0);
 }
 
-async function computeRolloverAmount(userId: string, budget: Budget): Promise<number> {
+async function computeRolloverAmount(userId: string, budget: Budget, userCurrency: string): Promise<number> {
   if (!budget.rollover || budget.type === 'custom') return 0;
   if (budget.rolloverMode === 'compounding') {
-    return computeCompoundingRollover(userId, budget);
+    return computeCompoundingRollover(userId, budget, userCurrency);
   }
-  return computeSingleRollover(userId, budget);
+  return computeSingleRollover(userId, budget, userCurrency);
 }
 
 /** Mirrors Goal.progressPercentage's capping formula (database/models/goal.model.ts). */
@@ -94,12 +124,12 @@ function computeSpentPercentage(spent: number, effectiveAmount: number): number 
   return Math.min(100, Math.round((spent / effectiveAmount) * 100));
 }
 
-async function enrichBudgetsWithSpent(budgets: Budget[]): Promise<BudgetWithSpent[]> {
+async function enrichBudgetsWithSpent(budgets: Budget[], userCurrency: string): Promise<BudgetWithSpent[]> {
   return Promise.all(
     budgets.map(async (budget) => {
       const [spent, rolloverAmount] = await Promise.all([
-        computeBudgetSpent(budget.userId, budget),
-        computeRolloverAmount(budget.userId, budget),
+        computeBudgetSpent(budget.userId, budget, userCurrency),
+        computeRolloverAmount(budget.userId, budget, userCurrency),
       ]);
       const effectiveAmount = Number(budget.amount) + rolloverAmount;
       return {
@@ -164,9 +194,10 @@ export async function getBudget(userId: string, id: string): Promise<BudgetWithS
     include: [{ model: Category, as: 'category' }],
   });
   if (!budget) throw new AppError(404, 'Budget not found');
+  const userCurrency = await resolveUserCurrency(userId);
   const [spent, rolloverAmount] = await Promise.all([
-    computeBudgetSpent(userId, budget),
-    computeRolloverAmount(userId, budget),
+    computeBudgetSpent(userId, budget, userCurrency),
+    computeRolloverAmount(userId, budget, userCurrency),
   ]);
   const effectiveAmount = Number(budget.amount) + rolloverAmount;
   return {
@@ -187,7 +218,8 @@ export async function listBudgets(userId: string, filters: PaginationInput = {})
     limit,
     offset,
   });
-  const budgets = await enrichBudgetsWithSpent(rows);
+  const userCurrency = await resolveUserCurrency(userId);
+  const budgets = await enrichBudgetsWithSpent(rows, userCurrency);
   return paginatedResult('budgets', budgets, count, page, limit);
 }
 

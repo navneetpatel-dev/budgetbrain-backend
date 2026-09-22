@@ -11,6 +11,7 @@
       "@core/*": ["src/core/*"],
       "@config/*": ["src/config/*"],
       "@jobs/*": ["src/jobs/*"],
+      "@queue/*": ["src/queue/*"],
       "@modules/*": ["src/shared/modules/*"],
       "@shared/*": ["src/shared/*"],
       "@testHelpers": ["src/testHelpers/index.ts"],

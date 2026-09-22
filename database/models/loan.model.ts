@@ -134,7 +134,7 @@ export function initLoanModel(sequelize: Sequelize): typeof Loan {
         },
       },
     },
-    { sequelize, tableName: 'loans' }
+    { sequelize, tableName: 'loans', indexes: [{ fields: ['user_id'] }] }
   );
   return Loan;
 }

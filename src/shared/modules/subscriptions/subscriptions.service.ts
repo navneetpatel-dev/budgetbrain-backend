@@ -4,8 +4,15 @@ import type { SubscriptionPlan, SubscriptionStatus, SubscriptionStore } from '@d
 import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { hasPermission, isLifetimeAccount, Permissions } from '@core/permissions/permissions';
+import { getOrSetCache, deleteCache } from '@core/cache/cache.service';
 
-export async function getEntitlementForUser(userId: string, entitlementId = 'pro') {
+const ENTITLEMENT_CACHE_TTL_SECONDS = 120;
+
+function entitlementCacheKey(userId: string, entitlementId: string): string {
+  return `entitlement:${userId}:${entitlementId}`;
+}
+
+async function computeEntitlementForUser(userId: string, entitlementId: string) {
   const user = await User.findByPk(userId);
   if (!user) {
     throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
@@ -42,6 +49,20 @@ export async function getEntitlementForUser(userId: string, entitlementId = 'pro
     isLifetime: subscription.isLifetime,
     expiresAt: subscription.currentPeriodEnd,
   };
+}
+
+/**
+ * Short TTL (2 min) since correctness matters here — a user upgrading mid-session should
+ * see Pro features reasonably promptly — but this is still called at least twice per
+ * `GET /expenses` (via applyHistoryLimit) plus on every budget/category create, so even a
+ * short-lived cache removes real, redundant per-request User + Subscription lookups.
+ */
+export async function getEntitlementForUser(userId: string, entitlementId = 'pro') {
+  return getOrSetCache(
+    entitlementCacheKey(userId, entitlementId),
+    ENTITLEMENT_CACHE_TTL_SECONDS,
+    () => computeEntitlementForUser(userId, entitlementId)
+  );
 }
 
 export interface SubscriptionStateInput {
@@ -113,6 +134,11 @@ export async function applySubscriptionState(input: SubscriptionStateInput) {
       await user.update({ role: updatedRole });
     }
   }
+
+  // Only 'pro' is used as an entitlementId anywhere in this codebase (verified across
+  // every getEntitlementForUser/requireEntitlement call site) — invalidate it explicitly
+  // rather than waiting out the cache's short TTL after a role-affecting state change.
+  await deleteCache(entitlementCacheKey(user.id, 'pro'));
 
   await writeAuditLog({
     action: AuditAction.USER_ROLE_CHANGE,

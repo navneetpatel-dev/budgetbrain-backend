@@ -1,28 +1,29 @@
 import { Transaction, TransactionAttachment } from '@database/models';
 import { AppError } from '@shared/errors';
-import { uploadFile, withSignedDownloadUrl, getSignedDownloadUrl } from '@core/storage/s3.service';
+import { uploadFile, withSignedDownloadUrl } from '@core/storage/s3.service';
 import { env } from '@config/env';
-import { extractReceiptData } from '@shared/ai';
+import { receiptExtractionQueue } from '@queue/queues';
+import { createLogger } from '@shared/logging';
 import type { ReceiptExtractedData } from '@database/models/transactionAttachment.model';
 
+const log = createLogger('system');
+
 /**
- * Fire-and-forget: never awaited by the request handler. A slow or failing OpenAI Vision
- * call must not block or fail the upload response — extraction is best-effort, surfaced
- * later via GET .../suggestion.
+ * Never awaited by the request handler — a slow or failing OpenAI Vision call must not
+ * block or fail the upload response. Extraction runs on the BullMQ 'receipt-extraction'
+ * queue (durable, retried up to 2x) instead of an in-process fire-and-forget task, so a
+ * process restart or a transient OpenAI failure no longer silently loses the extraction.
  */
 export function scheduleReceiptExtraction(attachmentId: string, s3Key: string, s3Url: string): void {
   if (!env.OPENAI_API_KEY) return;
-  void (async () => {
-    try {
-      const imageUrl = await getSignedDownloadUrl(s3Key, s3Url);
-      const extracted = await extractReceiptData({ apiKey: env.OPENAI_API_KEY!, imageUrl });
-      if (extracted) {
-        await saveReceiptExtraction(attachmentId, extracted);
-      }
-    } catch (err) {
-      console.warn('[attachments] receipt extraction failed:', err instanceof Error ? err.message : err);
-    }
-  })();
+  void receiptExtractionQueue
+    .add('extract', { attachmentId, s3Key, s3Url })
+    .catch((err) =>
+      log.warn('Failed to enqueue receipt extraction', {
+        attachmentId,
+        message: err instanceof Error ? err.message : String(err),
+      })
+    );
 }
 
 export async function saveReceiptExtraction(

@@ -117,7 +117,14 @@ export function initRecurringSeriesModel(sequelize: Sequelize): typeof Recurring
         field: 'goal_id',
       },
     },
-    { sequelize, tableName: 'recurring_series' }
+    {
+      sequelize,
+      tableName: 'recurring_series',
+      indexes: [
+        { unique: true, name: 'recurring_series_user_merchant_unique', fields: ['user_id', 'merchant'] },
+        { fields: ['user_id'] },
+      ],
+    }
   );
   return RecurringSeries;
 }

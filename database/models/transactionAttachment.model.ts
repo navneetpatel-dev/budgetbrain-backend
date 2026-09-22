@@ -86,7 +86,7 @@ export function initTransactionAttachmentModel(sequelize: Sequelize): typeof Tra
         field: 'extracted_data',
       },
     },
-    { sequelize, tableName: 'transaction_attachments' }
+    { sequelize, tableName: 'transaction_attachments', indexes: [{ fields: ['transaction_id'] }] }
   );
   return TransactionAttachment;
 }

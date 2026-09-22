@@ -118,7 +118,7 @@ export function initBudgetModel(sequelize: Sequelize): typeof Budget {
         field: 'rollover_started_at',
       },
     },
-    { sequelize, tableName: 'budgets' }
+    { sequelize, tableName: 'budgets', indexes: [{ fields: ['user_id'] }] }
   );
   return Budget;
 }

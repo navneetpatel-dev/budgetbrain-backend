@@ -7,6 +7,12 @@ import { convertAndSum } from '@shared/currency/currency.engine';
 /** Fixed progressive alert tiers, per requirements.md's budget-alert granularity gap. */
 const ALERT_TIERS = [50, 80, 90, 100] as const;
 
+interface ExpenseRow {
+  amount: unknown;
+  currency: string | null;
+  categoryId: string | null;
+}
+
 export async function checkBudgetAlertsAfterExpense(
   userId: string,
   categoryId?: string | null,
@@ -24,26 +30,45 @@ export async function checkBudgetAlertsAfterExpense(
     ...txOpts,
   });
 
-  for (const budget of budgets) {
-    if (budget.categoryId && categoryId && budget.categoryId !== categoryId) {
-      continue;
-    }
+  const relevantBudgets = budgets.filter(
+    (budget) => !(budget.categoryId && categoryId && budget.categoryId !== categoryId)
+  );
+  if (relevantBudgets.length === 0) return;
 
-    const { startDate, endDate } = getBudgetDateRange(budget);
+  // Fetched once, not once per budget: every budget in this check belongs to the same user.
+  const user = await User.findByPk(userId, { attributes: ['currency'], ...txOpts });
+  const userCurrency = user?.currency ?? 'INR';
 
-    const spendRows = await Transaction.findAll({
-      where: {
-        userId,
-        type: 'expense',
-        date: { [Op.gte]: startDate, [Op.lte]: endDate },
-        ...(budget.categoryId ? { categoryId: budget.categoryId } : {}),
-      },
-      attributes: ['amount', 'currency'],
+  // Most budgets share the same tracking window (e.g. every 'monthly' budget tracks the
+  // current calendar month), so fetch each distinct window's expense rows once and reuse
+  // them across every budget in that window, instead of one Transaction.findAll per budget.
+  const rowsByWindow = new Map<string, ExpenseRow[]>();
+  async function getWindowRows(startDate: string, endDate: string): Promise<ExpenseRow[]> {
+    const key = `${startDate}|${endDate}`;
+    const cached = rowsByWindow.get(key);
+    if (cached) return cached;
+
+    const rows = (await Transaction.findAll({
+      where: { userId, type: 'expense', date: { [Op.gte]: startDate, [Op.lte]: endDate } },
+      attributes: ['amount', 'currency', 'categoryId'],
       raw: true,
       ...txOpts,
-    });
-    const user = await User.findByPk(userId, { attributes: ['currency'], ...txOpts });
-    const spent = await convertAndSum(spendRows, user?.currency ?? 'INR');
+    })) as unknown as ExpenseRow[];
+    rowsByWindow.set(key, rows);
+    return rows;
+  }
+
+  for (const budget of relevantBudgets) {
+    const { startDate, endDate } = getBudgetDateRange(budget);
+    const windowRows = await getWindowRows(startDate, endDate);
+    // A null-category budget tracks total spend across every category (see sumExpensesInRange's
+    // "no categoryId filter" behavior in budget.service.ts) — a specific-category budget only
+    // counts rows matching it.
+    const matchingRows = budget.categoryId
+      ? windowRows.filter((row) => row.categoryId === budget.categoryId)
+      : windowRows;
+
+    const spent = await convertAndSum(matchingRows, userCurrency);
     const budgetAmount = Number(budget.amount);
     if (budgetAmount <= 0) continue;
 

@@ -52,6 +52,13 @@ export const envSchema = z.object({
   RAZORPAY_PLAN_ID_YEARLY: z.string().optional(),
   APP_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('*'),
+  REDIS_URL: z.string().optional(),
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.coerce.number().default(6379),
+  REDIS_PASSWORD: z.string().optional(),
+  // Set 'true' on exactly one deployed instance — BullMQ workers should have a single
+  // consumer per queue set, not one per app process. See src/queue/index.ts.
+  ENABLE_QUEUE_WORKERS: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

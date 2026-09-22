@@ -79,6 +79,22 @@ export async function fetchReportTransactions(
 
   return Transaction.findAll({
     where,
+    // Every export format only ever reads these columns (see generateCsvReport /
+    // generateExcelReport / sumConvertedIncomeAndExpense below) — restricting them cuts
+    // payload size for a query that, unlike most list endpoints, has no row-count cap
+    // (an export must cover the user's whole filtered history).
+    attributes: [
+      'id',
+      'type',
+      'amount',
+      'currency',
+      'date',
+      'merchant',
+      'paymentMethod',
+      'notes',
+      'categoryId',
+      'incomeSourceId',
+    ],
     include: [
       { model: Category, as: 'category', attributes: ['id', 'name'] },
       { model: IncomeSource, as: 'incomeSource', attributes: ['id', 'name'] },

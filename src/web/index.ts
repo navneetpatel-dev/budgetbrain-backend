@@ -6,6 +6,7 @@ import { initSentry } from '@config/sentry';
 import { validateProductionConfig } from '@config/production';
 import { createLogger } from '../shared/logging';
 import { start } from '@jobs/index';
+import { startWorkers } from '@queue/index';
 
 const log = createLogger('web');
 
@@ -18,6 +19,12 @@ async function bootstrap() {
     const dbConnected = await prepareDatabase(log);
     if (dbConnected && process.env.ENABLE_CRON === 'true') {
       start();
+    }
+    // Single-consumer by design: only one deployed instance should run the BullMQ
+    // workers, or every process's requests would enqueue jobs that all three then
+    // race to process. See src/queue/index.ts.
+    if (dbConnected && process.env.ENABLE_QUEUE_WORKERS === 'true') {
+      startWorkers();
     }
 
     listenAndLog(app, log, 'web', {

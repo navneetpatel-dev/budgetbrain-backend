@@ -1,7 +1,9 @@
 import { ExchangeRate } from '@database/models';
 import { logger } from '@shared/logging/logger';
+import { getOrSetCache, deleteCacheByPrefix } from '@core/cache/cache.service';
 
 const STALE_RATE_MS = 48 * 60 * 60 * 1000;
+const RATE_CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 
 export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'] as const;
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
@@ -16,10 +18,6 @@ const BASELINE_RATES_TO_INR: Record<string, number> = {
   SGD: 62.5,
 };
 
-let inMemoryRateCache: Map<string, number> | null = null;
-let lastCacheRefresh = 0;
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
 export function roundMoney(amount: number, decimals = 2): number {
   const factor = Math.pow(10, decimals);
   return Math.round((amount + Number.EPSILON) * factor) / factor;
@@ -29,48 +27,43 @@ export function isSupportedCurrency(curr: string): curr is SupportedCurrency {
   return SUPPORTED_CURRENCIES.includes(curr.toUpperCase() as SupportedCurrency);
 }
 
+function deriveFromBaseline(from: string, to: string): number {
+  const fromToInr = BASELINE_RATES_TO_INR[from] ?? 1.0;
+  const toToInr = BASELINE_RATES_TO_INR[to] ?? 1.0;
+  return fromToInr / toToInr;
+}
+
+/**
+ * Rates are cached in Redis (shared across all three deployed app processes — mobile/web/
+ * admin previously each warmed their own independent process-local copy) with a 1-hour TTL,
+ * invalidated explicitly whenever upsertRatesToInrTable runs (the daily sync cron, or a
+ * manual reseed). getOrSetCache is fail-open, so a Redis outage falls straight through to
+ * the same DB-then-baseline-fallback logic this always had.
+ */
 export async function getExchangeRate(fromCurrency: string, toCurrency: string): Promise<number> {
   const from = fromCurrency.toUpperCase();
   const to = toCurrency.toUpperCase();
 
   if (from === to) return 1.0;
 
-  const cacheKey = `${from}_${to}`;
-  const now = Date.now();
-
-  if (inMemoryRateCache && now - lastCacheRefresh < CACHE_TTL_MS) {
-    const cached = inMemoryRateCache.get(cacheKey);
-    if (cached !== undefined) return cached;
-  }
-
-  // Load from database
-  try {
-    const dbRows = await ExchangeRate.findAll();
-    if (!inMemoryRateCache) inMemoryRateCache = new Map();
-
-    for (const row of dbRows) {
-      inMemoryRateCache.set(`${row.fromCurrency}_${row.toCurrency}`, Number(row.rate));
-      const ageMs = now - new Date(row.updatedAt).getTime();
-      if (ageMs > STALE_RATE_MS) {
-        logger.warn(
-          `Exchange rate ${row.fromCurrency}->${row.toCurrency} is stale (updated ${row.updatedAt.toISOString()}); serving last known rate`
-        );
+  return getOrSetCache(`fx:${from}_${to}`, RATE_CACHE_TTL_SECONDS, async () => {
+    try {
+      const row = await ExchangeRate.findOne({ where: { fromCurrency: from, toCurrency: to } });
+      if (row) {
+        const ageMs = Date.now() - new Date(row.updatedAt).getTime();
+        if (ageMs > STALE_RATE_MS) {
+          logger.warn(
+            `Exchange rate ${row.fromCurrency}->${row.toCurrency} is stale (updated ${row.updatedAt.toISOString()}); serving last known rate`
+          );
+        }
+        return Number(row.rate);
       }
+    } catch (err) {
+      console.warn('[CurrencyEngine] Failed to load rate from DB, using fallback baseline:', err);
     }
-    lastCacheRefresh = now;
 
-    const fromDb = inMemoryRateCache.get(cacheKey);
-    if (fromDb !== undefined) return fromDb;
-  } catch (err) {
-    console.warn('[CurrencyEngine] Failed to load rates from DB, using fallback baselines:', err);
-  }
-
-  // Calculate from baseline rates relative to INR
-  const fromToInr = BASELINE_RATES_TO_INR[from] ?? 1.0;
-  const toToInr = BASELINE_RATES_TO_INR[to] ?? 1.0;
-  const derivedRate = fromToInr / toToInr;
-
-  return derivedRate;
+    return deriveFromBaseline(from, to);
+  });
 }
 
 export async function convertAmount(amount: number, fromCurrency: string, toCurrency: string): Promise<number> {
@@ -119,7 +112,7 @@ async function upsertRatesToInrTable(ratesToInr: Record<string, number>): Promis
     }
   }
 
-  inMemoryRateCache = null;
+  await deleteCacheByPrefix('fx:');
 }
 
 export async function seedInitialExchangeRates(): Promise<void> {

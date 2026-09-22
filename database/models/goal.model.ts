@@ -100,7 +100,7 @@ export function initGoalModel(sequelize: Sequelize): typeof Goal {
         },
       },
     },
-    { sequelize, tableName: 'goals' }
+    { sequelize, tableName: 'goals', indexes: [{ fields: ['user_id'] }] }
   );
   return Goal;
 }

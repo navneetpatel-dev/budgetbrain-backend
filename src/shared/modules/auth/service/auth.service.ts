@@ -21,7 +21,7 @@ import {
 } from '@core/auth/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { AppError } from '@shared/errors';
-import { sendOtpEmail, sendVerificationEmail, sendPasswordResetEmail } from '@core/mail/email.service';
+import { emailQueue } from '@queue/queues';
 import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
 
 function sanitizeUser(user: User) {
@@ -160,7 +160,9 @@ export async function register(email: string, password: string, name?: string) {
     return { tokens, verifyToken };
   });
 
-  await sendVerificationEmail(email, verifyToken);
+  // Enqueued, not awaited-to-send: the enqueue itself is a fast Redis write, so
+  // registration no longer blocks the HTTP response on SMTP latency.
+  await emailQueue.add('verify', { to: email, kind: 'verify', payload: { token: verifyToken } });
   return tokens;
 }
 
@@ -311,7 +313,7 @@ export async function requestOtp(email: string) {
   await sequelize.transaction(async (t) => {
     await storeToken(email, 'otp', otp, user.id, 10 * 60 * 1000, t);
   });
-  await sendOtpEmail(email, otp);
+  await emailQueue.add('otp', { to: email, kind: 'otp', payload: { otp } });
 }
 
 export async function verifyOtp(email: string, otp: string, deviceId?: string) {
@@ -370,7 +372,7 @@ export async function forgotPassword(email: string) {
       transaction: t,
     });
   });
-  await sendPasswordResetEmail(email, token);
+  await emailQueue.add('reset', { to: email, kind: 'reset', payload: { token } });
 }
 
 export async function resetPassword(token: string, newPassword: string) {

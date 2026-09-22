@@ -64,7 +64,7 @@ export function initIncomeSourceModel(sequelize: Sequelize): typeof IncomeSource
         field: 'recurring_rule',
       },
     },
-    { sequelize, tableName: 'income_sources' }
+    { sequelize, tableName: 'income_sources', indexes: [{ fields: ['user_id'] }] }
   );
   return IncomeSource;
 }

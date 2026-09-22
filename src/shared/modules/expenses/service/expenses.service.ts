@@ -37,22 +37,25 @@ async function resolveUserCurrency(userId: string, user?: User | null): Promise<
   return row?.currency ?? 'INR';
 }
 
-export async function getTotalIncome(userId: string, user: User): Promise<number> {
-  const rows = await Transaction.findAll({
-    where: { userId, type: 'income' },
-    attributes: ['amount', 'currency'],
+/** One SUM(amount) row per currency the user has ever transacted in (at most a handful),
+ * instead of fetching every transaction row ever recorded — convertAndSum then only has
+ * to convert/sum those few subtotals, not the user's entire lifetime history. */
+async function sumAllTimeByType(userId: string, type: 'income' | 'expense', targetCurrency: string): Promise<number> {
+  const rows = (await Transaction.findAll({
+    where: { userId, type },
+    attributes: ['currency', [fn('SUM', col('amount')), 'total']],
+    group: ['currency'],
     raw: true,
-  });
-  return convertAndSum(rows, user.currency);
+  })) as unknown as Array<{ currency: string; total: string }>;
+  return convertAndSum(rows.map((r) => ({ amount: r.total, currency: r.currency })), targetCurrency);
+}
+
+export async function getTotalIncome(userId: string, user: User): Promise<number> {
+  return sumAllTimeByType(userId, 'income', user.currency);
 }
 
 export async function getTotalExpenses(userId: string, user: User): Promise<number> {
-  const rows = await Transaction.findAll({
-    where: { userId, type: 'expense' },
-    attributes: ['amount', 'currency'],
-    raw: true,
-  });
-  return convertAndSum(rows, user.currency);
+  return sumAllTimeByType(userId, 'expense', user.currency);
 }
 
 export async function getRecentTransactions(userId: string, _user: User, limit: number) {
@@ -65,32 +68,37 @@ export async function getRecentTransactions(userId: string, _user: User, limit: 
 }
 
 export async function getCategoryBreakdown(userId: string, user: User, limit = 2) {
-  const rows = await Transaction.findAll({
+  // One SUM(amount) row per (category, currency) pair, not one row per transaction —
+  // then batch-load the (few) distinct categories instead of an include on every row.
+  const rows = (await Transaction.findAll({
     where: { userId, type: 'expense' },
-    attributes: ['categoryId', 'amount', 'currency'],
-    include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] }],
-  });
+    attributes: ['categoryId', 'currency', [fn('SUM', col('amount')), 'total']],
+    group: ['categoryId', 'currency'],
+    raw: true,
+  })) as unknown as Array<{ categoryId: string | null; currency: string; total: string }>;
 
-  const totals = new Map<string, { total: number; category: Category | null }>();
+  const rowsByCategory = new Map<string | null, Array<{ amount: unknown; currency: string }>>();
   for (const row of rows) {
-    const key = row.categoryId ?? 'uncategorized';
-    const converted = await convertAndSum([{ amount: row.amount, currency: row.currency }], user.currency);
-    const existing = totals.get(key);
-    if (existing) {
-      existing.total += converted;
-    } else {
-      totals.set(key, { total: converted, category: (row as Transaction & { category?: Category }).category ?? null });
-    }
+    const list = rowsByCategory.get(row.categoryId) ?? [];
+    list.push({ amount: row.total, currency: row.currency });
+    rowsByCategory.set(row.categoryId, list);
   }
 
-  return [...totals.entries()]
-    .map(([categoryId, value]) => ({
-      categoryId: categoryId === 'uncategorized' ? null : categoryId,
-      total: value.total,
-      category: value.category,
+  const categoryIds = [...rowsByCategory.keys()].filter((id): id is string => id !== null);
+  const categories = categoryIds.length
+    ? await Category.findAll({ where: { id: categoryIds }, attributes: ['id', 'name', 'icon', 'color'] })
+    : [];
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+
+  const totals = await Promise.all(
+    [...rowsByCategory.entries()].map(async ([categoryId, categoryRows]) => ({
+      categoryId,
+      total: await convertAndSum(categoryRows, user.currency),
+      category: categoryId ? (categoryById.get(categoryId) ?? null) : null,
     }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, limit);
+  );
+
+  return totals.sort((a, b) => b.total - a.total).slice(0, limit);
 }
 
 export interface TransactionFilters {
@@ -186,20 +194,23 @@ export async function getTransactionsSummary(
   delete rest.type;
   const where = buildTransactionWhere(userId, rest);
 
-  const rows = await Transaction.findAll({
+  // One SUM(amount) row per (type, currency) pair matching the filters, instead of one
+  // row per matching transaction — the filtered row set can be the user's entire history.
+  const rows = (await Transaction.findAll({
     where,
-    attributes: ['type', 'amount', 'currency'],
+    attributes: ['type', 'currency', [fn('SUM', col('amount')), 'total']],
+    group: ['type', 'currency'],
     raw: true,
-  });
+  })) as unknown as Array<{ type: string; currency: string; total: string }>;
 
   const currency = await resolveUserCurrency(userId);
-  let totalExpense = 0;
-  let totalIncome = 0;
-  for (const row of rows as unknown as { type: string; amount: unknown; currency?: string }[]) {
-    const converted = await convertAndSum([row], currency);
-    if (row.type === 'expense') totalExpense += converted;
-    else if (row.type === 'income') totalIncome += converted;
-  }
+  const expenseRows = rows.filter((r) => r.type === 'expense').map((r) => ({ amount: r.total, currency: r.currency }));
+  const incomeRows = rows.filter((r) => r.type === 'income').map((r) => ({ amount: r.total, currency: r.currency }));
+
+  const [totalExpense, totalIncome] = await Promise.all([
+    convertAndSum(expenseRows, currency),
+    convertAndSum(incomeRows, currency),
+  ]);
 
   return {
     totalExpense,
@@ -554,16 +565,28 @@ export async function getSpendingTrends(userId: string): Promise<SpendingTrends>
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
   const sixMonthsIso = sixMonthsAgo.toISOString().slice(0, 10);
 
-  const transactions = await Transaction.findAll({
+  // One SUM(amount) row per (date, currency) pair in the window, instead of one row per
+  // transaction — a heavy user's 6-month history can be thousands of rows, this bounds it
+  // to at most ~180 days times however many currencies they use.
+  const rows = (await Transaction.findAll({
     where: {
       userId,
       type: 'expense',
       date: { [Op.gte]: sixMonthsIso },
     },
-    attributes: ['amount', 'currency', 'date'],
+    attributes: ['date', 'currency', [fn('SUM', col('amount')), 'total']],
+    group: ['date', 'currency'],
     raw: true,
-  });
+  })) as unknown as Array<{ date: string; currency: string; total: string }>;
   const currency = await resolveUserCurrency(userId);
+
+  const rowsByDate = new Map<string, Array<{ amount: unknown; currency: string }>>();
+  for (const row of rows) {
+    const dayIso = String(row.date).slice(0, 10);
+    const list = rowsByDate.get(dayIso) ?? [];
+    list.push({ amount: row.total, currency: row.currency });
+    rowsByDate.set(dayIso, list);
+  }
 
   // 1. Daily trends: last 14 days ending today
   const dailyBuckets = new Map<string, number>();
@@ -604,11 +627,13 @@ export async function getSpendingTrends(userId: string): Promise<SpendingTrends>
     monthlyPoints.push({ date: iso, label, amount: 0 });
   }
 
-  // Populate buckets from transactions
-  for (const t of transactions) {
-    const amt = await convertAndSum([{ amount: t.amount, currency: (t as { currency?: string }).currency }], currency);
-    const txDate = new Date(t.date);
-    const dayIso = txDate.toISOString().slice(0, 10);
+  // Populate buckets from the per-day grouped totals (one convertAndSum call per day
+  // that has spend, not one per raw transaction — the accumulation below is additive,
+  // so summing a day's pre-converted total into weekly/monthly is identical to summing
+  // every underlying transaction individually).
+  for (const [dayIso, dayRows] of rowsByDate) {
+    const amt = await convertAndSum(dayRows, currency);
+    const txDate = new Date(dayIso);
     const monthIso = txDate.toISOString().slice(0, 7);
 
     if (dailyBuckets.has(dayIso)) {

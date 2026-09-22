@@ -54,7 +54,7 @@ export function initFinancialAccountModel(sequelize: Sequelize): typeof Financia
       currency: { type: DataTypes.STRING(3), defaultValue: 'INR' },
       isActive: { type: DataTypes.BOOLEAN, defaultValue: true, field: 'is_active' },
     },
-    { sequelize, tableName: 'financial_accounts' }
+    { sequelize, tableName: 'financial_accounts', indexes: [{ fields: ['user_id'] }] }
   );
   return FinancialAccount;
 }

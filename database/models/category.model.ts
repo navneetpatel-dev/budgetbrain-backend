@@ -69,7 +69,7 @@ export function initCategoryModel(sequelize: Sequelize): typeof Category {
         field: 'sort_order',
       },
     },
-    { sequelize, tableName: 'categories' }
+    { sequelize, tableName: 'categories', indexes: [{ fields: ['user_id'] }] }
   );
   return Category;
 }

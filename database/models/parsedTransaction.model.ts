@@ -54,7 +54,11 @@ export function initParsedTransactionModel(sequelize: Sequelize): typeof ParsedT
       status: { type: DataTypes.ENUM('pending', 'confirmed', 'rejected'), defaultValue: 'pending' },
       transactionId: { type: DataTypes.UUID, allowNull: true, field: 'transaction_id' },
     },
-    { sequelize, tableName: 'parsed_transactions' }
+    {
+      sequelize,
+      tableName: 'parsed_transactions',
+      indexes: [{ fields: ['user_id'] }, { fields: ['transaction_id'] }],
+    }
   );
   return ParsedTransaction;
 }

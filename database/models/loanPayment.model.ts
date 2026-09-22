@@ -56,7 +56,11 @@ export function initLoanPaymentModel(sequelize: Sequelize): typeof LoanPayment {
         field: 'paid_at',
       },
     },
-    { sequelize, tableName: 'loan_payments' }
+    {
+      sequelize,
+      tableName: 'loan_payments',
+      indexes: [{ fields: ['loan_id'] }, { fields: ['user_id'] }],
+    }
   );
   return LoanPayment;
 }

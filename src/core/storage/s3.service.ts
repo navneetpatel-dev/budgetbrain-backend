@@ -84,3 +84,40 @@ export async function uploadFile(
 
   return { key, url, fileName: file.originalname, fileType: sniffed.mime, fileSize: file.size };
 }
+
+/**
+ * Uploads a server-generated buffer (report exports, etc.) — unlike uploadFile, this
+ * takes an already-known content type and file name instead of sniffing/validating a
+ * user-uploaded Multer file, since the buffer is produced by our own code, not a client.
+ */
+export async function uploadGeneratedReport(
+  buffer: Buffer,
+  fileName: string,
+  contentType: string,
+  folder = 'budgetbrain/reports'
+): Promise<{ key: string; url: string }> {
+  const key = `${folder}/${fileName}`;
+
+  if (usesS3()) {
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const client = await getS3Client();
+
+    await client.send(
+      new PutObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      })
+    );
+
+    const url = `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+    return { key, url };
+  }
+
+  ensureUploadDir();
+  const localPath = path.join(UPLOAD_DIR, path.basename(key));
+  fs.writeFileSync(localPath, buffer);
+  const url = `${env.APP_URL}/uploads/${path.basename(key)}`;
+  return { key, url };
+}

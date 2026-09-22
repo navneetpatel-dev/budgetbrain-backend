@@ -59,7 +59,11 @@ export function initGoalContributionModel(sequelize: Sequelize): typeof GoalCont
         field: 'contributed_at',
       },
     },
-    { sequelize, tableName: 'goal_contributions' }
+    {
+      sequelize,
+      tableName: 'goal_contributions',
+      indexes: [{ fields: ['goal_id'] }, { fields: ['user_id'] }],
+    }
   );
   return GoalContribution;
 }

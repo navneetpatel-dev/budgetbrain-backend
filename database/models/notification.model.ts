@@ -92,7 +92,11 @@ export function initNotificationModel(sequelize: Sequelize): typeof Notification
         field: 'sent_at',
       },
     },
-    { sequelize, tableName: 'notifications' }
+    {
+      sequelize,
+      tableName: 'notifications',
+      indexes: [{ fields: ['user_id'] }, { fields: ['user_id', 'sent_at'] }],
+    }
   );
   return Notification;
 }

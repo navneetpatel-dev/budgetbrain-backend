@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import path from 'path';
 import { env } from './shared/config/env';
 import { createErrorHandler } from '@core/http/errors';
@@ -20,6 +21,7 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+app.use(compression());
 app.use(cors(createCorsOptions(env.CORS_ORIGIN)));
 app.use(express.json({ limit: '10mb' }));
 app.use(createRequestContextMiddleware('admin'));

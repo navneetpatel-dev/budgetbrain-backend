@@ -70,7 +70,11 @@ export function initExpenseSplitParticipantModel(sequelize: Sequelize): typeof E
         field: 'settled_at',
       },
     },
-    { sequelize, tableName: 'expense_split_participants' }
+    {
+      sequelize,
+      tableName: 'expense_split_participants',
+      indexes: [{ fields: ['transaction_id'] }, { fields: ['group_id'] }, { fields: ['user_id'] }],
+    }
   );
   return ExpenseSplitParticipant;
 }

@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import { Op, UniqueConstraintError } from 'sequelize';
 import { sequelize, RecurringSeries, Transaction, Goal } from '@database/models';
 import type { RecurringCadence } from '@database/models';
 import { AppError } from '@shared/errors';
@@ -16,15 +16,34 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** How far back to look for an `isRecurring`-flagged expense — bills/subscriptions/EMIs
+ * repeat far more often than every 180 days, so anything older adds no detection signal
+ * and would otherwise grow this query's cost forever as a user's history grows. */
+const RECURRING_LOOKBACK_DAYS = 180;
+
 /**
  * Lightweight heuristic: any merchant the user has marked `isRecurring` on at least one expense
  * gets (or updates) a `source: 'detected'` series, using the most recent occurrence's amount.
  * Cadence defaults to monthly (the common case for bills/subscriptions/EMIs); the user can
  * correct it after the fact since detected series remain editable.
+ *
+ * Runs on every `listRecurringSeries` call (immediate feedback when a user flags an expense
+ * as recurring), so it must stay cheap: one bounded fetch + one batched existence check,
+ * not a per-merchant query — see the recurring_series_user_merchant_unique index/constraint
+ * this relies on for race-safety under concurrent requests.
  */
 export async function detectRecurringSeries(userId: string): Promise<void> {
+  const lookbackStart = new Date();
+  lookbackStart.setDate(lookbackStart.getDate() - RECURRING_LOOKBACK_DAYS);
+
   const rows = await Transaction.findAll({
-    where: { userId, type: 'expense', isRecurring: true, merchant: { [Op.ne]: null } },
+    where: {
+      userId,
+      type: 'expense',
+      isRecurring: true,
+      merchant: { [Op.ne]: null },
+      date: { [Op.gte]: lookbackStart },
+    },
     attributes: ['merchant', 'categoryId', 'amount', 'date'],
     order: [['date', 'DESC']],
     raw: true,
@@ -37,22 +56,40 @@ export async function detectRecurringSeries(userId: string): Promise<void> {
       latestByMerchant.set(merchant, row);
     }
   }
+  if (latestByMerchant.size === 0) return;
+
+  // One batched existence check instead of one findOne per merchant.
+  const existing = (await RecurringSeries.findAll({
+    where: { userId, merchant: { [Op.in]: [...latestByMerchant.keys()] } },
+    attributes: ['merchant'],
+    raw: true,
+  })) as unknown as Array<{ merchant: string }>;
+  const existingMerchants = new Set(existing.map((e) => e.merchant));
 
   for (const [merchant, row] of latestByMerchant) {
-    const existing = await RecurringSeries.findOne({ where: { userId, merchant } });
-    if (existing) continue; // don't clobber a series the user may have already edited
+    if (existingMerchants.has(merchant)) continue; // don't clobber a series the user may have already edited
 
     const r = row as unknown as { categoryId: string | null; amount: string; date: string };
-    await RecurringSeries.create({
-      userId,
-      merchant,
-      categoryId: r.categoryId,
-      amount: Number(r.amount),
-      cadence: 'monthly',
-      nextDueDate: new Date(shiftByCadence(String(r.date), 'monthly')),
-      lastChargedDate: new Date(r.date),
-      source: 'detected',
-    });
+    try {
+      // findOrCreate (not create): two concurrent requests for the same new merchant now
+      // race safely against the unique (user_id, merchant) constraint instead of both
+      // passing the findAll-based check above and double-inserting.
+      await RecurringSeries.findOrCreate({
+        where: { userId, merchant },
+        defaults: {
+          userId,
+          merchant,
+          categoryId: r.categoryId,
+          amount: Number(r.amount),
+          cadence: 'monthly',
+          nextDueDate: new Date(shiftByCadence(String(r.date), 'monthly')),
+          lastChargedDate: new Date(r.date),
+          source: 'detected',
+        },
+      });
+    } catch (err) {
+      if (!(err instanceof UniqueConstraintError)) throw err;
+    }
   }
 }
 

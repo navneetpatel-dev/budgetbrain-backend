@@ -58,7 +58,11 @@ export function initFamilyMemberModel(sequelize: Sequelize): typeof FamilyMember
         field: 'joined_at',
       },
     },
-    { sequelize, tableName: 'family_members' }
+    {
+      sequelize,
+      tableName: 'family_members',
+      indexes: [{ fields: ['group_id'] }, { fields: ['user_id'] }],
+    }
   );
   return FamilyMember;
 }

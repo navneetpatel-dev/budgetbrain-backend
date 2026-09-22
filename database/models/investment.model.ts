@@ -57,7 +57,7 @@ export function initInvestmentModel(sequelize: Sequelize): typeof Investment {
       currency: { type: DataTypes.STRING(3), defaultValue: 'INR' },
       purchaseDate: { type: DataTypes.DATEONLY, allowNull: false, field: 'purchase_date' },
     },
-    { sequelize, tableName: 'investments' }
+    { sequelize, tableName: 'investments', indexes: [{ fields: ['user_id'] }] }
   );
   return Investment;
 }

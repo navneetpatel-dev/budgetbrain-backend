@@ -46,7 +46,11 @@ export function initIncomeAllocationModel(sequelize: Sequelize): typeof IncomeAl
         allowNull: false,
       },
     },
-    { sequelize, tableName: 'income_allocations' }
+    {
+      sequelize,
+      tableName: 'income_allocations',
+      indexes: [{ fields: ['transaction_id'] }, { fields: ['financial_account_id'] }],
+    }
   );
   return IncomeAllocation;
 }

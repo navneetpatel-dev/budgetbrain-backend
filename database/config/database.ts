@@ -19,6 +19,16 @@ const sequelizeOptions = {
     underscored: true,
     timestamps: true,
   },
+  // Explicit pool config: this app runs as 3 separately-deployed processes
+  // (mobile/web/admin) sharing one Postgres instance, and Sequelize's implicit
+  // default (max:5, min:0) meant only ~15 connections total with no floor —
+  // tune via DB_POOL_* per environment, not by editing these numbers directly.
+  pool: {
+    max: dbEnv.DB_POOL_MAX,
+    min: dbEnv.DB_POOL_MIN,
+    acquire: dbEnv.DB_POOL_ACQUIRE_MS,
+    idle: dbEnv.DB_POOL_IDLE_MS,
+  },
   ...(usesRemoteDatabase()
     ? {
         dialectOptions: {

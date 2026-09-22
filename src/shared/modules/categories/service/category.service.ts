@@ -10,25 +10,44 @@ import { AppError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
+import { getOrSetCache, deleteCacheByPrefix } from '@core/cache/cache.service';
 import type { PaginationInput } from '@shared/types';
 import type { CreateCategoryInput, UpdateCategoryInput } from '../categories.types';
+
+const CATEGORIES_CACHE_TTL_SECONDS = 600;
+
+function categoriesCachePrefix(userId: string): string {
+  return `categories:${userId}:`;
+}
+
+async function invalidateCategoriesCache(userId: string): Promise<void> {
+  await deleteCacheByPrefix(categoriesCachePrefix(userId));
+}
 
 export async function listCategories(
   userId: string,
   filters: PaginationInput & { includeArchived?: boolean } = {}
 ) {
   const { page, limit, offset } = resolvePagination(filters.page, filters.limit, 100);
-  const where: Record<string, unknown> = { userId };
-  if (!filters.includeArchived) {
-    where.isArchived = false;
-  }
-  const { rows, count } = await Category.findAndCountAll({
-    where,
-    order: [['sortOrder', 'ASC']],
-    limit,
-    offset,
+  const scope = filters.includeArchived ? 'all' : 'active';
+  const cacheKey = `${categoriesCachePrefix(userId)}${scope}:${page}:${limit}`;
+
+  // Categories change rarely (create/update/archive/reorder/merge) but are read on nearly
+  // every expense/budget/income screen — cached with explicit invalidation on every write
+  // below, not left to the TTL alone.
+  return getOrSetCache(cacheKey, CATEGORIES_CACHE_TTL_SECONDS, async () => {
+    const where: Record<string, unknown> = { userId };
+    if (!filters.includeArchived) {
+      where.isArchived = false;
+    }
+    const { rows, count } = await Category.findAndCountAll({
+      where,
+      order: [['sortOrder', 'ASC']],
+      limit,
+      offset,
+    });
+    return paginatedResult('categories', rows, count, page, limit);
   });
-  return paginatedResult('categories', rows, count, page, limit);
 }
 
 export async function createCategory(userId: string, data: CreateCategoryInput) {
@@ -43,19 +62,22 @@ export async function createCategory(userId: string, data: CreateCategoryInput) 
     );
   }
 
-  return Category.create({
+  const category = await Category.create({
     userId,
     name: data.name,
     icon: data.icon ?? null,
     color: data.color ?? null,
     sortOrder: count,
   });
+  await invalidateCategoriesCache(userId);
+  return category;
 }
 
 export async function updateCategory(userId: string, id: string, data: UpdateCategoryInput) {
   const category = await Category.findOne({ where: { id, userId } });
   if (!category) throw new AppError(404, 'Category not found');
   await category.update(data);
+  await invalidateCategoriesCache(userId);
   return category;
 }
 
@@ -63,6 +85,7 @@ export async function archiveCategory(userId: string, id: string) {
   const category = await Category.findOne({ where: { id, userId } });
   if (!category) throw new AppError(404, 'Category not found');
   await category.update({ isArchived: true });
+  await invalidateCategoriesCache(userId);
   return category;
 }
 
@@ -70,6 +93,7 @@ export async function unarchiveCategory(userId: string, id: string) {
   const category = await Category.findOne({ where: { id, userId } });
   if (!category) throw new AppError(404, 'Category not found');
   await category.update({ isArchived: false });
+  await invalidateCategoriesCache(userId);
   return category;
 }
 
@@ -79,6 +103,7 @@ export async function reorderCategories(userId: string, orderedIds: string[]) {
       Category.update({ sortOrder: index }, { where: { id, userId } })
     )
   );
+  await invalidateCategoriesCache(userId);
   return listCategories(userId, { page: 1, limit: 100 });
 }
 
@@ -92,7 +117,7 @@ export async function mergeCategories(userId: string, fromCategoryId: string, to
     throw new AppError(400, 'Cannot merge a category into itself', 'CATEGORY_MERGE_SAME');
   }
 
-  return sequelize.transaction(async (t) => {
+  const toCategory = await sequelize.transaction(async (t) => {
     const fromCategory = await Category.findOne({
       where: { id: fromCategoryId, userId },
       transaction: t,
@@ -100,8 +125,8 @@ export async function mergeCategories(userId: string, fromCategoryId: string, to
     });
     if (!fromCategory) throw new AppError(404, 'Source category not found');
 
-    const toCategory = await Category.findOne({ where: { id: toCategoryId, userId }, transaction: t });
-    if (!toCategory) throw new AppError(404, 'Target category not found');
+    const toCategoryRow = await Category.findOne({ where: { id: toCategoryId, userId }, transaction: t });
+    if (!toCategoryRow) throw new AppError(404, 'Target category not found');
 
     const [[transactionsMoved], [budgetsMoved], [recurringMoved], [rulesMoved]] = await Promise.all([
       Transaction.update({ categoryId: toCategoryId }, { where: { userId, categoryId: fromCategoryId }, transaction: t }),
@@ -127,6 +152,11 @@ export async function mergeCategories(userId: string, fromCategoryId: string, to
       transaction: t,
     });
 
-    return toCategory;
+    return toCategoryRow;
   });
+
+  // After commit, not inside the transaction — a rollback must not invalidate a cache
+  // entry for a write that never actually happened.
+  await invalidateCategoriesCache(userId);
+  return toCategory;
 }

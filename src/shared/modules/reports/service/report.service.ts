@@ -3,8 +3,13 @@ import ExcelJS from 'exceljs';
 import { Transaction, Category, IncomeSource, Budget, User } from '@database/models';
 import { getNoSpendStreak } from '@shared/modules/expenses/service/expenses.service';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
-import { convertAmount, convertAndSum, roundMoney } from '@shared/currency/currency.engine';
+import { convertAndSum, getExchangeRate, roundMoney } from '@shared/currency/currency.engine';
+import { AppError } from '@shared/errors';
+import { reportQueue, type ReportJobData } from '@queue/queues';
+import { getSignedDownloadUrl } from '@core/storage/s3.service';
 import type { ReportFilters } from '../reports.types';
+
+export type ReportExportFormat = ReportJobData['format'];
 
 async function resolveUserCurrency(userId: string): Promise<string> {
   const user = await User.findByPk(userId, { attributes: ['currency'] });
@@ -250,22 +255,25 @@ export async function getMonthlyRecap(userId: string) {
 
   const transactions = await Transaction.findAll({
     where: { userId, type: 'expense', date: { [Op.gte]: startDate, [Op.lte]: endDate } },
+    attributes: ['id', 'merchant', 'amount', 'currency', 'categoryId'],
     include: [{ model: Category, as: 'category', attributes: ['name'] }],
   });
 
   const currency = await resolveUserCurrency(userId);
-  const convertedRows: Array<{
-    merchant: string | null;
-    categoryName: string;
-    amount: number;
-  }> = [];
-  for (const t of transactions) {
-    convertedRows.push({
-      merchant: t.merchant,
-      categoryName: (t as Transaction & { category?: Category }).category?.name ?? 'Uncategorized',
-      amount: await convertAmount(Number(t.amount), t.currency || currency, currency),
-    });
-  }
+  // One getExchangeRate call per distinct currency present, not one convertAmount call per
+  // row — the per-row converted amount is still needed here (topCategory/biggestExpense
+  // compare individual rows), so this can't collapse into a single convertAndSum total the
+  // way getTransactionsSummary's SQL aggregation does.
+  const currencies = new Set(transactions.map((t) => t.currency || currency));
+  const rateEntries = await Promise.all(
+    [...currencies].map(async (c) => [c, c === currency ? 1 : await getExchangeRate(c, currency)] as const)
+  );
+  const rateMap = new Map(rateEntries);
+  const convertedRows = transactions.map((t) => ({
+    merchant: t.merchant,
+    categoryName: (t as Transaction & { category?: Category }).category?.name ?? 'Uncategorized',
+    amount: roundMoney(Number(t.amount) * (rateMap.get(t.currency || currency) ?? 1)),
+  }));
 
   const totalSpent = roundMoney(convertedRows.reduce((sum, row) => sum + row.amount, 0));
 
@@ -289,4 +297,49 @@ export async function getMonthlyRecap(userId: string) {
   const noSpendStreak = await getNoSpendStreak(userId);
 
   return { periodStart: startDate, periodEnd: endDate, totalSpent, topCategory, biggestExpense, noSpendStreak };
+}
+
+/** Enqueues a report generation job on the BullMQ `report` queue (see @queue/workers/report.worker.ts,
+ * which does the actual generation + S3 upload) and returns the job id for polling via
+ * getReportJobStatus. Never generates synchronously on the request path. */
+export async function enqueueReportExport(
+  userId: string,
+  format: ReportExportFormat,
+  filters: ReportFilters
+): Promise<string> {
+  const job = await reportQueue.add(format, { userId, format, filters: filters as Record<string, unknown> });
+  if (!job.id) {
+    throw new AppError(500, 'Failed to enqueue report export', 'REPORT_ENQUEUE_FAILED');
+  }
+  return job.id;
+}
+
+export interface ReportExportStatus {
+  status: 'pending' | 'active' | 'completed' | 'failed';
+  downloadUrl?: string;
+  fileName?: string;
+}
+
+/** A fresh presigned URL is minted on every poll of a completed job — never cache the URL
+ * itself, since it expires in SIGNED_URL_EXPIRES_IN (15 min, see core/storage/s3.service.ts). */
+export async function getReportJobStatus(userId: string, jobId: string): Promise<ReportExportStatus> {
+  const job = await reportQueue.getJob(jobId);
+  // Never leak another user's job by a guessable id — treat a userId mismatch the same as "not found".
+  if (!job || job.data.userId !== userId) {
+    throw new AppError(404, 'Export job not found', 'REPORT_JOB_NOT_FOUND');
+  }
+
+  const state = await job.getState();
+  if (state === 'completed' && job.returnvalue) {
+    const { s3Key, fileName } = job.returnvalue;
+    const downloadUrl = await getSignedDownloadUrl(s3Key);
+    return { status: 'completed', downloadUrl, fileName };
+  }
+  if (state === 'failed') {
+    return { status: 'failed' };
+  }
+  if (state === 'active') {
+    return { status: 'active' };
+  }
+  return { status: 'pending' };
 }

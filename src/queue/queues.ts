@@ -23,8 +23,8 @@ function logConnectionErrors(queueName: string, queue: Queue): void {
 
 export interface EmailJobData {
   to: string;
-  kind: 'otp' | 'verify' | 'reset';
-  payload: { otp?: string; token?: string };
+  kind: 'otp' | 'verify' | 'reset' | 'family_invite';
+  payload: { otp?: string; token?: string; groupName?: string; inviterName?: string };
 }
 
 export const emailQueue = new Queue<EmailJobData>('email', {

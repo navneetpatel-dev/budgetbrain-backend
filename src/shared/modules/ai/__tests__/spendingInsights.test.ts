@@ -1,5 +1,40 @@
-import { describe, it, expect } from 'vitest';
-import { buildBudgetRecommendation } from '../service/ai.service';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { setupTestDb, createTestUser, createTestTransaction, createTestCategory } from '@testHelpers';
+import { convertAmount } from '@shared/currency/currency.engine';
+import { buildBudgetRecommendation, getSpendingInsights } from '../service/ai.service';
+
+describe('getSpendingInsights', () => {
+  beforeAll(async () => {
+    await setupTestDb();
+  });
+
+  it('sums a category correctly across multiple currencies, matching convertAmount exactly', async () => {
+    const user = await createTestUser({ currency: 'INR' });
+    const category = await createTestCategory(user.id, { name: 'Dining' });
+
+    await createTestTransaction(user.id, {
+      categoryId: category.id,
+      amount: 1000,
+      currency: 'INR',
+      date: new Date(),
+    });
+    await createTestTransaction(user.id, {
+      categoryId: category.id,
+      amount: 50,
+      currency: 'USD',
+      date: new Date(),
+    });
+
+    const result = await getSpendingInsights(user.id);
+
+    const usdInInr = await convertAmount(50, 'USD', 'INR');
+    const expectedTotal = Math.round((1000 + usdInInr) * 100) / 100;
+
+    const topCategoryInsight = result.structuredInsights.find((i) => i.kind === 'top_category');
+    expect(topCategoryInsight?.category).toBe('Dining');
+    expect(topCategoryInsight?.amount).toBe(expectedTotal);
+  });
+});
 
 describe('buildBudgetRecommendation', () => {
   it('recommends raising the budget when over 100% used', () => {

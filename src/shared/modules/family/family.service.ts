@@ -14,7 +14,7 @@ import { generateInviteCode, hashToken } from '@core/auth/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { createDefaultCategories, issueTokens } from '@shared/modules/auth/service/auth.service';
-import { sendFamilyInviteEmail } from '@core/mail/email.service';
+import { emailQueue } from '@queue/queues';
 import type { PaginationInput } from '@shared/types';
 import type { CreateSplitInput } from './family.types';
 
@@ -373,7 +373,11 @@ export async function createFamilyInvite(
     expiresAt: new Date(Date.now() + FAMILY_INVITE_EXPIRY_MS),
   });
 
-  await sendFamilyInviteEmail(invitedEmail, rawToken, group.name, inviter?.name ?? 'A family member');
+  await emailQueue.add('family_invite', {
+    to: invitedEmail,
+    kind: 'family_invite',
+    payload: { token: rawToken, groupName: group.name, inviterName: inviter?.name ?? 'A family member' },
+  });
 
   await writeAuditLog({
     action: AuditAction.FAMILY_INVITE_CREATE,

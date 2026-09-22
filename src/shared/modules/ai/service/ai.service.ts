@@ -4,6 +4,7 @@ import type { AiMessage } from '@database/models';
 import { AppError } from '@shared/errors';
 import { env } from '@config/env';
 import { Op } from 'sequelize';
+import { getOrSetCache } from '@core/cache/cache.service';
 import {
   AI_COACH_CONFIG,
   buildCoachSystemPrompt,
@@ -69,7 +70,15 @@ export function buildBudgetRecommendation(input: {
   return null;
 }
 
+const AI_INSIGHTS_CACHE_TTL_SECONDS = 300;
+
 export async function getSpendingInsights(userId: string) {
+  return getOrSetCache(`ai:spending-insights:${userId}`, AI_INSIGHTS_CACHE_TTL_SECONDS, () =>
+    computeSpendingInsights(userId)
+  );
+}
+
+async function computeSpendingInsights(userId: string) {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -115,21 +124,34 @@ export async function getSpendingInsights(userId: string) {
   const previous = await convertAndSum(lastMonthRows, currency);
   const changePercent = previous > 0 ? ((current - previous) / previous) * 100 : 0;
 
-  const byCategoryMap = new Map<string, { categoryId: string | null; total: number; category?: { name: string } }>();
+  // Group rows by category first, then one convertAndSum call per category — not one call
+  // per transaction row (convertAndSum is a batch helper; calling it with a 1-row array
+  // inside a loop defeats the point, same anti-pattern already fixed in
+  // expenses.service.ts's getCategoryBreakdown).
+  const rowsByCategory = new Map<
+    string,
+    { categoryId: string | null; rows: Array<{ amount: unknown; currency: string }>; category?: { name: string } }
+  >();
   for (const row of expenseRows) {
     const key = row.categoryId ?? 'uncategorized';
-    const converted = await convertAndSum([{ amount: row.amount, currency: row.currency }], currency);
-    const existing = byCategoryMap.get(key);
-    if (existing) existing.total += converted;
-    else {
-      byCategoryMap.set(key, {
+    const existing = rowsByCategory.get(key);
+    if (existing) {
+      existing.rows.push({ amount: row.amount, currency: row.currency });
+    } else {
+      rowsByCategory.set(key, {
         categoryId: row.categoryId,
-        total: converted,
+        rows: [{ amount: row.amount, currency: row.currency }],
         category: (row as Transaction & { category?: { name: string } }).category,
       });
     }
   }
-  const byCategory = [...byCategoryMap.values()];
+  const byCategory = await Promise.all(
+    [...rowsByCategory.values()].map(async (entry) => ({
+      categoryId: entry.categoryId,
+      total: await convertAndSum(entry.rows, currency),
+      category: entry.category,
+    }))
+  );
 
   const insights: string[] = [];
   const structuredInsights: StructuredInsight[] = [];
@@ -448,6 +470,12 @@ export async function streamChatWithCoach(
 }
 
 export async function detectAnomalies(userId: string) {
+  return getOrSetCache(`ai:anomalies:${userId}`, AI_INSIGHTS_CACHE_TTL_SECONDS, () =>
+    computeAnomalies(userId)
+  );
+}
+
+async function computeAnomalies(userId: string) {
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 

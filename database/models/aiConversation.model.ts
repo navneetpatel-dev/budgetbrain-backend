@@ -54,7 +54,7 @@ export function initAiConversationModel(sequelize: Sequelize): typeof AiConversa
         defaultValue: [],
       },
     },
-    { sequelize, tableName: 'ai_conversations' }
+    { sequelize, tableName: 'ai_conversations', indexes: [{ fields: ['user_id'] }] }
   );
   return AiConversation;
 }

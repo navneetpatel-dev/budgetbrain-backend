@@ -73,6 +73,7 @@ export function initDeviceModel(sequelize: Sequelize): typeof Device {
           fields: ['push_token'],
           where: { push_token: { [Op.ne]: null } },
         },
+        { fields: ['user_id'] },
       ],
     }
   );

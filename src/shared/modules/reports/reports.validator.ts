@@ -11,3 +11,10 @@ export const reportQuerySchema = dateRangeObjectSchema
   .superRefine(refineDateRangeOrder);
 
 export type ReportQuerySchema = typeof reportQuerySchema;
+
+export const exportAsyncBodySchema = z.object({
+  format: z.enum(['csv', 'excel', 'pdf']),
+  filters: reportQuerySchema.optional(),
+});
+
+export type ExportAsyncBodySchema = typeof exportAsyncBodySchema;

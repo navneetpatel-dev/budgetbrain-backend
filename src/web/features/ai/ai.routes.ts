@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '@core/http/errors';
 import { authenticate } from '@core/auth/authenticate';
 import { validateBody, validateParams } from '@core/middleware/validate';
+import { aiChatRateLimiter } from '@core/middleware/rateLimit';
 import { uuidParamSchema } from '../../shared/validation/index';
 import * as controller from './ai.controller';
 import { chatSchema } from '@shared/modules/ai/validator/ai.validation';
@@ -17,7 +18,12 @@ router.get(
   validateParams(uuidParamSchema),
   asyncHandler(controller.getConversation)
 );
-router.post('/chat', validateBody(chatSchema), asyncHandler(controller.chat));
-router.post('/chat/stream', validateBody(chatSchema), asyncHandler(controller.chatStream));
+router.post('/chat', aiChatRateLimiter, validateBody(chatSchema), asyncHandler(controller.chat));
+router.post(
+  '/chat/stream',
+  aiChatRateLimiter,
+  validateBody(chatSchema),
+  asyncHandler(controller.chatStream)
+);
 
 export default router;

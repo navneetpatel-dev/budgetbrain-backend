@@ -10,6 +10,7 @@ import {
   sequelize,
 } from '@database/models';
 import { convertAndSum } from '@shared/currency/currency.engine';
+import { deleteCache } from '@core/cache/cache.service';
 import { AppError } from '@core/http/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@core/audit/audit.service';
 import type { TicketStatus } from '@database/models';
@@ -401,9 +402,11 @@ export async function updateUser(
       }
     }
 
-    return User.findByPk(id, {
+    const updated = await User.findByPk(id, {
       attributes: { exclude: ['passwordHash'] },
       transaction: t,
     });
+    void deleteCache(`user:session:${id}`);
+    return updated;
   });
 }

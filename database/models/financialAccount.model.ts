@@ -61,5 +61,7 @@ export function initFinancialAccountModel(sequelize: Sequelize): typeof Financia
 
 export function associateFinancialAccount(): void {
   const { User } = require('./user.model') as typeof import('./user.model');
+  const { Transaction } = require('./transaction.model') as typeof import('./transaction.model');
   FinancialAccount.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  FinancialAccount.hasMany(Transaction, { foreignKey: 'financialAccountId', as: 'transactions' });
 }

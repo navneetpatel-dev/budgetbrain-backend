@@ -18,11 +18,14 @@ import {
   hashToken,
   verifyRefreshToken,
   generateOtp,
+  generateMfaToken,
+  verifyMfaToken,
 } from '@core/auth/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit';
 import { AppError } from '@shared/errors';
 import { emailQueue } from '@queue/queues';
 import { verifyGoogleIdToken, verifyAppleIdToken, type GoogleTokenInput } from './socialAuth.service';
+import { verifyTotpCode } from './totp.service';
 
 function sanitizeUser(user: User) {
   const { passwordHash, ...safe } = user.toJSON();
@@ -196,6 +199,11 @@ export async function login(email: string, password: string, deviceId?: string) 
     throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
 
+  if (user.totpEnabled) {
+    const mfaToken = generateMfaToken(user.id);
+    return { mfaRequired: true, mfaToken };
+  }
+
   const tokens = await sequelize.transaction(async (t) => {
     const result = await issueTokens(user, deviceId, t);
     await writeAuditLog({
@@ -210,6 +218,38 @@ export async function login(email: string, password: string, deviceId?: string) 
   });
 
   return tokens;
+}
+
+export async function loginMfa(mfaToken: string, code: string, deviceId?: string) {
+  let userId: string;
+  try {
+    ({ userId } = verifyMfaToken(mfaToken));
+  } catch {
+    throw new AppError(401, 'Invalid or expired MFA session', 'INVALID_MFA_TOKEN');
+  }
+
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+  if (user.isSuspended) {
+    throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
+  }
+
+  await verifyTotpCode(user.id, code);
+
+  return sequelize.transaction(async (t) => {
+    const result = await issueTokens(user, deviceId, t);
+    await writeAuditLog({
+      action: AuditAction.AUTH_LOGIN,
+      resource: AuditResource.USER,
+      resourceId: user.id,
+      actorUserId: user.id,
+      metadata: { deviceId: deviceId ?? null, method: 'password+totp' },
+      transaction: t,
+    });
+    return result;
+  });
 }
 
 export async function refresh(refreshToken: string) {
@@ -308,6 +348,13 @@ export async function requestOtp(email: string) {
   if (user.isSuspended) {
     throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
   }
+  if (user.totpEnabled) {
+    throw new AppError(
+      403,
+      'This account requires password + authenticator code to sign in.',
+      'TOTP_REQUIRED'
+    );
+  }
 
   const otp = generateOtp();
   await sequelize.transaction(async (t) => {
@@ -341,6 +388,13 @@ export async function verifyOtp(email: string, otp: string, deviceId?: string) {
     }
     if (user.isSuspended) {
       throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
+    }
+    if (user.totpEnabled) {
+      throw new AppError(
+        403,
+        'This account requires password + authenticator code to sign in.',
+        'TOTP_REQUIRED'
+      );
     }
 
     const tokens = await issueTokens(user, deviceId, t);

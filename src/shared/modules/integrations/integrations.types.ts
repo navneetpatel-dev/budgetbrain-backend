@@ -10,4 +10,5 @@ export interface ParsedData {
   merchant: string | null;
   date: Date | null;
   confidence: number;
+  type?: 'expense' | 'income';
 }

@@ -6,6 +6,8 @@ import { AppError } from '@shared/errors';
 import { hasPermission, Permissions } from '@core/permissions/permissions';
 import { verifyAccessToken } from './jwt';
 
+import { getCache, setCache } from '@core/cache/cache.service';
+
 export async function resolveAuthenticatedUser(req: AuthRequest): Promise<User> {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -20,7 +22,19 @@ export async function resolveAuthenticatedUser(req: AuthRequest): Promise<User> 
     throw new AppError(401, 'Invalid or expired token', 'UNAUTHORIZED');
   }
 
-  const user = await User.findByPk(payload.userId);
+  const cacheKey = `user:session:${payload.userId}`;
+  const cached = await getCache<any>(cacheKey);
+  let user: User | null = null;
+
+  if (cached) {
+    user = User.build(cached, { isNewRecord: false });
+  } else {
+    user = await User.findByPk(payload.userId);
+    if (user) {
+      void setCache(cacheKey, user.toJSON(), 300);
+    }
+  }
+
   if (!user) {
     throw new AppError(401, 'User not found', 'UNAUTHORIZED');
   }

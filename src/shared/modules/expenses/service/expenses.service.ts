@@ -16,7 +16,8 @@ import { upsertMerchantCategoryRule } from '@shared/modules/categories/service/m
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
 import { resolvePagination, paginatedResult } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions/index';
-import { convertAndSum } from '@shared/currency/currency.engine';
+import { convertAndSum, getExchangeRate } from '@shared/currency/currency.engine';
+import { deleteFile } from '@core/storage/s3.service';
 import type { PaginationInput } from '@shared/types';
 import type {
   CreateTransactionInput,
@@ -134,7 +135,13 @@ function buildTransactionWhere(userId: string, filters: TransactionFilters): Rec
   }
 
   if (filters.search) {
-    where.searchVector = { [Op.iLike]: `%${filters.search}%` };
+    const rawSearch = filters.search.trim();
+    if (rawSearch) {
+      const escaped = sequelize.escape(rawSearch);
+      where[Op.and as unknown as string] = sequelize.literal(
+        `("Transaction"."fts" @@ websearch_to_tsquery('english', ${escaped}) OR "Transaction"."search_vector" ILIKE '%${rawSearch.replace(/'/g, "''")}%')`
+      );
+    }
   }
 
   return where;
@@ -227,6 +234,20 @@ export async function createTransaction(
   if (!user) throw new AppError(404, 'User not found');
 
   const run = async (t: DbTransaction) => {
+    if (data.financialAccountId) {
+      const account = await FinancialAccount.findOne({
+        where: { id: data.financialAccountId, userId },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!account) throw new AppError(404, 'Financial account not found');
+      const delta = data.type === 'income' ? Number(data.amount) : -Number(data.amount);
+      await account.update(
+        { balance: Number(account.balance) + delta },
+        { transaction: t }
+      );
+    }
+
     const transaction = await Transaction.create(
       {
         ...((data as any).id ? { id: (data as any).id } : {}),
@@ -237,6 +258,7 @@ export async function createTransaction(
         currency: data.currency ?? user.currency,
         categoryId: data.categoryId ?? null,
         incomeSourceId: data.incomeSourceId ?? null,
+        financialAccountId: data.financialAccountId ?? null,
         notes: data.notes ?? null,
         merchant: data.merchant ?? null,
         date: new Date(data.date),
@@ -260,7 +282,10 @@ export async function createTransaction(
     }
 
     const result = await Transaction.findByPk(transaction.id, {
-      include: [{ model: Category, as: 'category' }],
+      include: [
+        { model: Category, as: 'category' },
+        { model: FinancialAccount, as: 'financialAccount' },
+      ],
       transaction: t,
     });
 
@@ -322,6 +347,7 @@ export async function updateTransaction(
     if (data.merchant !== undefined) updateData.merchant = data.merchant;
     if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod;
     if (data.incomeSourceId !== undefined) updateData.incomeSourceId = data.incomeSourceId;
+    if (data.financialAccountId !== undefined) updateData.financialAccountId = data.financialAccountId;
     if (data.date) updateData.date = new Date(data.date);
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.taxWithheld !== undefined) {
@@ -332,6 +358,36 @@ export async function updateTransaction(
       // Amount changed without an explicit taxWithheld update — keep netAmount consistent
       // with the existing withholding rather than leaving it stale.
       updateData.netAmount = Number(data.amount) - Number(transaction.taxWithheld);
+    }
+
+    // Balance adjustment if account or amount changed
+    const oldAccountId = transaction.financialAccountId;
+    const newAccountId = data.financialAccountId !== undefined ? data.financialAccountId : oldAccountId;
+    const oldAmount = Number(transaction.amount);
+    const newAmount = data.amount !== undefined ? Number(data.amount) : oldAmount;
+    const isIncome = transaction.type === 'income';
+
+    if (oldAccountId && (oldAccountId !== newAccountId || oldAmount !== newAmount)) {
+      const oldAccount = await FinancialAccount.findOne({
+        where: { id: oldAccountId, userId },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (oldAccount) {
+        const revertDelta = isIncome ? -oldAmount : oldAmount;
+        await oldAccount.update({ balance: Number(oldAccount.balance) + revertDelta }, { transaction: t });
+      }
+    }
+
+    if (newAccountId && (oldAccountId !== newAccountId || oldAmount !== newAmount)) {
+      const newAccount = await FinancialAccount.findOne({
+        where: { id: newAccountId, userId },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!newAccount) throw new AppError(404, 'Financial account not found');
+      const applyDelta = isIncome ? newAmount : -newAmount;
+      await newAccount.update({ balance: Number(newAccount.balance) + applyDelta }, { transaction: t });
     }
 
     await transaction.update(
@@ -383,6 +439,30 @@ export async function deleteTransaction(userId: string, id: string) {
       merchant: transaction.merchant,
     };
 
+    if (transaction.financialAccountId) {
+      const account = await FinancialAccount.findOne({
+        where: { id: transaction.financialAccountId, userId },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (account) {
+        const revertDelta = transaction.type === 'income' ? -Number(transaction.amount) : Number(transaction.amount);
+        await account.update(
+          { balance: Number(account.balance) + revertDelta },
+          { transaction: t }
+        );
+      }
+    }
+
+    const attachments = await TransactionAttachment.findAll({
+      where: { transactionId: id },
+      transaction: t,
+    });
+    for (const att of attachments) {
+      if (att.s3Key) {
+        await deleteFile(att.s3Key);
+      }
+    }
     await TransactionAttachment.destroy({ where: { transactionId: id }, transaction: t });
     await transaction.destroy({ transaction: t });
 
@@ -627,12 +707,20 @@ export async function getSpendingTrends(userId: string): Promise<SpendingTrends>
     monthlyPoints.push({ date: iso, label, amount: 0 });
   }
 
-  // Populate buckets from the per-day grouped totals (one convertAndSum call per day
-  // that has spend, not one per raw transaction — the accumulation below is additive,
-  // so summing a day's pre-converted total into weekly/monthly is identical to summing
-  // every underlying transaction individually).
+  // Pre-fetch distinct exchange rates upfront in parallel instead of awaiting in a loop
+  const distinctCurrencies = Array.from(new Set(rows.map((r) => r.currency || currency)));
+  const rateEntries = await Promise.all(
+    distinctCurrencies.map(async (c) => [c.toUpperCase(), await getExchangeRate(c, currency)] as const)
+  );
+  const rateMap = new Map<string, number>(rateEntries);
+
   for (const [dayIso, dayRows] of rowsByDate) {
-    const amt = await convertAndSum(dayRows, currency);
+    let amt = 0;
+    for (const r of dayRows) {
+      const fromCurr = (r.currency || currency).toUpperCase();
+      const rate = rateMap.get(fromCurr) ?? 1.0;
+      amt += (Number(r.amount) || 0) * rate;
+    }
     const txDate = new Date(dayIso);
     const monthIso = txDate.toISOString().slice(0, 7);
 

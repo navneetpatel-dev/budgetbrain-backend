@@ -1,6 +1,6 @@
 import app from './app';
 import { initModels } from '@database/models';
-import { prepareDatabase, listenAndLog } from '../shared/startup';
+import { prepareDatabase, listenAndLog, setupGracefulShutdown } from '../shared/startup';
 import { env } from './shared/config/env';
 import { initSentry } from '@config/sentry';
 import { validateProductionConfig } from '@config/production';
@@ -16,11 +16,13 @@ async function bootstrap() {
     initModels();
     await prepareDatabase(log);
 
-    listenAndLog(app, log, 'admin', {
+    const server = listenAndLog(app, log, 'admin', {
       port: env.PORT,
       apiVersion: env.API_VERSION,
       environment: env.NODE_ENV,
     });
+
+    setupGracefulShutdown(server, log, 'admin');
   } catch (error) {
     log.error('Failed to start server', {
       error: error instanceof Error ? error.message : String(error),

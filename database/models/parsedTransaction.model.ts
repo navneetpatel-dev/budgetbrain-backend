@@ -6,6 +6,7 @@ export interface ParsedTransactionAttributes {
   id: string;
   userId: string;
   source: ParseSource;
+  type?: 'expense' | 'income';
   rawContent: string;
   parsedAmount: number | null;
   parsedMerchant: string | null;
@@ -19,7 +20,7 @@ export interface ParsedTransactionAttributes {
 
 export type ParsedTransactionCreationAttributes = Optional<
   ParsedTransactionAttributes,
-  'id' | 'parsedAmount' | 'parsedMerchant' | 'parsedDate' | 'transactionId' | 'status'
+  'id' | 'type' | 'parsedAmount' | 'parsedMerchant' | 'parsedDate' | 'transactionId' | 'status'
 >;
 
 export class ParsedTransaction
@@ -29,6 +30,7 @@ export class ParsedTransaction
   declare id: string;
   declare userId: string;
   declare source: ParseSource;
+  declare type: 'expense' | 'income';
   declare rawContent: string;
   declare parsedAmount: number | null;
   declare parsedMerchant: string | null;
@@ -46,6 +48,7 @@ export function initParsedTransactionModel(sequelize: Sequelize): typeof ParsedT
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
       userId: { type: DataTypes.UUID, allowNull: false, field: 'user_id' },
       source: { type: DataTypes.ENUM('sms', 'email', 'csv'), allowNull: false },
+      type: { type: DataTypes.STRING(32), defaultValue: 'expense', allowNull: false },
       rawContent: { type: DataTypes.TEXT, allowNull: false, field: 'raw_content' },
       parsedAmount: { type: DataTypes.DECIMAL(15, 2), allowNull: true, field: 'parsed_amount' },
       parsedMerchant: { type: DataTypes.STRING(255), allowNull: true, field: 'parsed_merchant' },

@@ -1,8 +1,8 @@
-import { FinancialAccount, Investment, User } from '@database/models';
+import { FinancialAccount, Investment, Loan, User } from '@database/models';
 import { getExchangeRate, roundMoney } from '@shared/currency/currency.engine';
 
 export async function getNetWorthDashboard(userId: string) {
-  const [user, accounts, investments] = await Promise.all([
+  const [user, accounts, investments, loans] = await Promise.all([
     User.findByPk(userId, { attributes: ['currency'] }),
     FinancialAccount.findAll({
       where: { userId, isActive: true },
@@ -12,17 +12,18 @@ export async function getNetWorthDashboard(userId: string) {
       where: { userId },
       attributes: ['id', 'name', 'type', 'quantity', 'currentPrice', 'purchasePrice', 'currency'],
     }),
+    Loan.findAll({
+      where: { userId, closed: false },
+      attributes: ['id', 'name', 'type', 'principal', 'remainingBalance', 'currency', 'closed'],
+    }),
   ]);
 
-  const targetCurrency = user?.currency ?? accounts[0]?.currency ?? investments[0]?.currency ?? 'INR';
+  const targetCurrency = user?.currency ?? accounts[0]?.currency ?? investments[0]?.currency ?? loans[0]?.currency ?? 'INR';
 
-  // One getExchangeRate call per distinct currency present, not one convertAmount call per
-  // account/investment row — accounts/investments are unbounded per user and the raw rows
-  // are returned as-is below (both web and mobile read fields off them directly), so this
-  // can't collapse into a single SQL-side sum the way expenses.service.ts's fixes did.
   const currencies = new Set<string>([
     ...accounts.map((a) => a.currency ?? 'INR'),
     ...investments.map((i) => i.currency ?? 'INR'),
+    ...loans.map((l) => l.currency ?? 'INR'),
   ]);
   const rateEntries = await Promise.all(
     [...currencies].map(
@@ -36,6 +37,7 @@ export async function getNetWorthDashboard(userId: string) {
   let totalLiabilities = 0;
   let bankBalance = 0;
   let creditCardDebt = 0;
+  let loanDebt = 0;
   let investmentValue = 0;
 
   for (const account of accounts) {
@@ -59,6 +61,13 @@ export async function getNetWorthDashboard(userId: string) {
     totalAssets += convertedValue;
   }
 
+  for (const loan of loans) {
+    const rawBalance = Number(loan.remainingBalance);
+    const converted = roundMoney(rawBalance * rateFor(loan.currency));
+    loanDebt += converted;
+    totalLiabilities += converted;
+  }
+
   const netWorth = roundMoney(totalAssets - totalLiabilities);
 
   return {
@@ -68,6 +77,7 @@ export async function getNetWorthDashboard(userId: string) {
       totalLiabilities: roundMoney(totalLiabilities),
       bankBalance: roundMoney(bankBalance),
       creditCardDebt: roundMoney(creditCardDebt),
+      loanDebt: roundMoney(loanDebt),
       investmentValue: roundMoney(investmentValue),
       currency: targetCurrency,
     },
@@ -80,6 +90,7 @@ export async function getNetWorthDashboard(userId: string) {
           Number(inv.quantity) * Number(inv.purchasePrice)
       ),
     })),
+    loans,
   };
 }
 

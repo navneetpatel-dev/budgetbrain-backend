@@ -1,283 +1,48 @@
-import { randomBytes } from 'crypto';
-import { Op, Transaction as DbTransaction } from 'sequelize';
-import {
-  User,
-  RefreshToken,
-  VerificationToken,
-  TokenType,
-  sequelize,
-} from '@database/models';
-import {
-  hashPassword,
-  comparePassword,
-  generateAccessToken,
-  generateRefreshToken,
-  hashToken,
-  verifyRefreshToken,
-  generateOtp,
-  generateMfaToken,
-  verifyMfaToken,
-} from '@core/auth/jwt';
-import { writeAuditLog, AuditAction, AuditResource } from '@core/audit/audit.service';
 import { AppError } from '@core/http/errors';
-import { emailQueue } from '@queue/queues';
-import {
-  verifyGoogleIdToken,
-  verifyAppleIdToken,
-  type GoogleTokenInput,
-} from '@shared/modules/auth/service/socialAuth.service';
-import { verifyTotpCode } from '@shared/modules/auth/service/totp.service';
 import { hasPermission, Permissions } from '@core/permissions/permissions';
+import { User } from '@database/models';
+import * as sharedAuth from '@shared/modules/auth/service/auth.service';
+import type { GoogleTokenInput } from '@shared/modules/auth/service/socialAuth.service';
 
-function assertAdminUser(user: User): void {
-  if (!hasPermission(user.role, Permissions.ADMIN_ACCESS)) {
+function assertAdminRole(role: string): void {
+  if (!hasPermission(role, Permissions.ADMIN_ACCESS)) {
     throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
   }
-}
-
-function sanitizeUser(user: User) {
-  const { passwordHash, ...safe } = user.toJSON();
-  return safe;
-}
-
-async function issueTokens(user: User, deviceId?: string, transaction?: DbTransaction) {
-  assertAdminUser(user);
-  const payload = { userId: user.id, email: user.email, role: user.role };
-  const accessToken = generateAccessToken(payload);
-  const refreshToken = generateRefreshToken(payload);
-
-  await RefreshToken.create(
-    {
-      userId: user.id,
-      tokenHash: hashToken(refreshToken),
-      deviceId: deviceId ?? null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    },
-    { transaction }
-  );
-
-  await user.update({ lastLoginAt: new Date() }, { transaction });
-
-  return { accessToken, refreshToken, user: sanitizeUser(user) };
-}
-
-async function invalidateTokens(
-  email: string,
-  type: TokenType,
-  transaction?: DbTransaction
-): Promise<void> {
-  await VerificationToken.update(
-    { usedAt: new Date() },
-    { where: { email, type, usedAt: null }, transaction }
-  );
-}
-
-async function storeToken(
-  email: string,
-  type: TokenType,
-  token: string,
-  userId: string | null,
-  expiresMs: number,
-  transaction?: DbTransaction
-): Promise<void> {
-  await invalidateTokens(email, type, transaction);
-  await VerificationToken.create(
-    {
-      userId,
-      email,
-      token,
-      type,
-      expiresAt: new Date(Date.now() + expiresMs),
-    },
-    { transaction }
-  );
-}
-
-async function consumeToken(
-  token: string,
-  type: TokenType,
-  transaction?: DbTransaction
-): Promise<VerificationToken> {
-  const stored = await VerificationToken.findOne({
-    where: {
-      token,
-      type,
-      usedAt: null,
-      expiresAt: { [Op.gt]: new Date() },
-    },
-    transaction,
-    lock: transaction ? transaction.LOCK.UPDATE : undefined,
-  });
-
-  if (!stored) {
-    throw new AppError(401, 'Invalid or expired token', 'INVALID_TOKEN');
-  }
-
-  await stored.update({ usedAt: new Date() }, { transaction });
-  return stored;
 }
 
 export async function register(_email: string, _password: string, _name?: string): Promise<never> {
   throw new AppError(
     403,
-    'Admin accounts are invite-only and cannot be self-registered',
+    'Admin registration is disabled. Contact your administrator.',
     'ADMIN_REGISTER_DISABLED'
   );
 }
 
 export async function login(email: string, password: string, deviceId?: string) {
-  const user = await User.findOne({ where: { email } });
-  if (!user || !user.passwordHash) {
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN_FAILED,
-      resource: AuditResource.AUTH,
-      outcome: 'failure',
-      severity: 'warning',
-      metadata: { email, reason: 'invalid_credentials' },
-    });
-    throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
+  const result = await sharedAuth.login(email, password, deviceId);
+  if ('user' in result && result.user) {
+    assertAdminRole(result.user.role);
   }
-
-  const valid = await comparePassword(password, user.passwordHash);
-  if (!valid) {
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN_FAILED,
-      resource: AuditResource.AUTH,
-      actorUserId: user.id,
-      outcome: 'failure',
-      severity: 'warning',
-      metadata: { email, reason: 'invalid_password' },
-    });
-    throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
-  }
-
-  if (user.isSuspended) {
-    throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
-  }
-
-  assertAdminUser(user);
-
-  if (user.totpEnabled) {
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      metadata: { deviceId: deviceId ?? null, step: 'password_ok_awaiting_totp' },
-    });
-    return { mfaRequired: true as const, mfaToken: generateMfaToken(user.id) };
-  }
-
-  const tokens = await sequelize.transaction(async (t) => {
-    const result = await issueTokens(user, deviceId, t);
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      metadata: { deviceId: deviceId ?? null },
-      transaction: t,
-    });
-    return result;
-  });
-
-  return tokens;
+  return result;
 }
 
-/** Completes login for a TOTP-enabled admin — the only path that issues real tokens for them. */
 export async function loginMfa(mfaToken: string, code: string, deviceId?: string) {
-  let userId: string;
-  try {
-    ({ userId } = verifyMfaToken(mfaToken));
-  } catch {
-    throw new AppError(401, 'Invalid or expired MFA session', 'INVALID_MFA_TOKEN');
-  }
-
-  const user = await User.findByPk(userId);
-  if (!user) {
-    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
-  }
-  if (user.isSuspended) {
-    throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
-  }
-
-  assertAdminUser(user);
-
-  await verifyTotpCode(user.id, code);
-
-  return sequelize.transaction(async (t) => {
-    const result = await issueTokens(user, deviceId, t);
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      metadata: { deviceId: deviceId ?? null, method: 'password+totp' },
-      transaction: t,
-    });
-    return result;
-  });
+  const result = await sharedAuth.loginMfa(mfaToken, code, deviceId);
+  assertAdminRole(result.user.role);
+  return result;
 }
 
-export async function refresh(refreshToken: string) {
-  const payload = verifyRefreshToken(refreshToken);
-  const tokenHash = hashToken(refreshToken);
-
-  return sequelize.transaction(async (t) => {
-    const stored = await RefreshToken.findOne({
-      where: {
-        userId: payload.userId,
-        tokenHash,
-        revokedAt: null,
-        expiresAt: { [Op.gt]: new Date() },
-      },
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-
-    if (!stored) {
-      throw new AppError(401, 'Invalid refresh token', 'INVALID_REFRESH_TOKEN');
-    }
-
-    await stored.update({ revokedAt: new Date() }, { transaction: t });
-
-    const user = await User.findByPk(payload.userId, { transaction: t });
-    if (!user) {
-      throw new AppError(401, 'User not found', 'UNAUTHORIZED');
-    }
-
-    if (user.isSuspended) {
-      throw new AppError(403, 'Account suspended', 'ACCOUNT_SUSPENDED');
-    }
-
-    assertAdminUser(user);
-
-    const tokens = await issueTokens(user, stored.deviceId ?? undefined, t);
-
-    await writeAuditLog({
-      action: AuditAction.AUTH_REFRESH,
-      resource: AuditResource.AUTH,
-      actorUserId: user.id,
-      transaction: t,
-    });
-
-    return tokens;
-  });
+export async function refresh(token: string) {
+  const result = await sharedAuth.refresh(token);
+  if ('user' in result && result.user) {
+    assertAdminRole(result.user.role);
+  }
+  return result;
 }
+export const refreshTokens = refresh;
 
 export async function logout(refreshToken: string) {
-  const tokenHash = hashToken(refreshToken);
-  const [count] = await RefreshToken.update(
-    { revokedAt: new Date() },
-    { where: { tokenHash, revokedAt: null } }
-  );
-
-  if (count > 0) {
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGOUT,
-      resource: AuditResource.AUTH,
-    });
-  }
+  return sharedAuth.logout(refreshToken);
 }
 
 export async function requestOtp(email: string) {
@@ -286,192 +51,47 @@ export async function requestOtp(email: string) {
     return;
   }
   if (user.totpEnabled) {
-    // Passwordless OTP-email login is a password *alternative* — once an account has
-    // TOTP enabled it must go through password+authenticator-code, otherwise OTP-email
-    // becomes a silent bypass of the 2FA this account explicitly opted into.
     throw new AppError(
       403,
       'This account requires password + authenticator code to sign in.',
       'TOTP_REQUIRED'
     );
   }
-
-  const otp = generateOtp();
-  await sequelize.transaction(async (t) => {
-    await storeToken(email, 'otp', otp, user.id, 10 * 60 * 1000, t);
-  });
-  await emailQueue.add('otp', { to: email, kind: 'otp', payload: { otp } });
+  return sharedAuth.requestOtp(email);
 }
 
 export async function verifyOtp(email: string, otp: string, deviceId?: string) {
-  return sequelize.transaction(async (t) => {
-    const stored = await VerificationToken.findOne({
-      where: {
-        email,
-        token: otp,
-        type: 'otp',
-        usedAt: null,
-        expiresAt: { [Op.gt]: new Date() },
-      },
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    });
-
-    if (!stored) {
-      throw new AppError(401, 'Invalid or expired OTP', 'INVALID_OTP');
-    }
-
-    await stored.update({ usedAt: new Date() }, { transaction: t });
-    const user = await User.findOne({ where: { email }, transaction: t });
-    if (!user) {
-      throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
-    }
-    if (user.totpEnabled) {
-      // Defense in depth: reject even an already-issued OTP if TOTP was enabled after
-      // it was requested but before it was used.
-      throw new AppError(
-        403,
-        'This account requires password + authenticator code to sign in.',
-        'TOTP_REQUIRED'
-      );
-    }
-
-    const tokens = await issueTokens(user, deviceId, t);
-    await writeAuditLog({
-      action: AuditAction.AUTH_LOGIN,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      metadata: { method: 'otp' },
-      transaction: t,
-    });
-    return tokens;
-  });
+  const result = await sharedAuth.verifyOtp(email, otp, deviceId);
+  if ('user' in result && result.user) {
+    assertAdminRole(result.user.role);
+  }
+  return result;
 }
 
 export async function forgotPassword(email: string) {
   const user = await User.findOne({ where: { email } });
-  if (!user) return;
-
-  // Same reasoning as register()'s verifyToken — an opaque random token, not a JWT.
-  const token = randomBytes(32).toString('hex');
-  await sequelize.transaction(async (t) => {
-    await storeToken(email, 'password_reset', token, user.id, 60 * 60 * 1000, t);
-    await writeAuditLog({
-      action: AuditAction.AUTH_PASSWORD_RESET_REQUEST,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      transaction: t,
-    });
-  });
-  await emailQueue.add('reset', { to: email, kind: 'reset', payload: { token } });
+  if (!user || !hasPermission(user.role, Permissions.ADMIN_ACCESS)) {
+    return;
+  }
+  return sharedAuth.forgotPassword(email);
 }
 
 export async function resetPassword(token: string, newPassword: string) {
-  await sequelize.transaction(async (t) => {
-    const stored = await consumeToken(token, 'password_reset', t);
-    const user = stored.userId ? await User.findByPk(stored.userId, { transaction: t }) : null;
-    if (!user) {
-      throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
-    }
-
-    await user.update({ passwordHash: await hashPassword(newPassword) }, { transaction: t });
-
-    await RefreshToken.update(
-      { revokedAt: new Date() },
-      { where: { userId: user.id, revokedAt: null }, transaction: t }
-    );
-
-    await writeAuditLog({
-      action: AuditAction.AUTH_PASSWORD_RESET,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      severity: 'warning',
-      transaction: t,
-    });
-  });
+  return sharedAuth.resetPassword(token, newPassword);
 }
 
-export async function verifyEmail(token: string) {
-  return sequelize.transaction(async (t) => {
-    const stored = await consumeToken(token, 'email_verify', t);
-    const user = stored.userId ? await User.findByPk(stored.userId, { transaction: t }) : null;
-    if (!user) {
-      throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
-    }
-
-    await user.update({ emailVerified: true }, { transaction: t });
-
-    await writeAuditLog({
-      action: AuditAction.AUTH_EMAIL_VERIFY,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      transaction: t,
-    });
-
-    return { message: 'Email verified successfully', user: sanitizeUser(user) };
-  });
-}
-
-export async function socialLoginWithGoogle(input: GoogleTokenInput, name?: string) {
-  const { googleId, email, name: tokenName } = await verifyGoogleIdToken(input);
-  const resolvedName = (typeof input === 'object' && input ? input.name : undefined) ?? name ?? tokenName;
-  return socialLogin('google', googleId, email, resolvedName);
+export async function socialLoginWithGoogle(tokenInput: GoogleTokenInput, name?: string) {
+  const result = await sharedAuth.socialLoginWithGoogle(tokenInput, name);
+  if ('user' in result && result.user) {
+    assertAdminRole(result.user.role);
+  }
+  return result;
 }
 
 export async function socialLoginWithApple(idToken: string, name?: string) {
-  const { appleId, email } = await verifyAppleIdToken(idToken);
-  if (!email) {
-    throw new AppError(400, 'Apple account must share email on first sign-in', 'APPLE_EMAIL_REQUIRED');
+  const result = await sharedAuth.socialLoginWithApple(idToken, name);
+  if ('user' in result && result.user) {
+    assertAdminRole(result.user.role);
   }
-  return socialLogin('apple', appleId, email, name);
+  return result;
 }
-
-export async function socialLogin(
-  provider: 'google' | 'apple',
-  providerId: string,
-  email: string,
-  name?: string
-) {
-  const idField = provider === 'google' ? 'googleId' : 'appleId';
-
-  return sequelize.transaction(async (t) => {
-    let user = await User.findOne({ where: { [idField]: providerId }, transaction: t });
-
-    if (!user) {
-      user = await User.findOne({ where: { email }, transaction: t });
-      if (!user) {
-        throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
-      }
-      assertAdminUser(user);
-      await user.update(
-        {
-          [idField]: providerId,
-          emailVerified: true,
-          ...(name && !user.name ? { name } : {}),
-        },
-        { transaction: t }
-      );
-    } else {
-      assertAdminUser(user);
-    }
-
-    const tokens = await issueTokens(user, undefined, t);
-
-    await writeAuditLog({
-      action: AuditAction.AUTH_SOCIAL_LOGIN,
-      resource: AuditResource.USER,
-      resourceId: user.id,
-      actorUserId: user.id,
-      metadata: { provider, isNew: false },
-      transaction: t,
-    });
-
-    return tokens;
-  });
-}
-
-export { sanitizeUser };

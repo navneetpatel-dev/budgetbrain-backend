@@ -121,11 +121,13 @@ export function initAssociations(): void {
   Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
   Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
   Transaction.hasMany(IncomeAllocation, { foreignKey: 'transactionId', as: 'incomeAllocations' });
+  Transaction.belongsTo(FinancialAccount, { foreignKey: 'financialAccountId', as: 'financialAccount' });
   TransactionAttachment.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
   ExpenseSplitParticipant.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
   IncomeAllocation.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
   IncomeAllocation.belongsTo(FinancialAccount, { foreignKey: 'financialAccountId', as: 'financialAccount' });
   FinancialAccount.hasMany(IncomeAllocation, { foreignKey: 'financialAccountId', as: 'incomeAllocations' });
+  FinancialAccount.hasMany(Transaction, { foreignKey: 'financialAccountId', as: 'transactions' });
 
   // AiUsageQuota
   AiUsageQuota.belongsTo(User, { foreignKey: 'userId', as: 'user' });

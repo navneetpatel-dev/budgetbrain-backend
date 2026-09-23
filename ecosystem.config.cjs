@@ -39,6 +39,7 @@ module.exports = {
       env: {
         ...sharedEnv,
         PORT: process.env.PORT_WEB || 3002,
+        ENABLE_QUEUE_WORKERS: 'true',
       },
       max_memory_restart: '400M',
       time: true,

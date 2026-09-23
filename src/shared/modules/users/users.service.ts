@@ -27,7 +27,14 @@ import {
   Loan,
   LoanPayment,
   RecurringSeries,
+  Subscription,
+  AiUsageQuota,
+  WebauthnCredential,
+  FamilyInvite,
+  IncomeAllocation,
+  SsoHandoffToken,
 } from '@database/models';
+import { deleteCache } from '@core/cache/cache.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
 import type { OnboardingInput, UpdateProfileInput } from './users.types';
 
@@ -51,6 +58,7 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const user = await getUser(userId);
   const beforeState = profileAuditSnapshot(user, data);
   await user.update(data);
+  void deleteCache(`user:session:${userId}`);
   await writeAuditLog({
     action: AuditAction.USER_UPDATE,
     resource: AuditResource.USER,
@@ -65,6 +73,7 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
 export async function updateOnboarding(userId: string, data: OnboardingInput) {
   const user = await getUser(userId);
   await user.update({ ...data, onboardingCompleted: true });
+  void deleteCache(`user:session:${userId}`);
   await writeAuditLog({
     action: AuditAction.USER_UPDATE,
     resource: AuditResource.USER,
@@ -94,10 +103,19 @@ export async function deleteUserAccount(userId: string): Promise<void> {
 
     const transactions = await Transaction.findAll({ where: { userId }, attributes: ['id'], ...txOpts });
     const txIds = transactions.map((x) => x.id);
+
+    const userAccounts = await FinancialAccount.findAll({ where: { userId }, attributes: ['id'], ...txOpts });
+    const accountIds = userAccounts.map((a) => a.id);
+
     if (txIds.length) {
+      await IncomeAllocation.destroy({ where: { transactionId: txIds }, ...txOpts });
       await TransactionAttachment.destroy({ where: { transactionId: txIds }, ...txOpts });
       await ExpenseSplitParticipant.destroy({ where: { transactionId: txIds }, ...txOpts });
     }
+    if (accountIds.length) {
+      await IncomeAllocation.destroy({ where: { financialAccountId: accountIds }, ...txOpts });
+    }
+
     await ExpenseSplitParticipant.destroy({ where: { userId }, ...txOpts });
     await MerchantCategoryRule.destroy({ where: { userId }, ...txOpts });
     await RecurringSeries.destroy({ where: { userId }, ...txOpts });
@@ -126,9 +144,11 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     const ownedGroups = await FamilyGroup.findAll({ where: { ownerId: userId }, attributes: ['id'], ...txOpts });
     const groupIds = ownedGroups.map((g) => g.id);
     if (groupIds.length) {
+      await FamilyInvite.destroy({ where: { groupId: groupIds }, ...txOpts });
       await FamilyMember.destroy({ where: { groupId: groupIds }, ...txOpts });
       await FamilyGroup.destroy({ where: { id: groupIds }, ...txOpts });
     }
+    await FamilyInvite.destroy({ where: { invitedByUserId: userId }, ...txOpts });
 
     await FamilyMember.destroy({ where: { userId }, ...txOpts });
     await RefreshToken.destroy({ where: { userId }, ...txOpts });
@@ -146,7 +166,12 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     await ParsedTransaction.destroy({ where: { userId }, ...txOpts });
     await SupportTicket.destroy({ where: { userId }, ...txOpts });
     await VerificationToken.destroy({ where: { userId }, ...txOpts });
+    await Subscription.destroy({ where: { userId }, ...txOpts });
+    await AiUsageQuota.destroy({ where: { userId }, ...txOpts });
+    await WebauthnCredential.destroy({ where: { userId }, ...txOpts });
+    await SsoHandoffToken.destroy({ where: { userId }, ...txOpts });
 
     await User.destroy({ where: { id: userId }, ...txOpts });
   });
+  void deleteCache(`user:session:${userId}`);
 }

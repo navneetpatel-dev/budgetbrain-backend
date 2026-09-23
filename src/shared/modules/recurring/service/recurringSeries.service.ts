@@ -121,6 +121,7 @@ export async function createRecurringSeries(userId: string, data: CreateRecurrin
     cadence: data.cadence as RecurringCadence,
     nextDueDate: new Date(data.nextDueDate),
     reminderDaysBefore: data.reminderDaysBefore ?? 3,
+    autoRecord: data.autoRecord ?? false,
     source: 'manual',
     goalId: data.goalId ?? null,
   });
@@ -130,7 +131,7 @@ export async function createRecurringSeries(userId: string, data: CreateRecurrin
     resource: AuditResource.RECURRING_SERIES,
     resourceId: series.id,
     actorUserId: userId,
-    afterState: { merchant: series.merchant, amount: series.amount, cadence: series.cadence },
+    afterState: { merchant: series.merchant, amount: series.amount, cadence: series.cadence, autoRecord: series.autoRecord },
   });
 
   return series;
@@ -144,13 +145,14 @@ export async function updateRecurringSeries(
   const series = await RecurringSeries.findOne({ where: { id, userId } });
   if (!series) throw new AppError(404, 'Recurring series not found');
 
-  const beforeState = { amount: series.amount, active: series.active, nextDueDate: series.nextDueDate };
+  const beforeState = { amount: series.amount, active: series.active, nextDueDate: series.nextDueDate, autoRecord: series.autoRecord };
 
   await series.update({
     ...(data.amount !== undefined && { amount: data.amount }),
     ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
     ...(data.nextDueDate !== undefined && { nextDueDate: new Date(data.nextDueDate) }),
     ...(data.active !== undefined && { active: data.active }),
+    ...(data.autoRecord !== undefined && { autoRecord: data.autoRecord }),
     ...(data.reminderDaysBefore !== undefined && { reminderDaysBefore: data.reminderDaysBefore }),
     ...(data.goalId !== undefined && { goalId: data.goalId }),
   });
@@ -161,7 +163,7 @@ export async function updateRecurringSeries(
     resourceId: id,
     actorUserId: userId,
     beforeState,
-    afterState: { amount: series.amount, active: series.active, nextDueDate: series.nextDueDate },
+    afterState: { amount: series.amount, active: series.active, nextDueDate: series.nextDueDate, autoRecord: series.autoRecord },
   });
 
   return series;
@@ -183,10 +185,56 @@ export async function deleteRecurringSeries(userId: string, id: string) {
   });
 }
 
+export async function recordRecurringExpense(userId: string, seriesId: string) {
+  const series = await RecurringSeries.findOne({ where: { id: seriesId, userId } });
+  if (!series) throw new AppError(404, 'Recurring series not found');
+
+  const today = todayIso();
+  const dueDate = String(series.nextDueDate).slice(0, 10);
+
+  const tx = await sequelize.transaction(async (t) => {
+    const createdTx = await Transaction.create(
+      {
+        userId,
+        type: 'expense',
+        amount: series.amount,
+        currency: series.currency,
+        categoryId: series.categoryId,
+        merchant: series.merchant,
+        date: new Date(),
+        isRecurring: true,
+        recurringSeriesId: series.id,
+        notes: `Recorded recurring expense for ${series.merchant}`,
+      },
+      { transaction: t }
+    );
+
+    await series.update(
+      {
+        lastChargedDate: new Date(today),
+        nextDueDate: new Date(shiftByCadence(dueDate, series.cadence)),
+      },
+      { transaction: t }
+    );
+
+    await writeAuditLog({
+      action: AuditAction.TRANSACTION_CREATE,
+      resource: AuditResource.TRANSACTION,
+      resourceId: createdTx.id,
+      actorUserId: userId,
+      transaction: t,
+    });
+
+    return createdTx;
+  });
+
+  return tx;
+}
+
 /**
  * Cron entry point: reminds users of bills due within their `reminderDaysBefore` window,
- * then rolls `nextDueDate` forward once a due date has passed. One notification per due date
- * (guarded by `lastChargedDate` no longer being before the reminder window).
+ * then rolls `nextDueDate` forward once a due date has passed. If autoRecord is true,
+ * automatically logs the expense transaction on the due date.
  */
 export async function sendBillDueReminders(): Promise<void> {
   const today = todayIso();
@@ -196,13 +244,49 @@ export async function sendBillDueReminders(): Promise<void> {
     const dueDate = String(s.nextDueDate).slice(0, 10);
     const reminderFrom = shiftDaysIso(dueDate, -s.reminderDaysBefore);
     const alreadyReminded = s.lastChargedDate && String(s.lastChargedDate).slice(0, 10) >= reminderFrom;
+    const currency = s.currency ?? '₹';
+
+    if (s.autoRecord && today >= dueDate) {
+      await sequelize.transaction(async (t) => {
+        await Transaction.create(
+          {
+            userId: s.userId,
+            type: 'expense',
+            amount: s.amount,
+            currency: s.currency,
+            categoryId: s.categoryId,
+            merchant: s.merchant,
+            date: new Date(today),
+            isRecurring: true,
+            recurringSeriesId: s.id,
+            notes: `Auto-recorded from recurring series "${s.merchant}"`,
+          },
+          { transaction: t }
+        );
+        await s.update(
+          {
+            lastChargedDate: new Date(today),
+            nextDueDate: new Date(shiftByCadence(dueDate, s.cadence)),
+          },
+          { transaction: t }
+        );
+      });
+      await createNotification(
+        s.userId,
+        'bill_due',
+        'Recurring expense auto-recorded',
+        `${s.merchant} — ${currency} ${Number(s.amount).toFixed(2)} was automatically recorded.`,
+        { recurringSeriesId: s.id, amount: s.amount }
+      );
+      continue;
+    }
 
     if (today >= reminderFrom && today <= dueDate && !alreadyReminded) {
       await createNotification(
         s.userId,
         'bill_due',
         'Upcoming bill',
-        `${s.merchant} — ₹${Number(s.amount).toFixed(2)} is due ${dueDate === today ? 'today' : `on ${dueDate}`}.`,
+        `${s.merchant} — ${currency} ${Number(s.amount).toFixed(2)} is due ${dueDate === today ? 'today' : `on ${dueDate}`}.`,
         {
           recurringSeriesId: s.id,
           merchant: s.merchant,

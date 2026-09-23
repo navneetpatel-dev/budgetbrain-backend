@@ -17,7 +17,9 @@ export const parseEmailSchema = z.object({
 });
 
 export const confirmParsedSchema = z.object({
-  categoryId: uuidField(),
+  type: z.enum(['expense', 'income']).optional(),
+  categoryId: uuidField().optional(),
+  incomeSourceId: uuidField().optional(),
   amount: amountField().optional(),
   merchant: optionalText('merchant'),
   date: optionalTransactionDate,

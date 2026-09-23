@@ -14,6 +14,7 @@ export interface RecurringSeriesAttributes {
   nextDueDate: Date;
   lastChargedDate: Date | null;
   active: boolean;
+  autoRecord?: boolean;
   reminderDaysBefore: number;
   source: RecurringSeriesSource;
   goalId: string | null;
@@ -28,6 +29,7 @@ export type RecurringSeriesCreationAttributes = Optional<
   | 'currency'
   | 'lastChargedDate'
   | 'active'
+  | 'autoRecord'
   | 'reminderDaysBefore'
   | 'source'
   | 'goalId'
@@ -47,6 +49,7 @@ export class RecurringSeries
   declare nextDueDate: Date;
   declare lastChargedDate: Date | null;
   declare active: boolean;
+  declare autoRecord: boolean;
   declare reminderDaysBefore: number;
   declare source: RecurringSeriesSource;
   declare goalId: string | null;
@@ -101,6 +104,11 @@ export function initRecurringSeriesModel(sequelize: Sequelize): typeof Recurring
       active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+      },
+      autoRecord: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'auto_record',
       },
       reminderDaysBefore: {
         type: DataTypes.INTEGER,

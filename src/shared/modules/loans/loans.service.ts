@@ -1,4 +1,4 @@
-import { Loan, LoanPayment, User, sequelize } from '@database/models';
+import { Loan, LoanPayment, Transaction, User, sequelize } from '@database/models';
 import { AppError } from '@shared/errors';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
@@ -126,6 +126,20 @@ export async function payLoan(userId: string, loanId: string, amount: number, no
 
     const payment = await LoanPayment.create(
       { loanId: loan.id, userId, amount: appliedAmount, notes: notes ?? null, paidAt: new Date() },
+      { transaction: t }
+    );
+
+    await Transaction.create(
+      {
+        userId,
+        type: 'expense',
+        amount: appliedAmount,
+        currency: loan.currency,
+        merchant: `Loan Payment: ${loan.name}`,
+        date: new Date(),
+        notes: notes ?? `Loan payment for ${loan.name}`,
+        tags: ['loan-payment'],
+      },
       { transaction: t }
     );
 

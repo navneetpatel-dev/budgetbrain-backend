@@ -21,6 +21,7 @@ router.patch(
   asyncHandler(controller.updateRecurringSeries)
 );
 router.delete('/:id', validateParams(uuidParamSchema), asyncHandler(controller.deleteRecurringSeries));
+router.post('/:id/record', validateParams(uuidParamSchema), asyncHandler(controller.recordRecurringExpense));
 router.post('/detect', asyncHandler(controller.detectRecurring));
 
 export default router;

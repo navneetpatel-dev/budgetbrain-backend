@@ -8,6 +8,7 @@ import {
   runRecurringExpenseCheck,
   runRecurringGoalContributions,
   runSubscriptionRenewalReminders,
+  runTokenAndReportCleanup,
   runWeeklyDigest,
 } from './scheduledNotifications';
 
@@ -23,6 +24,7 @@ export function start(): void {
   tasks.push(cron.schedule('0 7 * * *', () => void runRecurringGoalContributions()));
   tasks.push(cron.schedule('0 6 1 * *', () => void runMonthlyReportDigests()));
   tasks.push(cron.schedule('0 3 * * *', () => void runExchangeRateSync()));
+  tasks.push(cron.schedule('0 4 * * *', () => void runTokenAndReportCleanup()));
   console.log('Scheduled jobs started');
 }
 

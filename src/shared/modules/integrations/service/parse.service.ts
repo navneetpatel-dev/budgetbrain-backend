@@ -1,8 +1,18 @@
 import type { ParsedData } from '../integrations.types';
-const SMS_PATTERNS = [
+
+const CREDIT_KEYWORDS = [
+  /credited/i,
+  /received/i,
+  /deposited/i,
+  /salary/i,
+  /cashback/i,
+  /refund/i,
+];
+
+const SMS_AMOUNT_PATTERNS = [
   /(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{2})?)/i,
-  /debited.*?([\d,]+(?:\.\d{2})?)/i,
-  /spent.*?([\d,]+(?:\.\d{2})?)/i,
+  /(?:debited|spent|paid).*?([\d,]+(?:\.\d{2})?)/i,
+  /(?:credited|received|deposited).*?([\d,]+(?:\.\d{2})?)/i,
 ];
 
 const MERCHANT_PATTERNS = [
@@ -21,7 +31,10 @@ export function parseSmsContent(content: string): ParsedData {
   let date: Date | null = null;
   let confidence = 0;
 
-  for (const pattern of SMS_PATTERNS) {
+  const isCredit = CREDIT_KEYWORDS.some((kw) => kw.test(content));
+  const type: 'expense' | 'income' = isCredit ? 'income' : 'expense';
+
+  for (const pattern of SMS_AMOUNT_PATTERNS) {
     const match = content.match(pattern);
     if (match) {
       amount = parseFloat(match[1].replace(/,/g, ''));
@@ -53,7 +66,7 @@ export function parseSmsContent(content: string): ParsedData {
 
   if (amount && merchant) confidence = Math.min(1, confidence + 0.1);
 
-  return { amount, merchant, date, confidence };
+  return { amount, merchant, date, confidence, type };
 }
 
 export function parseEmailReceipt(subject: string, body: string): ParsedData {

@@ -1,5 +1,14 @@
-import { Op } from 'sequelize';
-import { User, Transaction, Notification, Subscription } from '@database/models';
+import { Op, QueryTypes } from 'sequelize';
+import {
+  User,
+  Transaction,
+  Notification,
+  Subscription,
+  VerificationToken,
+  SsoHandoffToken,
+  RefreshToken,
+  sequelize,
+} from '@database/models';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
 import { getWeeklySpendComparison } from '@shared/modules/expenses/service/expenses.service';
 import { sendBillDueReminders, processRecurringGoalContributions } from '@shared/modules/recurring/service/recurringSeries.service';
@@ -9,32 +18,38 @@ import { sendMonthlyReportDigests } from '@shared/modules/reports/service/report
 
 export async function runDailyReminder(): Promise<void> {
   try {
-    const users = await User.findAll({ attributes: ['id'] });
-    for (const user of users) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const loggedToday = await Transaction.count({
-        where: { userId: user.id, createdAt: { [Op.gte]: today } },
-      });
-      if (loggedToday === 0) {
-        const recent = await Notification.findOne({
-          where: {
-            userId: user.id,
-            type: 'daily_reminder',
-            sentAt: { [Op.gte]: today },
-          },
-        });
-        if (!recent) {
-          await createNotification(
-            user.id,
-            'daily_reminder',
-            'Log your expenses',
-            'Take a moment to record today\'s spending and stay on track.',
-            undefined,
-            true
-          );
-        }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Single set-based query: find users who have NO transactions logged today
+    // and have NOT received a daily_reminder notification today.
+    const eligibleUsers = await sequelize.query<{ id: string }>(
+      `SELECT u.id
+       FROM users u
+       WHERE u.is_suspended = false
+         AND NOT EXISTS (
+           SELECT 1 FROM transactions t
+           WHERE t.user_id = u.id AND t.created_at >= :today
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM notifications n
+           WHERE n.user_id = u.id AND n.type = 'daily_reminder' AND n.sent_at >= :today
+         )`,
+      {
+        replacements: { today },
+        type: QueryTypes.SELECT,
       }
+    );
+
+    for (const user of eligibleUsers) {
+      await createNotification(
+        user.id,
+        'daily_reminder',
+        'Log your expenses',
+        "Take a moment to record today's spending and stay on track.",
+        undefined,
+        true
+      );
     }
   } catch (err) {
     console.error('[cron] daily_reminder failed:', err);
@@ -94,41 +109,54 @@ export async function runRecurringExpenseCheck(): Promise<void> {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const batchSize = 500;
-    const fetchBatch = (offset: number) =>
-      Transaction.findAll({
-        where: { isRecurring: true, type: 'expense' },
+
+    let lastId: string | undefined = undefined;
+
+    let hasMore = true;
+    while (hasMore) {
+      const recurring: Transaction[] = await Transaction.findAll({
+        where: {
+          isRecurring: true,
+          type: 'expense',
+          ...(lastId ? { id: { [Op.gt]: lastId } } : {}),
+        },
         limit: batchSize,
-        offset,
         order: [['id', 'ASC']],
       });
 
-    let offset = 0;
-    let recurring = await fetchBatch(offset);
+      if (!recurring.length) {
+        hasMore = false;
+        break;
+      }
 
-    while (recurring.length) {
+      const userIds = Array.from(new Set(recurring.map((t) => t.userId)));
+      const existingAlerts = await Notification.findAll({
+        where: {
+          userId: { [Op.in]: userIds },
+          type: 'recurring_expense',
+          sentAt: { [Op.gte]: todayStart },
+        },
+        attributes: ['userId'],
+      });
+      const alreadyNotifiedUsers = new Set(existingAlerts.map((n) => n.userId));
+
       for (const tx of recurring) {
-        const existing = await Notification.findOne({
-          where: {
-            userId: tx.userId,
-            type: 'recurring_expense',
-            sentAt: { [Op.gte]: todayStart },
-          },
-        });
-        if (existing) continue;
+        if (alreadyNotifiedUsers.has(tx.userId)) continue;
 
+        const currencySymbol = tx.currency ?? '₹';
         await createNotification(
           tx.userId,
           'recurring_expense',
           'Recurring expense due',
-          `Don't forget: ${tx.merchant ?? 'Recurring expense'} — ₹${tx.amount}`,
+          `Don't forget: ${tx.merchant ?? 'Recurring expense'} — ${currencySymbol} ${tx.amount}`,
           { transactionId: tx.id },
           true
         );
+        alreadyNotifiedUsers.add(tx.userId);
       }
 
       if (recurring.length < batchSize) break;
-      offset += batchSize;
-      recurring = await fetchBatch(offset);
+      lastId = recurring[recurring.length - 1].id;
     }
   } catch (err) {
     console.error('[cron] recurring_expense failed:', err);
@@ -137,7 +165,7 @@ export async function runRecurringExpenseCheck(): Promise<void> {
 
 export async function runWeeklyDigest(): Promise<void> {
   try {
-    const users = await User.findAll({ where: { weeklyDigestOptIn: true }, attributes: ['id'] });
+    const users = await User.findAll({ where: { weeklyDigestOptIn: true }, attributes: ['id', 'currency'] });
     for (const user of users) {
       const { thisWeek, lastWeek } = await getWeeklySpendComparison(user.id);
       const changeText =
@@ -147,16 +175,57 @@ export async function runWeeklyDigest(): Promise<void> {
             )}% vs last week`
           : 'no spending logged last week';
 
+      const currency = user.currency ?? '₹';
       await createNotification(
         user.id,
         'weekly_digest',
         'Your weekly spending recap',
-        `You spent ₹${thisWeek.toFixed(2)} this week (${changeText}).`,
+        `You spent ${currency} ${thisWeek.toFixed(2)} this week (${changeText}).`,
         { thisWeek, lastWeek }
       );
     }
   } catch (err) {
     console.error('[cron] weekly_digest failed:', err);
+  }
+}
+
+export async function runTokenAndReportCleanup(): Promise<void> {
+  try {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [deletedVerifications, deletedSso, deletedRefresh] = await Promise.all([
+      VerificationToken.destroy({
+        where: {
+          [Op.or]: [
+            { expiresAt: { [Op.lt]: now } },
+            { usedAt: { [Op.ne]: null, [Op.lt]: thirtyDaysAgo } },
+          ],
+        },
+      }),
+      SsoHandoffToken.destroy({
+        where: {
+          [Op.or]: [
+            { expiresAt: { [Op.lt]: now } },
+            { usedAt: { [Op.ne]: null } },
+          ],
+        },
+      }),
+      RefreshToken.destroy({
+        where: {
+          [Op.or]: [
+            { expiresAt: { [Op.lt]: thirtyDaysAgo } },
+            { revokedAt: { [Op.ne]: null, [Op.lt]: thirtyDaysAgo } },
+          ],
+        },
+      }),
+    ]);
+
+    console.log(
+      `[cron] token cleanup completed: verifications=${deletedVerifications}, sso=${deletedSso}, refresh=${deletedRefresh}`
+    );
+  } catch (err) {
+    console.error('[cron] token cleanup failed:', err);
   }
 }
 

@@ -57,6 +57,22 @@ export async function markAsRead(userId: string, id: string) {
   return notification;
 }
 
+export async function markAllAsRead(userId: string): Promise<{ updatedCount: number }> {
+  const [updatedCount] = await Notification.update({ read: true }, { where: { userId, read: false } });
+  return { updatedCount };
+}
+
+export async function getUnreadCount(userId: string): Promise<{ unreadCount: number }> {
+  const unreadCount = await Notification.count({ where: { userId, read: false } });
+  return { unreadCount };
+}
+
+export async function deleteNotification(userId: string, id: string): Promise<void> {
+  const notification = await Notification.findOne({ where: { id, userId } });
+  if (!notification) throw new AppError(404, 'Notification not found');
+  await notification.destroy();
+}
+
 export async function registerDevice(userId: string, data: RegisterDeviceInput) {
   const existingByToken = await Device.findOne({ where: { pushToken: data.pushToken } });
   if (existingByToken) {

@@ -21,6 +21,22 @@ export async function markAsRead(req: Request, res: Response) {
   successResponse(res, notification);
 }
 
+export async function markAllAsRead(req: Request, res: Response) {
+  const result = await notificationService.markAllAsRead((req as AuthRequest).userId!);
+  successResponse(res, result);
+}
+
+export async function getUnreadCount(req: Request, res: Response) {
+  const result = await notificationService.getUnreadCount((req as AuthRequest).userId!);
+  successResponse(res, result);
+}
+
+export async function deleteNotification(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  await notificationService.deleteNotification((req as AuthRequest).userId!, id);
+  successResponse(res, { message: 'Notification deleted' });
+}
+
 export async function registerDevice(req: Request, res: Response) {
   const device = await notificationService.registerDevice(
     (req as AuthRequest).userId!,

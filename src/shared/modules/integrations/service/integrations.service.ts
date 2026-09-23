@@ -23,6 +23,7 @@ export async function parseSms(userId: string, content: string) {
   const record = await ParsedTransaction.create({
     userId,
     source: 'sms',
+    type: parsed.type ?? 'expense',
     rawContent: content,
     parsedAmount: parsed.amount,
     parsedMerchant: parsed.merchant,
@@ -39,6 +40,7 @@ export async function parseEmail(userId: string, subject: string, body: string) 
   const record = await ParsedTransaction.create({
     userId,
     source: 'email',
+    type: parsed.type ?? 'expense',
     rawContent: `${subject}\n${body}`,
     parsedAmount: parsed.amount,
     parsedMerchant: parsed.merchant,
@@ -73,19 +75,29 @@ export async function confirmParsed(
     });
     if (!parsed) throw new AppError(404, 'Parsed transaction not found');
 
+    const effectiveType = data.type ?? parsed.type ?? 'expense';
     const merchant = data.merchant ?? parsed.parsedMerchant ?? undefined;
+
+    const txPayload: any = {
+      type: effectiveType,
+      amount: data.amount ?? Number(parsed.parsedAmount),
+      date:
+        data.date ??
+        (parsed.parsedDate ? toLocalIsoDate(parsed.parsedDate) : null) ??
+        toLocalIsoDate(new Date()),
+    };
+
+    if (effectiveType === 'income') {
+      txPayload.incomeSourceId = data.incomeSourceId;
+      if (merchant) txPayload.notes = `From: ${merchant}`;
+    } else {
+      txPayload.categoryId = data.categoryId;
+      txPayload.merchant = merchant;
+    }
+
     const transaction = await transactionService.createTransaction(
       userId,
-      {
-        type: 'expense',
-        amount: data.amount ?? Number(parsed.parsedAmount),
-        categoryId: data.categoryId,
-        merchant,
-        date:
-          data.date ??
-          (parsed.parsedDate ? toLocalIsoDate(parsed.parsedDate) : null) ??
-          toLocalIsoDate(new Date()),
-      },
+      txPayload,
       { transaction: t }
     );
 

@@ -23,6 +23,7 @@ const transactionObjectSchema = z.object({
   currency: currencyField(true),
   categoryId: uuidField().optional(),
   incomeSourceId: uuidField().optional(),
+  financialAccountId: uuidField().nullable().optional(),
   notes: optionalText('notes'),
   merchant: optionalText('merchant'),
   date: transactionDate,

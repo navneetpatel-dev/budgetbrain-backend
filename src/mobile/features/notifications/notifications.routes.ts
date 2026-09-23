@@ -10,6 +10,8 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', validateQuery(paginationSchema), asyncHandler(controller.listNotifications));
+router.get('/unread-count', asyncHandler(controller.getUnreadCount));
+router.patch('/read-all', asyncHandler(controller.markAllAsRead));
 router.post(
   '/register-device',
   validateBody(registerDeviceSchema),
@@ -17,5 +19,6 @@ router.post(
 );
 router.post('/test', asyncHandler(controller.sendTestPush));
 router.patch('/:id/read', validateParams(uuidParamSchema), asyncHandler(controller.markAsRead));
+router.delete('/:id', validateParams(uuidParamSchema), asyncHandler(controller.deleteNotification));
 
 export default router;

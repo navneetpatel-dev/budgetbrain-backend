@@ -75,42 +75,45 @@ export async function convertAmount(amount: number, fromCurrency: string, toCurr
   return roundMoney(amount * rate);
 }
 
-/** Convert each row into `targetCurrency` then sum. Used instead of SQL SUM(amount) across mixed currencies. */
+/** Convert each row into `targetCurrency` then sum. Group by currency to minimize rate lookups. */
 export async function convertAndSum(
   rows: Array<{ amount: unknown; currency?: string | null }>,
   targetCurrency: string
 ): Promise<number> {
-  let total = 0;
+  const target = targetCurrency.toUpperCase();
+  const totalsByCurrency: Record<string, number> = {};
+
   for (const row of rows) {
-    const from = row.currency || targetCurrency;
-    total += await convertAmount(Number(row.amount) || 0, from, targetCurrency);
+    const from = (row.currency || target).toUpperCase();
+    totalsByCurrency[from] = (totalsByCurrency[from] || 0) + (Number(row.amount) || 0);
   }
+
+  const currencies = Object.keys(totalsByCurrency);
+  const rates = await Promise.all(currencies.map((curr) => getExchangeRate(curr, target)));
+
+  let total = 0;
+  for (let i = 0; i < currencies.length; i++) {
+    total += totalsByCurrency[currencies[i]] * rates[i];
+  }
+
   return roundMoney(total);
 }
 
 async function upsertRatesToInrTable(ratesToInr: Record<string, number>): Promise<void> {
   const currencies = Object.keys(ratesToInr);
+  const records: Array<{ fromCurrency: string; toCurrency: string; rate: number }> = [];
 
   for (const from of currencies) {
     for (const to of currencies) {
       if (from === to) continue;
       const rate = roundMoney(ratesToInr[from] / ratesToInr[to], 6);
-
-      const existing = await ExchangeRate.findOne({
-        where: { fromCurrency: from, toCurrency: to },
-      });
-
-      if (existing) {
-        await existing.update({ rate });
-      } else {
-        await ExchangeRate.create({
-          fromCurrency: from,
-          toCurrency: to,
-          rate,
-        });
-      }
+      records.push({ fromCurrency: from, toCurrency: to, rate });
     }
   }
+
+  await ExchangeRate.bulkCreate(records, {
+    updateOnDuplicate: ['rate', 'updatedAt'],
+  });
 
   await deleteCacheByPrefix('fx:');
 }

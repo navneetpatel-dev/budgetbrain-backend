@@ -1,6 +1,6 @@
 import { Transaction, TransactionAttachment } from '@database/models';
 import { AppError } from '@shared/errors';
-import { uploadFile, withSignedDownloadUrl } from '@core/storage/s3.service';
+import { uploadFile, withSignedDownloadUrl, deleteFile } from '@core/storage/s3.service';
 import { env } from '@config/env';
 import { receiptExtractionQueue } from '@queue/queues';
 import { createLogger } from '@shared/logging';
@@ -96,6 +96,9 @@ export async function deleteTransactionAttachment(userId: string, transactionId:
     where: { id: attachmentId, transactionId: transaction.id },
   });
   if (!attachment) throw new AppError(404, 'Attachment not found');
+  if (attachment.s3Key) {
+    await deleteFile(attachment.s3Key);
+  }
   await attachment.destroy();
   return { message: 'Attachment deleted' };
 }

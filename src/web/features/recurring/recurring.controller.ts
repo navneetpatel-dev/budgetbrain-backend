@@ -43,3 +43,9 @@ export async function detectRecurring(req: Request, res: Response) {
   const series = await recurringDetectionService.detectRecurringPatternsForUser((req as AuthRequest).userId!);
   successResponse(res, { series });
 }
+
+export async function recordRecurringExpense(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const tx = await recurringService.recordRecurringExpense((req as AuthRequest).userId!, id);
+  successResponse(res, tx, 201);
+}

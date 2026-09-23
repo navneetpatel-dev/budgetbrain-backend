@@ -18,6 +18,7 @@ export interface TransactionAttributes {
   isRecurring: boolean;
   recurringRule: string | null;
   recurringSeriesId: string | null;
+  financialAccountId?: string | null;
   tags: string[] | null;
   searchVector: string | null;
   taxWithheld: number | null;
@@ -31,6 +32,7 @@ export type TransactionCreationAttributes = Optional<
   | 'id'
   | 'categoryId'
   | 'incomeSourceId'
+  | 'financialAccountId'
   | 'notes'
   | 'merchant'
   | 'paymentMethod'
@@ -61,6 +63,7 @@ export class Transaction
   declare isRecurring: boolean;
   declare recurringRule: string | null;
   declare recurringSeriesId: string | null;
+  declare financialAccountId: string | null;
   declare tags: string[] | null;
   declare searchVector: string | null;
   declare taxWithheld: number | null;
@@ -103,6 +106,11 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         type: DataTypes.UUID,
         allowNull: true,
         field: 'income_source_id',
+      },
+      financialAccountId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'financial_account_id',
       },
       notes: DataTypes.TEXT,
       merchant: DataTypes.STRING(255),
@@ -158,6 +166,7 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         { fields: ['user_id', 'date'] },
         { fields: ['user_id', 'type'] },
         { fields: ['category_id'] },
+        { fields: ['financial_account_id'] },
       ],
     }
   );
@@ -168,6 +177,7 @@ export function associateTransaction(): void {
   const { User } = require('./user.model') as typeof import('./user.model');
   const { Category } = require('./category.model') as typeof import('./category.model');
   const { IncomeSource } = require('./incomeSource.model') as typeof import('./incomeSource.model');
+  const { FinancialAccount } = require('./financialAccount.model') as typeof import('./financialAccount.model');
   const { TransactionAttachment } = require('./transactionAttachment.model') as typeof import('./transactionAttachment.model');
   const { RecurringSeries } = require('./recurringSeries.model') as typeof import('./recurringSeries.model');
   const { ExpenseSplitParticipant } = require('./expenseSplitParticipant.model') as typeof import('./expenseSplitParticipant.model');
@@ -175,6 +185,7 @@ export function associateTransaction(): void {
   Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   Transaction.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
   Transaction.belongsTo(IncomeSource, { foreignKey: 'incomeSourceId', as: 'incomeSource' });
+  Transaction.belongsTo(FinancialAccount, { foreignKey: 'financialAccountId', as: 'financialAccount' });
   Transaction.hasMany(TransactionAttachment, { foreignKey: 'transactionId', as: 'attachments' });
   Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
   Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });

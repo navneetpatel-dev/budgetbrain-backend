@@ -1,55 +1,82 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { type Store, type Options, type IncrementResponse } from 'express-rate-limit';
+import { redis, isRedisEnabled } from '@core/cache/redis.client';
 
-export const globalRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  message: { success: false, error: { message: 'Too many requests', code: 'RATE_LIMIT' } },
-});
+class RedisRateLimitStore implements Store {
+  prefix: string;
+  windowMs: number = 60000;
 
-export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMIT' } },
-});
+  constructor(options?: { prefix?: string }) {
+    this.prefix = options?.prefix ?? 'rl:';
+  }
 
-export const aiChatRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 15,
-  message: { success: false, error: { message: 'Too many chat requests', code: 'RATE_LIMIT' } },
-});
+  init(options: Options) {
+    this.windowMs = options.windowMs;
+  }
 
-export const reportExportRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 8,
-  message: { success: false, error: { message: 'Too many export requests', code: 'RATE_LIMIT' } },
-});
+  async increment(key: string): Promise<IncrementResponse> {
+    const fullKey = `${this.prefix}${key}`;
+    try {
+      const results = await redis
+        .pipeline()
+        .incr(fullKey)
+        .pttl(fullKey)
+        .exec();
 
-export const searchRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  message: { success: false, error: { message: 'Too many search requests', code: 'RATE_LIMIT' } },
-});
+      if (!results) {
+        return { totalHits: 1, resetTime: new Date(Date.now() + this.windowMs) };
+      }
 
-export const receiptUploadRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  message: { success: false, error: { message: 'Too many upload requests', code: 'RATE_LIMIT' } },
-});
+      const totalHits = Number(results[0][1] ?? 1);
+      let pttl = Number(results[1][1] ?? -1);
 
-export const syncBatchRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { success: false, error: { message: 'Too many sync requests', code: 'RATE_LIMIT' } },
-});
+      if (pttl <= 0) {
+        await redis.pexpire(fullKey, this.windowMs);
+        pttl = this.windowMs;
+      }
 
-export const integrationsRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 15,
-  message: { success: false, error: { message: 'Too many import requests', code: 'RATE_LIMIT' } },
-});
+      return {
+        totalHits,
+        resetTime: new Date(Date.now() + pttl),
+      };
+    } catch {
+      // Fail-open: on Redis error, treat as a single pass-through hit
+      return {
+        totalHits: 1,
+        resetTime: new Date(Date.now() + this.windowMs),
+      };
+    }
+  }
 
-export const checkoutRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { success: false, error: { message: 'Too many checkout requests', code: 'RATE_LIMIT' } },
-});
+  async decrement(key: string): Promise<void> {
+    try {
+      await redis.decr(`${this.prefix}${key}`);
+    } catch {}
+  }
+
+  async resetKey(key: string): Promise<void> {
+    try {
+      await redis.del(`${this.prefix}${key}`);
+    } catch {}
+  }
+}
+
+function createLimiter(prefix: string, max: number, windowMs: number, message: string, code = 'RATE_LIMIT') {
+  return rateLimit({
+    windowMs,
+    max,
+    message: { success: false, error: { message, code } },
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: isRedisEnabled() ? new RedisRateLimitStore({ prefix: `rl:${prefix}:` }) : undefined,
+  });
+}
+
+export const globalRateLimiter = createLimiter('global', 1000, 15 * 60 * 1000, 'Too many requests');
+export const authRateLimiter = createLimiter('auth', 20, 15 * 60 * 1000, 'Too many auth attempts');
+export const aiChatRateLimiter = createLimiter('aichat', 15, 60 * 1000, 'Too many chat requests');
+export const reportExportRateLimiter = createLimiter('export', 8, 60 * 1000, 'Too many export requests');
+export const searchRateLimiter = createLimiter('search', 30, 60 * 1000, 'Too many search requests');
+export const receiptUploadRateLimiter = createLimiter('receipt', 20, 60 * 1000, 'Too many upload requests');
+export const syncBatchRateLimiter = createLimiter('sync', 10, 60 * 1000, 'Too many sync requests');
+export const integrationsRateLimiter = createLimiter('integrations', 15, 60 * 1000, 'Too many import requests');
+export const checkoutRateLimiter = createLimiter('checkout', 10, 60 * 1000, 'Too many checkout requests');

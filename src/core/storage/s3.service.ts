@@ -79,7 +79,7 @@ export async function uploadFile(
 
   ensureUploadDir();
   const localPath = path.join(UPLOAD_DIR, path.basename(key));
-  fs.writeFileSync(localPath, file.buffer);
+  await fs.promises.writeFile(localPath, file.buffer);
   const url = `${env.APP_URL}/uploads/${path.basename(key)}`;
 
   return { key, url, fileName: file.originalname, fileType: sniffed.mime, fileSize: file.size };
@@ -117,7 +117,35 @@ export async function uploadGeneratedReport(
 
   ensureUploadDir();
   const localPath = path.join(UPLOAD_DIR, path.basename(key));
-  fs.writeFileSync(localPath, buffer);
+  await fs.promises.writeFile(localPath, buffer);
   const url = `${env.APP_URL}/uploads/${path.basename(key)}`;
   return { key, url };
 }
+
+export async function deleteFile(key: string): Promise<void> {
+  if (usesS3()) {
+    try {
+      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const client = await getS3Client();
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: env.S3_BUCKET,
+          Key: key,
+        })
+      );
+    } catch (err) {
+      console.warn('[Storage] Failed to delete S3 file:', key, err);
+    }
+    return;
+  }
+
+  try {
+    const localPath = path.join(UPLOAD_DIR, path.basename(key));
+    if (fs.existsSync(localPath)) {
+      await fs.promises.unlink(localPath);
+    }
+  } catch (err) {
+    console.warn('[Storage] Failed to delete local file:', key, err);
+  }
+}
+

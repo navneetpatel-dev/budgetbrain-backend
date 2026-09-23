@@ -29,6 +29,7 @@ import { AiUsageQuota } from './aiUsageQuota.model';
 import { WebauthnCredential } from './webauthnCredential.model';
 import { IncomeAllocation } from './incomeAllocation.model';
 import { FamilyInvite } from './familyInvite.model';
+import { DetectedTransaction } from './detectedTransaction.model';
 
 export function initAssociations(): void {
   // User associations
@@ -52,6 +53,7 @@ export function initAssociations(): void {
   User.hasMany(Loan, { foreignKey: 'userId', as: 'loans' });
   User.hasMany(RecurringSeries, { foreignKey: 'userId', as: 'recurringSeries' });
   User.hasMany(Subscription, { foreignKey: 'userId', as: 'subscriptions' });
+  User.hasMany(DetectedTransaction, { foreignKey: 'userId', as: 'detectedTransactions' });
 
   // BelongsTo User
   RefreshToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
@@ -141,4 +143,11 @@ export function initAssociations(): void {
   FamilyInvite.belongsTo(User, { foreignKey: 'invitedByUserId', as: 'invitedBy' });
   FamilyInvite.belongsTo(FamilyGroup, { foreignKey: 'groupId', as: 'group' });
   FamilyGroup.hasMany(FamilyInvite, { foreignKey: 'groupId', as: 'invites' });
+
+  // DetectedTransaction
+  DetectedTransaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  DetectedTransaction.belongsTo(Transaction, { foreignKey: 'createdTransactionId', as: 'createdTransaction' });
+  DetectedTransaction.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+  DetectedTransaction.belongsTo(FinancialAccount, { foreignKey: 'financialAccountId', as: 'financialAccount' });
+  Transaction.hasOne(DetectedTransaction, { foreignKey: 'createdTransactionId', as: 'sourceDetection' });
 }

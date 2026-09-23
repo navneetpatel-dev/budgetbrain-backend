@@ -41,6 +41,11 @@ import { initWebauthnCredentialModel, WebauthnCredential } from './webauthnCrede
 import { initIncomeAllocationModel, IncomeAllocation } from './incomeAllocation.model';
 import { initFamilyInviteModel, FamilyInvite } from './familyInvite.model';
 import { initSsoHandoffTokenModel, SsoHandoffToken } from './ssoHandoffToken.model';
+import {
+  initDetectedTransactionModel,
+  DetectedTransaction,
+  associateDetectedTransaction,
+} from './detectedTransaction.model';
 import { initAssociations } from './associations';
 
 export function initModels(db: Sequelize = sequelize): void {
@@ -78,6 +83,7 @@ export function initModels(db: Sequelize = sequelize): void {
   initFamilyInviteModel(db);
   initIncomeAllocationModel(db);
   initSsoHandoffTokenModel(db);
+  initDetectedTransactionModel(db);
 
   initAssociations();
 }
@@ -119,6 +125,7 @@ export {
   FamilyInvite,
   IncomeAllocation,
   SsoHandoffToken,
+  DetectedTransaction,
 };
 
 export type { TokenType, NotificationType };
@@ -134,4 +141,12 @@ export type {
   SubscriptionAttributes,
   SubscriptionCreationAttributes,
 } from './subscription.model';
+export type {
+  DetectedTransactionAttributes,
+  DetectedTransactionCreationAttributes,
+  DetectedTransactionDirection,
+  DetectedTransactionType,
+  DetectedTransactionStatus,
+  DetectedTransactionSource,
+} from './detectedTransaction.model';
 

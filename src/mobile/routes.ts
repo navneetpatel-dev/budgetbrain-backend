@@ -21,6 +21,7 @@ import recurringRoutes from './features/recurring/recurring.routes';
 import subscriptionsRoutes from './features/subscriptions/subscriptions.routes';
 import searchRoutes from './features/search/search.routes';
 import currencyRoutes from '@shared/modules/currency/currency.routes';
+import detectedTransactionRoutes from './features/transaction-detection/transactionDetection.routes';
 import { authenticate } from '@core/auth/authenticate';
 import { requireOnboarding } from '@core/auth/requireOnboarding';
 import { requireEntitlement } from '@shared/middleware/requireEntitlement';
@@ -54,6 +55,7 @@ export function registerMobileRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/recurring-series`, protectedFeature, recurringRoutes);
   app.use(`${apiPrefix}/search`, protectedFeature, searchRoutes);
   app.use(`${apiPrefix}/currencies`, protectedFeature, currencyRoutes);
+  app.use(`${apiPrefix}/detected-transactions`, protectedFeature, detectedTransactionRoutes);
 }
 
 

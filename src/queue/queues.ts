@@ -23,8 +23,20 @@ function logConnectionErrors(queueName: string, queue: Queue): void {
 
 export interface EmailJobData {
   to: string;
-  kind: 'otp' | 'verify' | 'reset' | 'family_invite';
-  payload: { otp?: string; token?: string; groupName?: string; inviterName?: string };
+  kind: 'otp' | 'verify' | 'reset' | 'family_invite' | 'monthly_digest';
+  payload: {
+    otp?: string;
+    token?: string;
+    groupName?: string;
+    inviterName?: string;
+    name?: string | null;
+    periodLabel?: string;
+    attachmentFilename?: string;
+    attachmentContentType?: string;
+    /** Base64-encoded — BullMQ job data is JSON over Redis, so the raw xlsx Buffer
+     * generateExcelReport returns can't be passed through as-is. */
+    attachmentBase64?: string;
+  };
 }
 
 export const emailQueue = new Queue<EmailJobData>('email', {

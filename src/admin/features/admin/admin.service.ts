@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import { Op, fn, col } from 'sequelize';
 import {
   User,
   AuditLog,
@@ -195,15 +195,22 @@ export async function getAuditLog(id: string) {
 }
 
 export async function getTransactionStats() {
-  const [totalTransactions, expenseRows] = await Promise.all([
+  // SUM per currency in SQL first — collapses an unbounded, ever-growing transactions
+  // table down to at most a handful of rows (one per distinct currency in use) before
+  // handing off to convertAndSum, instead of pulling every expense row into Node.
+  const [totalTransactions, currencyTotals] = await Promise.all([
     Transaction.count(),
     Transaction.findAll({
       where: { type: 'expense' },
-      attributes: ['amount', 'currency'],
+      attributes: ['currency', [fn('SUM', col('amount')), 'total']],
+      group: ['currency'],
       raw: true,
-    }),
+    }) as unknown as Promise<Array<{ currency: string; total: string }>>,
   ]);
-  const totalExpenseVolume = await convertAndSum(expenseRows, 'INR');
+  const totalExpenseVolume = await convertAndSum(
+    currencyTotals.map((r) => ({ amount: r.total, currency: r.currency })),
+    'INR'
+  );
   return { totalTransactions, totalExpenseVolume };
 }
 

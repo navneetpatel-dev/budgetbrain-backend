@@ -29,3 +29,9 @@ export const searchRateLimiter = rateLimit({
   max: 30,
   message: { success: false, error: { message: 'Too many search requests', code: 'RATE_LIMIT' } },
 });
+
+export const receiptUploadRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { success: false, error: { message: 'Too many upload requests', code: 'RATE_LIMIT' } },
+});

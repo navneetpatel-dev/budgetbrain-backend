@@ -55,7 +55,11 @@ export function initSupportTicketModel(sequelize: Sequelize): typeof SupportTick
       adminNotes: { type: DataTypes.TEXT, allowNull: true, field: 'admin_notes' },
       resolvedAt: { type: DataTypes.DATE, allowNull: true, field: 'resolved_at' },
     },
-    { sequelize, tableName: 'support_tickets' }
+    {
+      sequelize,
+      tableName: 'support_tickets',
+      indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
+    }
   );
   return SupportTicket;
 }

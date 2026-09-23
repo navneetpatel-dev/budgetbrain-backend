@@ -1,5 +1,5 @@
-import { Op } from 'sequelize';
-import { Subscription, User, type SubscriptionAttributes } from '@database/models';
+import { Op, QueryTypes } from 'sequelize';
+import { Subscription, User, sequelize, type SubscriptionAttributes } from '@database/models';
 import { resolvePagination, paginatedResult } from '@shared/pagination';
 import { PLAN_PRICES_INR } from './subscriptions.constants';
 
@@ -102,29 +102,31 @@ export async function listSubscriptions(params: ListSubscriptionsParams) {
 }
 
 export async function getRevenueMetrics() {
-  const allSubscriptions = await Subscription.findAll();
+  // Conditional-count aggregation in SQL instead of pulling every subscription row into
+  // Node to tally in a loop — this table only grows, and it's an admin-dashboard endpoint.
+  const [row] = await sequelize.query<{
+    lifetime_count: string;
+    active_monthly_count: string;
+    active_yearly_count: string;
+    cancelled_count: string;
+    expired_count: string;
+  }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE is_lifetime) AS lifetime_count,
+       COUNT(*) FILTER (WHERE NOT is_lifetime AND status IN ('active', 'in_grace_period') AND plan = 'monthly') AS active_monthly_count,
+       COUNT(*) FILTER (WHERE NOT is_lifetime AND status IN ('active', 'in_grace_period') AND plan = 'yearly') AS active_yearly_count,
+       COUNT(*) FILTER (WHERE NOT is_lifetime AND status = 'cancelled') AS cancelled_count,
+       COUNT(*) FILTER (WHERE NOT is_lifetime AND status = 'expired') AS expired_count
+     FROM subscriptions`,
+    { type: QueryTypes.SELECT }
+  );
 
-  let activeCount = 0;
-  let monthlyCount = 0;
-  let yearlyCount = 0;
-  let lifetimeCount = 0;
-  let cancelledCount = 0;
-  let expiredCount = 0;
-
-  for (const sub of allSubscriptions) {
-    if (sub.isLifetime) {
-      lifetimeCount++;
-      activeCount++;
-    } else if (sub.status === 'active' || sub.status === 'in_grace_period') {
-      activeCount++;
-      if (sub.plan === 'monthly') monthlyCount++;
-      if (sub.plan === 'yearly') yearlyCount++;
-    } else if (sub.status === 'cancelled') {
-      cancelledCount++;
-    } else if (sub.status === 'expired') {
-      expiredCount++;
-    }
-  }
+  const lifetimeCount = Number(row.lifetime_count);
+  const monthlyCount = Number(row.active_monthly_count);
+  const yearlyCount = Number(row.active_yearly_count);
+  const cancelledCount = Number(row.cancelled_count);
+  const expiredCount = Number(row.expired_count);
+  const activeCount = lifetimeCount + monthlyCount + yearlyCount;
 
   // MRR: monthly * 199 + (yearly * 1499) / 12
   const monthlyRevenue = monthlyCount * PLAN_PRICES_INR.monthly;

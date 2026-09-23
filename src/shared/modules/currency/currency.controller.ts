@@ -17,10 +17,10 @@ export async function getRates(req: Request, res: Response): Promise<void> {
     throw new AppError(400, `Unsupported base currency: ${baseCurrency}`, 'INVALID_CURRENCY');
   }
 
-  const rates: Record<string, number> = {};
-  for (const curr of SUPPORTED_CURRENCIES) {
-    rates[curr] = await getExchangeRate(baseCurrency, curr);
-  }
+  const rateEntries = await Promise.all(
+    SUPPORTED_CURRENCIES.map(async (curr) => [curr, await getExchangeRate(baseCurrency, curr)] as const)
+  );
+  const rates = Object.fromEntries(rateEntries);
 
   successResponse(res, {
     base: baseCurrency,

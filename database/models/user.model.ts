@@ -212,7 +212,12 @@ export function initUserModel(sequelize: Sequelize): typeof User {
     {
       sequelize,
       tableName: 'users',
-      indexes: [{ fields: ['email'] }],
+      indexes: [
+        { fields: ['email'] },
+        { fields: ['created_at'] },
+        { fields: ['last_login_at'] },
+        { fields: ['role'] },
+      ],
     }
   );
   return User;

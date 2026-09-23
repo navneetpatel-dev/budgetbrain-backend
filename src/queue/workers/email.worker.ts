@@ -6,6 +6,7 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendFamilyInviteEmail,
+  sendMonthlyReportEmail,
 } from '@core/mail/email.service';
 import type { EmailJobData } from '../queues';
 
@@ -34,6 +35,20 @@ export function startEmailWorker(): Worker<EmailJobData> {
           if (!payload.groupName) throw new Error('email job "family_invite" missing payload.groupName');
           if (!payload.inviterName) throw new Error('email job "family_invite" missing payload.inviterName');
           await sendFamilyInviteEmail(to, payload.token, payload.groupName, payload.inviterName);
+          return;
+        case 'monthly_digest':
+          if (!payload.periodLabel) throw new Error('email job "monthly_digest" missing payload.periodLabel');
+          if (!payload.attachmentFilename) {
+            throw new Error('email job "monthly_digest" missing payload.attachmentFilename');
+          }
+          if (!payload.attachmentBase64) {
+            throw new Error('email job "monthly_digest" missing payload.attachmentBase64');
+          }
+          await sendMonthlyReportEmail(to, payload.name ?? null, payload.periodLabel, {
+            filename: payload.attachmentFilename,
+            content: Buffer.from(payload.attachmentBase64, 'base64'),
+            contentType: payload.attachmentContentType,
+          });
           return;
         default:
           throw new Error(`Unknown email job kind: ${kind}`);

@@ -1,7 +1,7 @@
 import { UniqueConstraintError, type Transaction as DbTransaction } from 'sequelize';
 import { Notification, NotificationType, Device } from '@database/models';
 import { AppError } from '@shared/errors';
-import { sendPushToUser } from './push.service';
+import { pushQueue } from '@queue/queues';
 import { paginatedResult, resolvePagination } from '@shared/pagination';
 import type { PaginationInput } from '@shared/types';
 import type { RegisterDeviceInput } from '../notifications.types';
@@ -30,8 +30,10 @@ export async function createNotification(
   // Never send push inside an open DB transaction (external side-effect).
   // Include `type` in the push payload so clients can deep-link by trigger type
   // without having to infer it from which entity-id key happens to be present.
+  // Enqueued, not sent inline — the live Expo API call moves off the request path
+  // (createNotification runs on live paths like real-time budget alerts, not just cron).
   if (sendPush && !dbTx) {
-    await sendPushToUser(userId, title, body, { ...data, type });
+    await pushQueue.add('push', { userId, title, body, data: { ...data, type } });
   }
 
   return notification;

@@ -35,3 +35,21 @@ export const receiptUploadRateLimiter = rateLimit({
   max: 20,
   message: { success: false, error: { message: 'Too many upload requests', code: 'RATE_LIMIT' } },
 });
+
+export const syncBatchRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: { message: 'Too many sync requests', code: 'RATE_LIMIT' } },
+});
+
+export const integrationsRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { success: false, error: { message: 'Too many import requests', code: 'RATE_LIMIT' } },
+});
+
+export const checkoutRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: { message: 'Too many checkout requests', code: 'RATE_LIMIT' } },
+});

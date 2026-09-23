@@ -216,7 +216,18 @@ export async function getTransactionStats() {
 
 export async function listAiUsage(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
+  // messageCount computed in SQL (jsonb_array_length) instead of pulling every
+  // conversation's full messages blob — the entire chat history — into Node just to
+  // read its length.
   const { rows, count } = await AiConversation.findAndCountAll({
+    attributes: [
+      'id',
+      'userId',
+      'title',
+      'createdAt',
+      'updatedAt',
+      [fn('jsonb_array_length', col('AiConversation.messages')), 'messageCount'],
+    ],
     include: [{ model: User, as: 'user', attributes: ['id', 'email', 'name'] }],
     order: [['createdAt', 'DESC']],
     limit,
@@ -224,11 +235,11 @@ export async function listAiUsage(page = 1, limit = 20) {
   });
 
   const conversations = rows.map((row) => {
-    const json = row.toJSON() as {
+    const json = row.toJSON() as unknown as {
       id: string;
       userId: string;
       title: string;
-      messages: unknown[];
+      messageCount: number;
       createdAt: Date;
       updatedAt: Date;
       user?: { id: string; email: string; name: string | null };
@@ -237,7 +248,7 @@ export async function listAiUsage(page = 1, limit = 20) {
       id: json.id,
       userId: json.userId,
       title: json.title,
-      messageCount: Array.isArray(json.messages) ? json.messages.length : 0,
+      messageCount: json.messageCount ?? 0,
       createdAt: json.createdAt,
       updatedAt: json.updatedAt,
       user: json.user,

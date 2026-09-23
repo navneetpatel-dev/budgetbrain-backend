@@ -64,7 +64,11 @@ export function initRefreshTokenModel(sequelize: Sequelize): typeof RefreshToken
         field: 'revoked_at',
       },
     },
-    { sequelize, tableName: 'refresh_tokens' }
+    {
+      sequelize,
+      tableName: 'refresh_tokens',
+      indexes: [{ fields: ['token_hash'] }, { fields: ['user_id'] }],
+    }
   );
   return RefreshToken;
 }

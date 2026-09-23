@@ -73,3 +73,16 @@ export const reportQueue = new Queue<ReportJobData, ReportJobResult>('report', {
   defaultJobOptions,
 });
 logConnectionErrors('report', reportQueue);
+
+export interface PushJobData {
+  userId: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}
+
+export const pushQueue = new Queue<PushJobData>('push', {
+  connection: queueConnection,
+  defaultJobOptions,
+});
+logConnectionErrors('push', pushQueue);

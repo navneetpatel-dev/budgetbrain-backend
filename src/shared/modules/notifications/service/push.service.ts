@@ -30,6 +30,7 @@ export async function sendPushToUser(
 ): Promise<number> {
   const devices = await Device.findAll({
     where: { userId },
+    attributes: ['pushToken'],
   });
 
   const tokens = devices

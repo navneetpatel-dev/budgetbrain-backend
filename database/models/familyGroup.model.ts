@@ -47,7 +47,7 @@ export function initFamilyGroupModel(sequelize: Sequelize): typeof FamilyGroup {
         field: 'invite_code',
       },
     },
-    { sequelize, tableName: 'family_groups' }
+    { sequelize, tableName: 'family_groups', indexes: [{ fields: ['owner_id'] }] }
   );
   return FamilyGroup;
 }

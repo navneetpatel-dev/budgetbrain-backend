@@ -20,7 +20,7 @@ import {
 } from '@core/auth/jwt';
 import { writeAuditLog, AuditAction, AuditResource } from '@core/audit/audit.service';
 import { AppError } from '@core/http/errors';
-import { sendOtpEmail, sendPasswordResetEmail } from '@core/mail/email.service';
+import { emailQueue } from '@queue/queues';
 import {
   verifyGoogleIdToken,
   verifyAppleIdToken,
@@ -300,7 +300,7 @@ export async function requestOtp(email: string) {
   await sequelize.transaction(async (t) => {
     await storeToken(email, 'otp', otp, user.id, 10 * 60 * 1000, t);
   });
-  await sendOtpEmail(email, otp);
+  await emailQueue.add('otp', { to: email, kind: 'otp', payload: { otp } });
 }
 
 export async function verifyOtp(email: string, otp: string, deviceId?: string) {
@@ -365,7 +365,7 @@ export async function forgotPassword(email: string) {
       transaction: t,
     });
   });
-  await sendPasswordResetEmail(email, token);
+  await emailQueue.add('reset', { to: email, kind: 'reset', payload: { token } });
 }
 
 export async function resetPassword(token: string, newPassword: string) {

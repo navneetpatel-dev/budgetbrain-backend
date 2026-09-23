@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '@core/http/errors';
 import { authenticate } from '@core/auth/authenticate';
 import { validateBody, validateParams, validateQuery } from '@core/middleware/validate';
+import { integrationsRateLimiter } from '@core/middleware/rateLimit';
 import { paginationSchema, uuidParamSchema } from '../../shared/validation/index';
 import { uploadCsv } from '@core/middleware/upload';
 import * as controller from './integrations.controller';
@@ -14,9 +15,9 @@ import {
 const router = Router();
 router.use(authenticate);
 
-router.post('/sms', validateBody(parseSmsSchema), asyncHandler(controller.parseSms));
-router.post('/email', validateBody(parseEmailSchema), asyncHandler(controller.parseEmail));
-router.post('/csv', uploadCsv.single('file'), asyncHandler(controller.importCsv));
+router.post('/sms', integrationsRateLimiter, validateBody(parseSmsSchema), asyncHandler(controller.parseSms));
+router.post('/email', integrationsRateLimiter, validateBody(parseEmailSchema), asyncHandler(controller.parseEmail));
+router.post('/csv', integrationsRateLimiter, uploadCsv.single('file'), asyncHandler(controller.importCsv));
 router.get('/pending', validateQuery(paginationSchema), asyncHandler(controller.listPending));
 router.post(
   '/:id/confirm',

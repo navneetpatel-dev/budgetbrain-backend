@@ -32,7 +32,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
     "@aws-sdk/s3-request-presigner": "^3.1134.0",
-    "@budgetbrain/detection-core": "github:navneetpatel-dev/budgetbrain-detection-core#2ff04e9cf1fb0435fc716f1b4ec94bae7d6eafe1",
+    "@budgetbrain/detection-core": "github:navneetpatel-dev/budgetbrain-detection-core#36e1eac3898d618ae2afb72e7d6b6529e7dabdc9",
     "@sentry/node": "^9.5.0",
     "@simplewebauthn/server": "^14.0.2",
     "bcryptjs": "^2.4.3",

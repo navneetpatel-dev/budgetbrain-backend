@@ -10,7 +10,7 @@ import adminApp from '../../../../admin/app';
 import mobileApp from '../../../../mobile/app';
 import { deleteUserAccount } from '@modules/users/users.service';
 import { syncBatch, undoDetected } from '../transactionDetection.service';
-import { listAliasCandidates, runDetectionRetention, runDetectionRollup } from '../detectionAdmin.service';
+import { getDetectionDashboard, listAliasCandidates, runDetectionRetention, runDetectionRollup } from '../detectionAdmin.service';
 import { listSkeletonQueue, userHash } from '../skeletons.service';
 import { makeSignedItem } from './fixtures';
 
@@ -120,6 +120,25 @@ describe('detection admin and learning (Phase 7)', () => {
     expect(row).toMatchObject({ count: 3, autoApproved: 1, review: 1, rejected: 1 });
     expect(dash.body.data.series.find((d: any) => d.day === today)).toBeTruthy();
     expect(dash.body.data.adoption.activeUsers30d).toBeGreaterThan(0);
+    expect(dash.body.data.counts.auto_approved).toBeGreaterThanOrEqual(1);
+    expect(dash.body.data.total).toBe(Object.values(dash.body.data.counts as Record<string, number>).reduce((a, b) => a + b, 0));
+    expect(dash.body.data.bySource.find((r: any) => r.source === 'android_sms')?.count).toBeGreaterThanOrEqual(3);
+    expect(dash.body.data.byCountry.length).toBeGreaterThan(0);
+
+    // Plan §3.2: the dashboard is at most five indexed queries (it is four).
+    let queries = 0;
+    const options = (sequelize as unknown as { options: { logging: unknown } }).options;
+    const previous = options.logging;
+    // Only the dashboard's tables: background work from the undo above may still be logging.
+    options.logging = (sql: string) => {
+      if (/detection_daily_stats|detection_rollup_state/.test(sql)) queries += 1;
+    };
+    try {
+      await getDetectionDashboard({ from: today, to: today });
+    } finally {
+      options.logging = previous;
+    }
+    expect(queries).toBe(4);
     const [stat] = await sequelize.query<{ status: string; count: number }>(
       `SELECT status, count FROM detection_daily_stats WHERE institution_id = :inst AND status = 'undone'`,
       { type: QueryTypes.SELECT, replacements: { inst } }

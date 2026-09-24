@@ -105,18 +105,19 @@ export async function getAdoption(): Promise<AdoptionState> {
 
 /**
  * The detection dashboard (T7.3): totals, rates, sources, institutions, countries and a daily
- * series, from the rollup table only (five indexed queries on the primary key range).
+ * series, from the rollup table only. Four queries: status, source and country totals in one
+ * grouping-sets scan, the institution table, the daily series, and the stored adoption row.
  */
 export async function getDetectionDashboard(range: { from: string; to: string }) {
   const replacements = range;
   const where = `day BETWEEN CAST(:from AS date) AND CAST(:to AS date)`;
-  const [byStatus, bySource, byInstitution, byCountry, series, adoption] = await Promise.all([
-    sequelize.query<{ status: string; count: string }>(
-      `SELECT status, sum(count) AS count FROM detection_daily_stats WHERE ${where} GROUP BY status`,
-      { type: QueryTypes.SELECT, replacements }
-    ),
-    sequelize.query<{ source: string; count: string }>(
-      `SELECT source, sum(count) AS count FROM detection_daily_stats WHERE ${where} GROUP BY source ORDER BY count DESC`,
+  const [totals, byInstitution, series, adoption] = await Promise.all([
+    sequelize.query<{ status: string | null; source: string | null; country: string | null; by: 'status' | 'source' | 'country'; count: string }>(
+      `SELECT status, source, country,
+              CASE WHEN GROUPING(status) = 0 THEN 'status' WHEN GROUPING(source) = 0 THEN 'source' ELSE 'country' END AS by,
+              sum(count) AS count
+       FROM detection_daily_stats WHERE ${where}
+       GROUP BY GROUPING SETS ((status), (source), (country)) ORDER BY count DESC`,
       { type: QueryTypes.SELECT, replacements }
     ),
     sequelize.query<{ institution_id: string; name: string | null; count: string; auto: string; review: string; rejected: string }>(
@@ -128,10 +129,6 @@ export async function getDetectionDashboard(range: { from: string; to: string })
        WHERE ${where} GROUP BY s.institution_id ORDER BY count DESC LIMIT 15`,
       { type: QueryTypes.SELECT, replacements }
     ),
-    sequelize.query<{ country: string; count: string }>(
-      `SELECT country, sum(count) AS count FROM detection_daily_stats WHERE ${where} GROUP BY country ORDER BY count DESC`,
-      { type: QueryTypes.SELECT, replacements }
-    ),
     sequelize.query<{ day: string; status: string; count: string }>(
       `SELECT to_char(day, 'YYYY-MM-DD') AS day, status, sum(count) AS count FROM detection_daily_stats
        WHERE ${where} GROUP BY day, status ORDER BY day`,
@@ -139,7 +136,10 @@ export async function getDetectionDashboard(range: { from: string; to: string })
     ),
     getAdoption(),
   ]);
-  const counts = Object.fromEntries(byStatus.map((r) => [r.status, Number(r.count)]));
+  const byStatus = totals.filter((r) => r.by === 'status');
+  const bySource = totals.filter((r) => r.by === 'source');
+  const byCountry = totals.filter((r) => r.by === 'country');
+  const counts: Record<string, number> = Object.fromEntries(byStatus.map((r) => [r.status ?? '', Number(r.count)]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const rate = (n: number | undefined) => (total > 0 ? Math.round(((n ?? 0) / total) * 1000) / 1000 : 0);
   const days = new Map<string, Record<string, number>>();

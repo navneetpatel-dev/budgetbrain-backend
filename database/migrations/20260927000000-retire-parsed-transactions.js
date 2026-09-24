@@ -14,6 +14,9 @@ module.exports = {
   async up(queryInterface) {
     const sequelize = queryInterface.sequelize;
     if (sequelize.getDialect() !== 'postgres') return;
+    // A fresh database never had the table (the model is gone); nothing to retire.
+    const [[{ exists }]] = await sequelize.query(`SELECT to_regclass('public.parsed_transactions') IS NOT NULL AS "exists"`);
+    if (!exists) return;
     await sequelize.transaction(async (transaction) => {
       await sequelize.query(
         `INSERT INTO "detected_transactions"

@@ -46,6 +46,7 @@ import type {
 import { validateServerDetectedPayload } from './engine/serverValidation.engine';
 import { computeServerFingerprint } from './engine/serverDeduplication.engine';
 import { toDetectedDto } from './engine/detectedDto';
+import { deleteUserSkeletons } from './skeletons.service';
 
 const log = createLogger('system');
 
@@ -93,12 +94,13 @@ function detectionIncludes() {
 // ---------------------------------------------------------------------------------------------
 
 export async function getDetectionConfig(userId: string): Promise<DetectionConfigResponse> {
-  const user = await User.findByPk(userId, { attributes: ['id', 'detectionAutoAdd'] });
+  const user = await User.findByPk(userId, { attributes: ['id', 'detectionAutoAdd', 'detectionTemplateLearning'] });
   return {
     enabled: env.DETECTION_ENABLED === 'true',
     autoCreateEnabled: env.DETECTION_AUTO_CREATE_ENABLED === 'true',
     minAppVersion: env.DETECTION_MIN_APP_VERSION ?? null,
     autoAddHighConfidence: user?.detectionAutoAdd ?? true,
+    templateLearning: user?.detectionTemplateLearning ?? false,
     // Per institution, template, country, pack and app version (plan T4.6); applied by core.
     killSwitches: await getActiveKillSwitches(),
   };
@@ -108,7 +110,12 @@ export async function updateDetectionSettings(
   userId: string,
   input: DetectionSettingsInput
 ): Promise<DetectionConfigResponse> {
-  await User.update({ detectionAutoAdd: input.autoAddHighConfidence }, { where: { id: userId } });
+  const changes: { detectionAutoAdd?: boolean; detectionTemplateLearning?: boolean } = {};
+  if (input.autoAddHighConfidence !== undefined) changes.detectionAutoAdd = input.autoAddHighConfidence;
+  if (input.templateLearning !== undefined) changes.detectionTemplateLearning = input.templateLearning;
+  await User.update(changes, { where: { id: userId } });
+  // Turning template learning off also removes what this user already sent (plan D-5).
+  if (input.templateLearning === false) await deleteUserSkeletons(userId);
   return getDetectionConfig(userId);
 }
 
@@ -470,6 +477,17 @@ export async function syncBatch(
     results,
   };
 
+  if (createdCount > 0) {
+    // One row per batch keeps the query count constant (plan T7.7).
+    await writeAuditLog({
+      action: AuditAction.DETECTION_AUTO_CREATE,
+      resource: AuditResource.DETECTED_TRANSACTION,
+      resourceId: userId,
+      actorUserId: userId,
+      afterState: { created: createdCount, source: options.import ? 'import' : 'device' },
+    });
+  }
+
   await deleteCache(syncStateKey(userId));
   if (options.idempotencyKey) {
     await setCache(idempotencyKey(userId, options.idempotencyKey), response, DETECTION_LIMITS.IDEMPOTENCY_CACHE_SECONDS);
@@ -660,7 +678,8 @@ export async function undoDetected(userId: string, id: string): Promise<Detected
       await deleteTransaction(userId, transactionId, { transaction: t });
     }
     await detected.update(
-      { status: DETECTION_STATUS.REJECTED, createdTransactionId: null, reviewReason: null },
+      // `undone` tells an undo from a rejection in the admin rollups (plan T7.2).
+      { status: DETECTION_STATUS.REJECTED, createdTransactionId: null, reviewReason: REVIEW_REASONS.UNDONE },
       { transaction: t }
     );
     await writeAuditLog({

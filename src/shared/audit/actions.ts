@@ -53,6 +53,12 @@ export const AuditAction = {
   DETECTION_UNDO: 'detection.undo',
   DETECTION_DELETE_ALL: 'detection.delete_all',
   DETECTION_IMPORT: 'detection.statement_import',
+  DETECTION_EXPORT: 'detection.export',
+
+  KB_CHANGE: 'kb.change',
+  KB_PUBLISH: 'kb.publish',
+  KB_PACK_BUILD: 'kb.pack_build',
+  KILL_SWITCH_CHANGE: 'kb.kill_switch_change',
 
   LOAN_CREATE: 'loan.create',
   LOAN_UPDATE: 'loan.update',
@@ -85,6 +91,8 @@ export const AuditResource = {
   DEVICE: 'device',
   CATEGORY: 'category',
   DETECTED_TRANSACTION: 'detected_transaction',
+  KNOWLEDGE_BASE: 'knowledge_base',
+  KILL_SWITCH: 'kill_switch',
 } as const;
 
 export type AuditResourceValue = (typeof AuditResource)[keyof typeof AuditResource];

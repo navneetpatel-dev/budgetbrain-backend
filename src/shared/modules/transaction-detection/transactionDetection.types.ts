@@ -5,8 +5,10 @@ import type {
   createMerchantRuleSchema,
   detectedItemSchema,
   detectionSettingsSchema,
+  diagnosticsUploadSchema,
   ingestMessageSchema,
   listDetectedQuerySchema,
+  skeletonUploadSchema,
   syncDetectedBatchSchema,
   updateMerchantRuleSchema,
 } from './transactionDetection.validator';
@@ -18,6 +20,8 @@ export type MerchantRuleInput = z.infer<typeof createMerchantRuleSchema>;
 export type DetectionSettingsInput = z.infer<typeof detectionSettingsSchema>;
 export type ListDetectedQuery = z.infer<typeof listDetectedQuerySchema>;
 export type IngestInput = z.infer<typeof ingestMessageSchema>;
+export type DiagnosticsUploadInput = z.infer<typeof diagnosticsUploadSchema>;
+export type SkeletonUploadInput = z.infer<typeof skeletonUploadSchema>;
 export type UpdateMerchantRuleInput = z.infer<typeof updateMerchantRuleSchema>;
 
 /** What happened to a pasted message or email (plan T6.2). Never echoes the text. */
@@ -54,6 +58,8 @@ export interface DetectionConfigResponse {
   minAppVersion: string | null;
   /** The user's own preference; the server applies it too. */
   autoAddHighConfidence: boolean;
+  /** Opt-in to sending anonymous message skeletons (plan D-5, T7.4). */
+  templateLearning: boolean;
   /** Active kill switches; core applies them on top of the pack's (plan T4.6). */
   killSwitches: PackKillSwitch[];
 }

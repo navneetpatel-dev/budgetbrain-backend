@@ -251,7 +251,8 @@ describe('detected transaction sync', () => {
     const small = await count(2);
     const large = await count(60);
     expect(large).toBe(small);
-    expect(large).toBeLessThanOrEqual(10);
+    // 10 for the sync itself, plus the one DETECTION_AUTO_CREATE audit row per batch (plan T7.7).
+    expect(large).toBeLessThanOrEqual(11);
   });
 
   describe('review actions', () => {

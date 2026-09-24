@@ -15,11 +15,16 @@ import {
 import { sequelize } from '@database/models';
 import { env } from '@config/env';
 import { redis } from '@core/cache/redis.client';
-import { setupTestDb, createTestUser } from '@testHelpers';
+import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import { getDetectionConfig } from '@modules/transaction-detection/transactionDetection.service';
 import { parseCsv, runImport } from '../knowledgeBase.importers';
 import { coverageByCountry } from '../knowledgeBase.repository';
-import { buildPack, getPackForClient } from '../packBuilder.service';
+import { buildPack, getPackForClient, loadLatestPack } from '../packBuilder.service';
+import type { Server } from 'http';
+import type { AddressInfo } from 'net';
+import { generateAccessToken } from '@core/auth/jwt';
+import adminApp from '../../../../admin/app';
+import { submitSkeletons } from '@modules/transaction-detection/skeletons.service';
 import { enrichMerchant, enrichmentProvider, registerEnrichmentProvider } from '../merchantEnrichment';
 import { getKnowledgePack } from '@modules/transaction-detection/transactionDetection.controller';
 
@@ -232,6 +237,146 @@ describe('knowledge base (Phase 4)', () => {
       expect(enrichmentProvider().name).toBe('none');
       expect(await enrichMerchant('SWIGGY*BANGALORE', 'IN')).toBeNull();
       expect(calls).toBe(0);
+    });
+  });
+  describe('admin catalog, packs, kill switches and learning (Phase 7)', () => {
+    let admin: string;
+    let token: string;
+    let server: Server;
+    const call = async (method: string, url: string, body?: unknown) => {
+      const res = await fetch(`${admin}${url}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: res.status, body: (await res.json()) as any };
+    };
+
+    beforeAll(async () => {
+      server = await new Promise<Server>((resolve) => {
+        const s = adminApp.listen(0, () => resolve(s));
+      });
+      admin = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1/admin/detection`;
+      const user = await createTestUser({ role: 'admin' } as never);
+      token = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
+    });
+
+    afterAll(async () => {
+      await new Promise((resolve) => server.close(resolve));
+    });
+
+    it('a published alias appears in the next pack; drafts and edits do not (T7.3 acceptance)', async () => {
+      const merchant = await call('POST', '/catalog/merchants', {
+        id: 'm.t7_chaiwala',
+        data: { name: 'Chaiwala', country: 'IN', taxonomyCode: 'FOOD_AND_DRINK.RESTAURANT' },
+      });
+      expect(merchant.status).toBe(201);
+      expect(merchant.body.data).toMatchObject({ id: 'm.t7_chaiwala', status: 'draft', version: 1 });
+      const alias = await call('POST', '/catalog/aliases', { data: { merchantId: 'm.t7_chaiwala', alias: 'Chaiwala Express', country: 'IN' } });
+      expect(alias.body.data).toMatchObject({ alias: 'chaiwala express', status: 'draft' });
+      const aliasId = alias.body.data.id as string;
+
+      const hasAlias = async () => {
+        await call('POST', '/packs/build', { country: 'IN' });
+        const pack = await loadLatestPack('IN');
+        return pack!.payload.merchantAliases.some((a) => a.alias === 'chaiwala express');
+      };
+      expect(await hasAlias()).toBe(false);
+
+      expect((await call('POST', '/catalog/merchants/m.t7_chaiwala/status', { status: 'published' })).body.data.status).toBe('published');
+      expect((await call('POST', `/catalog/aliases/${aliasId}/status`, { status: 'review' })).body.data.status).toBe('review');
+      expect((await call('POST', `/catalog/aliases/${aliasId}/status`, { status: 'published' })).body.data.status).toBe('published');
+      expect(await hasAlias()).toBe(true);
+
+      // An edit returns the row to draft (version 2) and takes it out of the next pack.
+      const edited = await call('PATCH', `/catalog/aliases/${aliasId}`, { data: { alias: 'chaiwala exp' } });
+      expect(edited.body.data).toMatchObject({ status: 'draft', version: 2, alias: 'chaiwala exp' });
+      expect(await hasAlias()).toBe(false);
+      expect((await call('POST', `/catalog/aliases/${aliasId}/status`, { status: 'published' })).status).toBe(200);
+      expect((await call('POST', `/catalog/aliases/${aliasId}/status`, { status: 'review' })).status).toBe(400);
+
+      const history = await call('GET', `/catalog/aliases/${aliasId}/history`);
+      expect(history.body.data.map((h: any) => h.action)).toEqual(['publish', 'update', 'publish', 'review', 'create']);
+      expect(await count(`SELECT count(*) AS n FROM audit_logs WHERE action = 'kb.publish' AND metadata->>'id' = '${aliasId}'`)).toBe(2);
+
+      const list = await call('GET', '/catalog/aliases?q=chaiwala');
+      expect(list.body.data.items).toHaveLength(1);
+      expect((await call('POST', '/catalog/aliases', { data: { merchantId: 'm.t7_chaiwala', alias: 'chaiwala exp', country: 'IN' } })).status).toBe(409);
+      expect((await call('POST', '/catalog/aliases', { data: { merchantId: 'm.nope', alias: 'nope', country: 'IN' } })).status).toBe(400);
+      expect((await call('POST', '/catalog/merchants', { id: 'Bad Id', data: { name: 'x', taxonomyCode: 'FOOD_AND_DRINK' } })).status).toBe(400);
+    });
+
+    it('a template is published only with a sample message it matches (T7.3, T7.4)', async () => {
+      const skeleton = 'Rs <AMT> paid to <NAME> from HDFC Bank A/c <ACCT> on <DATE>';
+      const data = {
+        institutionId: 'in.hdfc_bank',
+        language: 'en',
+        skeleton,
+        fields: ['amount', 'merchant', 'account', 'date'],
+        direction: 'DEBIT',
+        transactionType: 'expense',
+      };
+      await call('POST', '/catalog/templates', { id: 't.hdfc.t7_paid', data });
+      expect((await call('POST', '/catalog/templates/t.hdfc.t7_paid/status', { status: 'published' })).body.error.code).toBe('TEMPLATE_SAMPLE_REQUIRED');
+      await call('PATCH', '/catalog/templates/t.hdfc.t7_paid', { data: { sample: 'Rs 99 paid to Someone Else via UPI' } });
+      expect((await call('POST', '/catalog/templates/t.hdfc.t7_paid/status', { status: 'published' })).body.error.code).toBe('TEMPLATE_SAMPLE_MISMATCH');
+      await call('PATCH', '/catalog/templates/t.hdfc.t7_paid', { data: { sample: 'Rs 99.00 paid to Tea Stall from HDFC Bank A/c XX1234 on 12-09-26' } });
+      expect((await call('POST', '/catalog/templates/t.hdfc.t7_paid/status', { status: 'published' })).body.data.status).toBe('published');
+    });
+
+    it('turns kill switches on and off for clients at once, with an audit row (T7.3, T7.7)', async () => {
+      const user = await createTestUser();
+      const created = await call('POST', '/kill-switches', { scope: 'template', key: 't.hdfc.t7_paid', action: 'disable_detection', reason: 'wrong amounts' });
+      expect(created.status).toBe(201);
+      const has = async () => (await getDetectionConfig(user.id)).killSwitches.some((k) => k.key === 't.hdfc.t7_paid');
+      expect(await has()).toBe(true);
+      await call('PATCH', `/kill-switches/${created.body.data.id}`, { active: false, reason: 'fixed in pack v9' });
+      expect(await has()).toBe(false);
+      expect(await count(`SELECT count(*) AS n FROM audit_logs WHERE action = 'kb.kill_switch_change' AND resource_id = '${created.body.data.id}'`)).toBe(2);
+      expect((await call('GET', '/kill-switches')).body.data.find((k: any) => k.id === created.body.data.id)).toMatchObject({ active: false, reason: 'fixed in pack v9' });
+    });
+
+    it('turns a shape k users sent into a draft template, then takes it off the queue (T7.4)', async () => {
+      const skeleton = 'Rs.<AMT> debited from HDFC Bank A/c <ACCT> for <NAME> on <DATE>';
+      for (let i = 0; i < 10; i += 1) {
+        const user = await createTestUser({ detectionTemplateLearning: true } as never);
+        await submitSkeletons(user.id, {
+          items: [{ skeletonHash: '0'.repeat(64), skeleton, institutionId: 'in.hdfc_bank', senderKey: 'HDFCBK', country: 'IN', language: 'en', correctedField: 'merchant' }],
+        });
+      }
+      const group = (await call('GET', '/skeletons')).body.data.find((g: any) => g.skeleton === skeleton);
+      expect(group).toMatchObject({ users: 10, correctedFields: ['merchant'] });
+      const body = {
+        id: 't.hdfc.t7_learned',
+        institutionId: 'in.hdfc_bank',
+        language: 'en',
+        fields: ['amount', 'account', 'merchant', 'date'],
+        direction: 'DEBIT',
+        transactionType: 'expense',
+        sample: 'Rs.10.00 debited from HDFC Bank A/c XX1111 for Book Shop on 01-09-26',
+      };
+      expect((await call('POST', `/skeletons/${group.skeletonHash}/template`, { ...body, fields: ['amount'] })).body.error.code).toBe('TEMPLATE_FIELDS');
+      const created = await call('POST', `/skeletons/${group.skeletonHash}/template`, body);
+      expect(created.status).toBe(201);
+      expect(created.body.data).toMatchObject({ id: 't.hdfc.t7_learned', status: 'draft', skeleton, sample: body.sample });
+      expect(await count(`SELECT count(*) AS n FROM kb_templates WHERE id = 't.hdfc.t7_learned' AND source = 'learned'`)).toBe(1);
+      expect((await call('GET', '/skeletons')).body.data.some((g: any) => g.skeletonHash === group.skeletonHash)).toBe(false);
+    });
+
+    it('promotes an alias candidate to a draft global alias (T7.5)', async () => {
+      const key = 'tea trails t7';
+      for (let i = 0; i < 10; i += 1) {
+        const user = await createTestUser();
+        const cat = await createTestCategory(user.id, { name: 'Food' });
+        await sequelize.query(
+          `INSERT INTO merchant_category_rules (id, user_id, merchant, category_id, created_at, updated_at) VALUES (gen_random_uuid(), :u, :m, :c, NOW(), NOW())`,
+          { replacements: { u: user.id, m: key, c: cat.id } }
+        );
+      }
+      expect((await call('POST', '/alias-candidates/promote', { aliasKey: 'not a candidate', merchantId: 'm.t7_chaiwala' })).status).toBe(404);
+      const promoted = await call('POST', '/alias-candidates/promote', { aliasKey: key, merchantId: 'm.t7_chaiwala' });
+      expect(promoted.body.data).toMatchObject({ alias: key, country: '', status: 'draft', source: 'crowd' });
+      expect((await call('GET', '/alias-candidates')).body.data.some((c: any) => c.aliasKey === key)).toBe(false);
     });
   });
 });

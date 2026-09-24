@@ -11,9 +11,11 @@ import {
   confirmDetectedTransactionSchema,
   createMerchantRuleSchema,
   detectionSettingsSchema,
+  diagnosticsUploadSchema,
   ingestMessageSchema,
   knowledgePackQuerySchema,
   listDetectedQuerySchema,
+  skeletonUploadSchema,
   syncDetectedBatchSchema,
   updateMerchantRuleSchema,
 } from './transactionDetection.validator';
@@ -51,8 +53,13 @@ router.post('/import', detectionIngestRateLimiter, uploadStatement.single('file'
 router.get('/', validateQuery(listDetectedQuerySchema), asyncHandler(controller.listDetected));
 router.get('/pending', validateQuery(paginationSchema), asyncHandler(controller.listPending));
 
-// "Delete my detected data" (T5.7). Registered before '/:id' so "me" is never read as an id.
+// "Delete my detected data" (T5.7) and export (T7.6). Registered before '/:id' so "me" is never read as an id.
 router.delete('/me', asyncHandler(controller.deleteMyDetectedData));
+router.get('/me/export', asyncHandler(controller.exportMyDetectedData));
+
+// Daily diagnostics counts (T7.1) and opt-in template learning (T7.4)
+router.post('/diagnostics', detectionSyncRateLimiter, validateBody(diagnosticsUploadSchema), asyncHandler(controller.uploadDiagnostics));
+router.post('/skeletons', detectionSyncRateLimiter, validateBody(skeletonUploadSchema), asyncHandler(controller.uploadSkeletons));
 
 // Learned merchant rules. Registered before '/:id' so "rules" is never read as an id.
 router.get('/rules', asyncHandler(controller.getMerchantRules));

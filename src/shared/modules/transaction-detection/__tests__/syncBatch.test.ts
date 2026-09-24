@@ -8,6 +8,7 @@ import { updateTransaction } from '@modules/expenses/service/expenses.service';
 import {
   confirmPending,
   deleteMyDetectedData,
+  deleteMerchantRules,
   getMerchantRules,
   getSyncState,
   listDetected,
@@ -313,6 +314,9 @@ describe('detected transaction sync', () => {
       ]);
       expect(first.etag).not.toBe(empty.etag);
       expect((await getMerchantRules(user.id)).etag).toBe(first.etag);
+      // "Reset learned preferences" clears them on the server, so the daily sync can't restore them.
+      expect(await deleteMerchantRules(user.id)).toEqual({ deleted: 1 });
+      expect((await getMerchantRules(user.id)).etag).toBe(empty.etag);
     });
 
     it('editing an auto-detected transaction updates its detection and learns the rule (T5.4)', async () => {

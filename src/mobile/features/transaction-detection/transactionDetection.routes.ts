@@ -51,5 +51,6 @@ router.post('/:id/undo', validateParams(uuidParamSchema), asyncHandler(controlle
 // Learned merchant rules
 router.get('/rules', asyncHandler(controller.getMerchantRules));
 router.post('/rules', validateBody(createMerchantRuleSchema), asyncHandler(controller.saveMerchantRule));
+router.delete('/rules', asyncHandler(controller.deleteMerchantRules));
 
 export default router;

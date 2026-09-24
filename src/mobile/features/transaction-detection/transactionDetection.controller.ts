@@ -87,6 +87,11 @@ export async function getMerchantRules(req: Request, res: Response) {
   successResponse(res, rules);
 }
 
+export async function deleteMerchantRules(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await service.deleteMerchantRules(userId));
+}
+
 export async function saveMerchantRule(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   successResponse(res, await service.saveMerchantRule(userId, req.body as MerchantRuleInput), 201);

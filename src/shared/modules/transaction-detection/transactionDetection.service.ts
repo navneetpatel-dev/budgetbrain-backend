@@ -696,6 +696,15 @@ export async function deleteMyDetectedData(userId: string): Promise<{ deleted: n
   return { deleted };
 }
 
+/**
+ * "Reset learned preferences" (plan T5.7): removes every merchant → category rule of the user,
+ * so the app's daily rules sync doesn't bring them back.
+ */
+export async function deleteMerchantRules(userId: string): Promise<{ deleted: number }> {
+  const deleted = await MerchantCategoryRule.destroy({ where: { userId } });
+  return { deleted };
+}
+
 export async function saveMerchantRule(userId: string, input: MerchantRuleInput): Promise<MerchantCategoryRule> {
   const category = await Category.findOne({ where: { id: input.categoryId, userId }, attributes: ['id'] });
   if (!category) throw new NotFoundError(ERROR_MESSAGES.CATEGORY_NOT_FOUND);

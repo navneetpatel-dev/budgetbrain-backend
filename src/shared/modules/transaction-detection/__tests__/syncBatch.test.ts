@@ -4,8 +4,11 @@ import { env } from '@config/env';
 import { redis } from '@core/cache/redis.client';
 import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import type { DetectedItemInput } from '../transactionDetection.types';
+import { updateTransaction } from '@modules/expenses/service/expenses.service';
 import {
   confirmPending,
+  deleteMyDetectedData,
+  getMerchantRules,
   getSyncState,
   listDetected,
   listPending,
@@ -282,6 +285,58 @@ describe('detected transaction sync', () => {
       expect(rule).toMatchObject({ merchant: 'zomato', categoryId: office.id });
       const tx = await Transaction.findByPk(dto.createdTransactionId!);
       expect(tx).toMatchObject({ source: 'detected', categoryId: office.id });
+    });
+
+    it('learns from a renamed merchant too, and never from an unchanged confirm (T5.2)', async () => {
+      const user = await createTestUser();
+      const food = await createTestCategory(user.id, { name: 'Food' });
+      const id = await pendingItem(user.id, { categoryId: food.id, merchantName: 'ZOMATO MEDIA' });
+      await confirmPending(user.id, id, { merchant: 'Zomato' } as never);
+      expect(await MerchantCategoryRule.findOne({ where: { userId: user.id } })).toMatchObject({ merchant: 'zomato', categoryId: food.id });
+
+      const optOut = await pendingItem(user.id, { categoryId: food.id, merchantName: 'Blue Door' });
+      await confirmPending(user.id, optOut, { merchant: 'Blue Door Cafe', learnMerchantCategory: false } as never);
+      expect(await MerchantCategoryRule.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it('serves rules flat with an ETag that changes only when the rules do (T5.3)', async () => {
+      const user = await createTestUser();
+      const food = await createTestCategory(user.id, { name: 'Food' });
+      const office = await createTestCategory(user.id, { name: 'Office' });
+      const empty = await getMerchantRules(user.id);
+      expect(empty.rules).toEqual([]);
+      const id = await pendingItem(user.id, { categoryId: food.id, merchantName: 'Zomato' });
+      await confirmPending(user.id, id, { categoryId: office.id } as never);
+      const first = await getMerchantRules(user.id);
+      expect(first.rules).toEqual([
+        expect.objectContaining({ merchant: 'zomato', categoryId: office.id, categoryName: 'Office' }),
+      ]);
+      expect(first.etag).not.toBe(empty.etag);
+      expect((await getMerchantRules(user.id)).etag).toBe(first.etag);
+    });
+
+    it('editing an auto-detected transaction updates its detection and learns the rule (T5.4)', async () => {
+      const user = await createTestUser();
+      const food = await createTestCategory(user.id, { name: 'Food' });
+      const office = await createTestCategory(user.id, { name: 'Office' });
+      const res = await syncBatch(user.id, { items: [item(user.id, { categoryId: food.id, merchantName: 'Swiggy' })] });
+      expect(res.results[0].status).toBe('created');
+      await updateTransaction(user.id, res.results[0].transactionId!, { categoryId: office.id } as never);
+      const detected = await DetectedTransaction.findByPk(res.results[0].detectedId!);
+      expect(detected?.categoryId).toBe(office.id);
+      expect(await MerchantCategoryRule.findOne({ where: { userId: user.id } })).toMatchObject({ merchant: 'swiggy', categoryId: office.id });
+    });
+
+    it('deletes all detected data but keeps the transactions it created (T5.7)', async () => {
+      const user = await createTestUser();
+      const other = await createTestUser();
+      const res = await syncBatch(user.id, { items: [item(user.id), item(user.id, { evidence: weakEvidence })] });
+      await syncBatch(other.id, { items: [item(other.id)] });
+      expect(await deleteMyDetectedData(user.id)).toEqual({ deleted: 2 });
+      expect(await DetectedTransaction.count({ where: { userId: user.id } })).toBe(0);
+      expect(await DetectedTransaction.count({ where: { userId: other.id } })).toBe(1);
+      const tx = await Transaction.findByPk(res.results[0].transactionId!);
+      expect(tx).toMatchObject({ detectedTransactionId: null });
     });
 
     it('lets the user correct the type while confirming, within the direction rules', async () => {

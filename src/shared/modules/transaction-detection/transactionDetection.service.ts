@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { getActiveKillSwitches } from '@modules/knowledge-base/killSwitches.service';
@@ -526,10 +527,14 @@ export async function confirmPending(
       input.financialAccountId !== undefined ? input.financialAccountId : detected.financialAccountId;
     const merchant = input.merchant || detected.normalizedMerchant || detected.merchant;
 
-    // Learn only from a real correction of an expense's category (gap L3), with the same
-    // normalized key manual entries use (gap L6).
+    // Learn only from a real correction (gap L3, plan T5.2): the user picked another category, or
+    // renamed the merchant, for an expense. Confirming as detected teaches nothing. The rule uses
+    // the same normalized key manual entries use (gap L6), and this is the only write path.
     const categoryChanged = input.categoryId !== undefined && input.categoryId !== detected.categoryId;
-    if (input.learnMerchantCategory && categoryChanged && categoryId && merchant && type === 'expense') {
+    const detectedMerchant = detected.normalizedMerchant || detected.merchant;
+    const merchantChanged =
+      Boolean(input.merchant) && normalizeMerchantKey(input.merchant!) !== normalizeMerchantKey(detectedMerchant ?? '');
+    if (input.learnMerchantCategory !== false && (categoryChanged || merchantChanged) && categoryId && merchant && type === 'expense') {
       await upsertMerchantCategoryRule(userId, merchant, categoryId, t);
     }
 
@@ -571,7 +576,7 @@ export async function confirmPending(
       resource: AuditResource.DETECTED_TRANSACTION,
       resourceId: detected.id,
       actorUserId: userId,
-      afterState: { transactionId: created?.id ?? null, type, categoryChanged },
+      afterState: { transactionId: created?.id ?? null, type, categoryChanged, merchantChanged },
       transaction: t,
     });
 
@@ -639,12 +644,56 @@ export async function undoDetected(userId: string, id: string): Promise<Detected
 // Merchant rules (plan task T1.9)
 // ---------------------------------------------------------------------------------------------
 
-export async function getMerchantRules(userId: string): Promise<MerchantCategoryRule[]> {
-  return MerchantCategoryRule.findAll({
+export interface MerchantRuleDto {
+  id: string;
+  /** Normalized merchant key (lowercase, trimmed): the same key on every client. */
+  merchant: string;
+  categoryId: string;
+  categoryName: string | null;
+  updatedAt: string;
+}
+
+/**
+ * The user's learned rules (plan T5.3), with an ETag over their content so clients can
+ * re-sync daily and on login for the cost of a 304.
+ */
+export async function getMerchantRules(userId: string): Promise<{ rules: MerchantRuleDto[]; etag: string }> {
+  const rows = await MerchantCategoryRule.findAll({
     where: { userId },
     order: [['merchant', 'ASC']],
-    include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'icon', 'color'] }],
+    include: [{ model: Category, as: 'category', attributes: ['id', 'name'] }],
   });
+  const rules = rows.map((row) => {
+    const category = (row as MerchantCategoryRule & { category?: { name: string } }).category;
+    return {
+      id: row.id,
+      merchant: row.merchant,
+      categoryId: row.categoryId,
+      categoryName: category?.name ?? null,
+      updatedAt: new Date(row.updatedAt).toISOString(),
+    };
+  });
+  const etag = `"${createHash('sha256').update(JSON.stringify(rules)).digest('hex')}"`;
+  return { rules, etag };
+}
+
+/**
+ * Deletes every detected-transaction record of the user (plan T5.7, "Delete my detected data").
+ * Transactions they created stay, since they are the user's records now; their link to the
+ * detection is cleared by the foreign key. Learned rules stay too, because manual entries
+ * teach them as well.
+ */
+export async function deleteMyDetectedData(userId: string): Promise<{ deleted: number }> {
+  const deleted = await DetectedTransaction.destroy({ where: { userId } });
+  await deleteCache(syncStateKey(userId));
+  await writeAuditLog({
+    action: AuditAction.DETECTION_DELETE_ALL,
+    resource: AuditResource.DETECTED_TRANSACTION,
+    resourceId: userId,
+    actorUserId: userId,
+    afterState: { deleted },
+  });
+  return { deleted };
 }
 
 export async function saveMerchantRule(userId: string, input: MerchantRuleInput): Promise<MerchantCategoryRule> {

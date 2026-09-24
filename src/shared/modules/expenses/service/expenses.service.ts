@@ -7,6 +7,7 @@ import {
   IncomeSource,
   IncomeAllocation,
   FinancialAccount,
+  DetectedTransaction,
   User,
   sequelize,
 } from '@database/models';
@@ -565,6 +566,18 @@ export async function updateTransaction(
     const effectiveMerchant = data.merchant ?? transaction.merchant;
     if (transaction.type === 'expense' && effectiveCategoryId && effectiveMerchant) {
       await upsertMerchantCategoryRule(userId, effectiveMerchant, effectiveCategoryId, t);
+    }
+
+    // An auto-detected transaction edited in the normal edit screen (plan T5.4): keep its
+    // detection record in step, so the review history and later syncs see the correction.
+    if (transaction.detectedTransactionId && (data.categoryId !== undefined || data.merchant !== undefined)) {
+      await DetectedTransaction.update(
+        {
+          ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+          ...(data.merchant !== undefined ? { normalizedMerchant: data.merchant } : {}),
+        },
+        { where: { id: transaction.detectedTransactionId, userId }, transaction: t }
+      );
     }
 
     await writeAuditLog({

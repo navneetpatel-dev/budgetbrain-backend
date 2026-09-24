@@ -77,7 +77,19 @@ export async function undoDetected(req: Request, res: Response) {
 
 export async function getMerchantRules(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
-  successResponse(res, await service.getMerchantRules(userId));
+  const { rules, etag } = await service.getMerchantRules(userId);
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  if (req.header('If-None-Match') === etag) {
+    res.status(304).end();
+    return;
+  }
+  successResponse(res, rules);
+}
+
+export async function deleteMerchantRules(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await service.deleteMerchantRules(userId));
 }
 
 export async function saveMerchantRule(req: Request, res: Response) {
@@ -100,4 +112,9 @@ export async function getKnowledgePack(req: Request, res: Response) {
     return;
   }
   successResponse(res, pack);
+}
+
+export async function deleteMyDetectedData(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await service.deleteMyDetectedData(userId));
 }

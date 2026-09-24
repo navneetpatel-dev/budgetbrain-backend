@@ -32,6 +32,9 @@ router.post('/sync', detectionSyncRateLimiter, validateBody(syncDetectedBatchSch
 router.get('/', validateQuery(listDetectedQuerySchema), asyncHandler(controller.listDetected));
 router.get('/pending', validateQuery(paginationSchema), asyncHandler(controller.listPending));
 
+// "Delete my detected data" (T5.7). Registered before '/:id' so "me" is never read as an id.
+router.delete('/me', asyncHandler(controller.deleteMyDetectedData));
+
 // Review actions
 router.post(
   '/pending/:id/confirm',
@@ -48,5 +51,6 @@ router.post('/:id/undo', validateParams(uuidParamSchema), asyncHandler(controlle
 // Learned merchant rules
 router.get('/rules', asyncHandler(controller.getMerchantRules));
 router.post('/rules', validateBody(createMerchantRuleSchema), asyncHandler(controller.saveMerchantRule));
+router.delete('/rules', asyncHandler(controller.deleteMerchantRules));
 
 export default router;

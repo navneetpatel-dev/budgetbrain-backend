@@ -12,6 +12,7 @@ import {
   runWeeklyDigest,
 } from './scheduledNotifications';
 import { enqueueNightlyPackBuild } from '@modules/knowledge-base/knowledgeBase.jobs';
+import { runDetectionRetention, runDetectionRollup } from '@modules/transaction-detection/detectionAdmin.service';
 
 const tasks: ScheduledTask[] = [];
 
@@ -28,6 +29,9 @@ export function start(): void {
   tasks.push(cron.schedule('0 4 * * *', () => void runTokenAndReportCleanup()));
   // Knowledge packs (plan T4.3): rebuilt nightly; unchanged content produces no new version.
   tasks.push(cron.schedule('30 3 * * *', () => void enqueueNightlyPackBuild()));
+  // Detection admin rollups (plan T7.2) hourly; retention (T7.6) daily.
+  tasks.push(cron.schedule('15 * * * *', () => void runDetectionRollup().catch((err) => console.error('Detection rollup failed', err))));
+  tasks.push(cron.schedule('45 4 * * *', () => void runDetectionRetention().catch((err) => console.error('Detection retention failed', err))));
   console.log('Scheduled jobs started');
 }
 

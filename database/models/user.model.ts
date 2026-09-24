@@ -34,6 +34,8 @@ export interface UserAttributes {
   monthlyDigestOptIn: boolean;
   /** Automatic detection may add high-confidence transactions without review (plan T1.5, T5.7). */
   detectionAutoAdd: boolean;
+  /** Opt-in to sending anonymous message skeletons for template learning (plan D-5, T7.4). */
+  detectionTemplateLearning: boolean;
   totpSecret: string | null;
   totpEnabled: boolean;
   createdAt?: Date;
@@ -62,6 +64,7 @@ export type UserCreationAttributes = Optional<
   | 'weeklyDigestOptIn'
   | 'monthlyDigestOptIn'
   | 'detectionAutoAdd'
+  | 'detectionTemplateLearning'
   | 'totpSecret'
   | 'totpEnabled'
 >;
@@ -90,6 +93,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare weeklyDigestOptIn: boolean;
   declare monthlyDigestOptIn: boolean;
   declare detectionAutoAdd: boolean;
+  declare detectionTemplateLearning: boolean;
   declare totpSecret: string | null;
   declare totpEnabled: boolean;
   declare readonly createdAt: Date;
@@ -206,6 +210,12 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         allowNull: false,
         defaultValue: true,
         field: 'detection_auto_add',
+      },
+      detectionTemplateLearning: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'detection_template_learning',
       },
       totpSecret: {
         type: DataTypes.STRING(255),

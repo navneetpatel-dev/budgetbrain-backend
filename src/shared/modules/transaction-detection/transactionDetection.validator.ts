@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { MESSAGE_SOURCES, PAYMENT_METHODS, TRANSACTION_SUBTYPES, TRANSACTION_TYPES } from '@budgetbrain/detection-core';
+import {
+  LIFECYCLE_STATES,
+  MESSAGE_SOURCES,
+  PAYMENT_METHODS,
+  REASON_CODES,
+  TRANSACTION_SUBTYPES,
+  TRANSACTION_TYPES,
+} from '@budgetbrain/detection-core';
 import { optionalText, tagsField, uuidField } from '@shared/validation/index';
 import { DETECTION_LIMITS } from './transactionDetection.constants';
 
@@ -81,9 +88,12 @@ export const createMerchantRuleSchema = z.object({
 
 export const detectionSettingsSchema = z
   .object({
-    autoAddHighConfidence: z.boolean(),
+    autoAddHighConfidence: z.boolean().optional(),
+    /** Opt-in to template learning (plan D-5, T7.4); off by default. */
+    templateLearning: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => v.autoAddHighConfidence !== undefined || v.templateLearning !== undefined, 'Nothing to update');
 
 export const listDetectedQuerySchema = z.object({
   status: z.enum(['auto_approved', 'pending_review', 'user_confirmed', 'rejected', 'duplicate']).optional(),
@@ -117,3 +127,54 @@ export const ingestMessageSchema = z
 
 /** `PATCH /detected-transactions/rules/:id` (plan T6.4, rules manager). */
 export const updateMerchantRuleSchema = z.object({ categoryId: uuidField() }).strict();
+
+/**
+ * `POST /detected-transactions/diagnostics` (plan T7.1): daily counts only. Stages and reason
+ * codes come from core's closed lists, so no free text can be uploaded.
+ */
+export const diagnosticsUploadSchema = z
+  .object({
+    rows: z
+      .array(
+        z
+          .object({
+            day: isoDate,
+            stage: z.enum(LIFECYCLE_STATES),
+            reasonCode: z.enum(REASON_CODES),
+            institutionId: z.string().regex(/^[a-z0-9_.-]{1,80}$/).nullable(),
+            count: z.number().int().min(1).max(100_000),
+          })
+          .strict()
+      )
+      .max(DETECTION_LIMITS.MAX_DIAGNOSTIC_ROWS),
+  })
+  .strict();
+
+/**
+ * `POST /detected-transactions/skeletons` (plan T7.4): opt-in message skeletons. The skeleton
+ * must contain only placeholders and letters (core masks every digit), and is capped in size.
+ */
+export const skeletonUploadSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            skeletonHash: z.string().regex(/^[0-9a-f]{64}$/),
+            skeleton: z
+              .string()
+              .min(1)
+              .max(1200)
+              .refine((s) => !/\d/.test(s), 'A skeleton may not contain digits'),
+            institutionId: z.string().regex(/^[a-z0-9_.-]{1,80}$/).nullable(),
+            senderKey: z.string().max(200),
+            country: z.string().regex(/^[A-Z]{2}$/).nullable(),
+            language: z.string().max(20).nullable(),
+            correctedField: z.enum(['amount', 'date', 'merchant', 'type', 'account', 'direction']).nullable(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(DETECTION_LIMITS.MAX_SKELETONS_PER_UPLOAD),
+  })
+  .strict();

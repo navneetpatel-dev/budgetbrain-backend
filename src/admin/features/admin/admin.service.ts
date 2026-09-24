@@ -1,3 +1,4 @@
+import { getAdoption } from '@modules/transaction-detection/detectionAdmin.service';
 import { Op, fn, col } from 'sequelize';
 import {
   User,
@@ -85,8 +86,11 @@ export async function getFeatureUsageStats() {
     raw: true,
   });
 
+  // Auto-tracking adoption comes from the hourly detection rollup (plan T7.3), not a raw scan.
+  const autoTracking = await getAdoption();
   return {
     period: 'last_30_days',
+    autoTracking,
     features: (usageByResource as unknown as Array<{ resource: string; count: string }>).map(
       (item) => ({
         feature: item.resource,

@@ -22,6 +22,9 @@ export const DETECTION_LIMITS = {
   IDEMPOTENCY_CACHE_SECONDS: 24 * 60 * 60,
   /** A pasted message or forwarded email; bank alerts are far shorter (core reads 1000 chars). */
   MAX_INGEST_TEXT_CHARS: 20_000,
+  /** Diagnostics rows one upload may carry: a month of stages × reasons × banks. */
+  MAX_DIAGNOSTIC_ROWS: 2000,
+  MAX_SKELETONS_PER_UPLOAD: 50,
 } as const;
 
 /** Why an item is waiting for the user instead of being created (stored in review_reason). */
@@ -32,6 +35,8 @@ export const REVIEW_REASONS = {
   USER_REVIEWS_ALL: 'auto_add_disabled',
   /** An imported statement line that looks like a transaction already in the ledger. */
   POSSIBLE_DUPLICATE: 'possible_duplicate',
+  /** Set on a rejected row when the user undid an added transaction (rollups count it apart). */
+  UNDONE: 'undone',
 } as const;
 
 export const ERROR_MESSAGES = {

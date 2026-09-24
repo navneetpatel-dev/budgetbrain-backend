@@ -1,3 +1,4 @@
+import { userHash } from '@modules/transaction-detection/skeletons.service';
 import { sequelize } from '@database/models';
 import { AppError } from '@shared/errors';
 import {
@@ -20,6 +21,7 @@ import {
   FinancialAccount,
   Investment,
   ParsedTransaction,
+  DetectedTransaction,
   SupportTicket,
   VerificationToken,
   MerchantCategoryRule,
@@ -164,6 +166,13 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     await FinancialAccount.destroy({ where: { userId }, ...txOpts });
     await Investment.destroy({ where: { userId }, ...txOpts });
     await ParsedTransaction.destroy({ where: { userId }, ...txOpts });
+    // Detection data (plan T7.6). Skeletons are keyed by an HMAC of the id, so no FK covers them.
+    await DetectedTransaction.destroy({ where: { userId }, ...txOpts });
+    await sequelize.query(`DELETE FROM detection_diagnostics_daily WHERE user_id = :userId`, { replacements: { userId }, ...txOpts });
+    await sequelize.query(`DELETE FROM detection_skeleton_submissions WHERE user_hash = :hash`, {
+      replacements: { hash: userHash(userId) },
+      ...txOpts,
+    });
     await SupportTicket.destroy({ where: { userId }, ...txOpts });
     await VerificationToken.destroy({ where: { userId }, ...txOpts });
     await Subscription.destroy({ where: { userId }, ...txOpts });

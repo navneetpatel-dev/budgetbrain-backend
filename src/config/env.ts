@@ -73,6 +73,11 @@ export const envSchema = z.object({
   PACK_STORAGE_PREFIX: z.string().default('detection/packs'),
   // Server-side merchant enrichment (plan T4.7, decision D-7): 'none' keeps it off.
   MERCHANT_ENRICHMENT_PROVIDER: z.enum(['none']).default('none'),
+  // HMAC key for pseudonymous user ids on template-learning submissions (plan T7.4). Falls back
+  // to JWT_ACCESS_SECRET; set its own value so rotating JWT keys doesn't split k-anonymity counts.
+  DETECTION_HMAC_SECRET: z.string().min(32).optional(),
+  // Distinct users a learned skeleton or alias needs before admins can see it (plan T7.4, T7.5).
+  DETECTION_K_ANONYMITY: z.coerce.number().int().min(2).default(10),
 });
 
 export const env = envSchema.parse(process.env);

@@ -5,12 +5,17 @@ import * as service from '@shared/modules/transaction-detection/transactionDetec
 import { getPackForClient } from '@modules/knowledge-base/packBuilder.service';
 import { AppError } from '@shared/errors';
 import { ingestMessage, listIngestInstitutions } from './ingest.service';
+import { saveDiagnostics } from './diagnostics.service';
+import { submitSkeletons } from './skeletons.service';
+import { exportDetectionData } from './detectionAdmin.service';
 import type {
   ConfirmDetectedTransactionInput,
   DetectionSettingsInput,
   ListDetectedQuery,
+  DiagnosticsUploadInput,
   IngestInput,
   MerchantRuleInput,
+  SkeletonUploadInput,
   SyncDetectedBatchRequest,
   UpdateMerchantRuleInput,
 } from '@shared/modules/transaction-detection/transactionDetection.types';
@@ -141,4 +146,23 @@ export async function ingest(req: Request, res: Response) {
 
 export async function listInstitutions(_req: Request, res: Response) {
   successResponse(res, await listIngestInstitutions());
+}
+
+/** Daily counts of where messages stopped (plan T7.1). */
+export async function uploadDiagnostics(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await saveDiagnostics(userId, req.body as DiagnosticsUploadInput));
+}
+
+/** Opt-in message skeletons for template learning (plan T7.4). */
+export async function uploadSkeletons(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await submitSkeletons(userId, req.body as SkeletonUploadInput));
+}
+
+/** Everything detection stores about the user (plan T7.6). */
+export async function exportMyDetectedData(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  res.setHeader('Content-Disposition', 'attachment; filename="detection-data.json"');
+  successResponse(res, await exportDetectionData(userId));
 }

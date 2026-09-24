@@ -21,7 +21,7 @@ import { parseCsv, runImport } from '../knowledgeBase.importers';
 import { coverageByCountry } from '../knowledgeBase.repository';
 import { buildPack, getPackForClient } from '../packBuilder.service';
 import { enrichMerchant, enrichmentProvider, registerEnrichmentProvider } from '../merchantEnrichment';
-import { getKnowledgePack } from '../../../../mobile/features/transaction-detection/transactionDetection.controller';
+import { getKnowledgePack } from '@modules/transaction-detection/transactionDetection.controller';
 
 const KB_TABLES = [
   'kb_import_runs',

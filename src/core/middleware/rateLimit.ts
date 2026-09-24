@@ -78,7 +78,8 @@ export const reportExportRateLimiter = createLimiter('export', 8, 60 * 1000, 'To
 export const searchRateLimiter = createLimiter('search', 30, 60 * 1000, 'Too many search requests');
 export const receiptUploadRateLimiter = createLimiter('receipt', 20, 60 * 1000, 'Too many upload requests');
 export const syncBatchRateLimiter = createLimiter('sync', 10, 60 * 1000, 'Too many sync requests');
-export const integrationsRateLimiter = createLimiter('integrations', 15, 60 * 1000, 'Too many import requests');
+/** Pasted messages, emails and statement imports (plan T6.2, T6.5). */
+export const detectionIngestRateLimiter = createLimiter('ingest', 15, 60 * 1000, 'Too many import requests');
 export const checkoutRateLimiter = createLimiter('checkout', 10, 60 * 1000, 'Too many checkout requests');
 
 /**

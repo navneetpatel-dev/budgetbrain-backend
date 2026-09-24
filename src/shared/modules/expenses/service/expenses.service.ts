@@ -126,6 +126,7 @@ export interface TransactionFilters {
   endDate?: string;
   search?: string;
   tag?: string;
+  source?: 'manual' | 'detected' | 'import' | 'open_banking';
   page?: number;
   limit?: number;
 }
@@ -142,6 +143,7 @@ function buildTransactionWhere(userId: string, filters: TransactionFilters): Rec
   if (filters.incomeSourceId) where.incomeSourceId = filters.incomeSourceId;
   if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
   if (filters.tag) where.tags = { [Op.contains]: [filters.tag] };
+  if (filters.source) where.source = filters.source;
 
   if (filters.startDate || filters.endDate) {
     where.date = {};

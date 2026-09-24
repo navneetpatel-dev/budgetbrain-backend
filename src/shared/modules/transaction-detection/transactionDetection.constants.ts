@@ -14,8 +14,14 @@ export const DETECTION_LIMITS = {
   MAX_FUTURE_DAYS: 1,
   /** Detected items one user may sync per UTC day (plan T1.7); far above any real inbox. */
   MAX_ITEMS_PER_DAY: 2000,
+  /** Oldest date a statement import accepts, in days before today. */
+  MAX_IMPORT_AGE_DAYS: 5 * 366,
+  /** Rows one statement file may hold. */
+  MAX_IMPORT_ROWS: 50_000,
   SYNC_STATE_CACHE_SECONDS: 30,
   IDEMPOTENCY_CACHE_SECONDS: 24 * 60 * 60,
+  /** A pasted message or forwarded email; bank alerts are far shorter (core reads 1000 chars). */
+  MAX_INGEST_TEXT_CHARS: 20_000,
 } as const;
 
 /** Why an item is waiting for the user instead of being created (stored in review_reason). */
@@ -24,6 +30,8 @@ export const REVIEW_REASONS = {
   LOW_CONFIDENCE: 'low_confidence',
   AUTO_CREATE_DISABLED: 'kill_switch',
   USER_REVIEWS_ALL: 'auto_add_disabled',
+  /** An imported statement line that looks like a transaction already in the ledger. */
+  POSSIBLE_DUPLICATE: 'possible_duplicate',
 } as const;
 
 export const ERROR_MESSAGES = {

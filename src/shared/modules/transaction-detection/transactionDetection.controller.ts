@@ -4,12 +4,15 @@ import { AuthRequest } from '@shared/types';
 import * as service from '@shared/modules/transaction-detection/transactionDetection.service';
 import { getPackForClient } from '@modules/knowledge-base/packBuilder.service';
 import { AppError } from '@shared/errors';
+import { ingestMessage, listIngestInstitutions } from './ingest.service';
 import type {
   ConfirmDetectedTransactionInput,
   DetectionSettingsInput,
   ListDetectedQuery,
+  IngestInput,
   MerchantRuleInput,
   SyncDetectedBatchRequest,
+  UpdateMerchantRuleInput,
 } from '@shared/modules/transaction-detection/transactionDetection.types';
 
 function pageParams(query: { page?: number; limit?: number }) {
@@ -117,4 +120,25 @@ export async function getKnowledgePack(req: Request, res: Response) {
 export async function deleteMyDetectedData(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   successResponse(res, await service.deleteMyDetectedData(userId));
+}
+
+export async function updateMerchantRule(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  const { categoryId } = req.body as UpdateMerchantRuleInput;
+  successResponse(res, await service.updateMerchantRule(userId, String(req.params.id), categoryId));
+}
+
+export async function deleteMerchantRule(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await service.deleteMerchantRule(userId, String(req.params.id)));
+}
+
+/** A pasted SMS or forwarded email (plan T6.2). The text is parsed and never stored. */
+export async function ingest(req: Request, res: Response) {
+  const userId = (req as AuthRequest).userId!;
+  successResponse(res, await ingestMessage(userId, req.body as IngestInput));
+}
+
+export async function listInstitutions(_req: Request, res: Response) {
+  successResponse(res, await listIngestInstitutions());
 }

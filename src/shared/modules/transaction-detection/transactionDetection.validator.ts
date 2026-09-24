@@ -97,3 +97,23 @@ export const knowledgePackQuerySchema = z.object({
   country: z.string().regex(/^(?:[A-Za-z]{2}|GLOBAL)$/),
   since: z.coerce.number().int().positive().optional(),
 });
+
+/**
+ * `POST /detected-transactions/ingest` (plan T6.2): a pasted bank SMS or a forwarded email.
+ * The text is parsed and dropped; only the extracted fields are stored.
+ */
+export const ingestMessageSchema = z
+  .object({
+    kind: z.enum(['sms', 'email']),
+    text: z.string().trim().min(1).max(DETECTION_LIMITS.MAX_INGEST_TEXT_CHARS),
+    /** SMS sender id (e.g. `VM-HDFCBK`) or the email's From address. */
+    sender: z.string().trim().max(255).nullable().optional(),
+    subject: z.string().trim().max(500).nullable().optional(),
+    /** Which bank this is, when the pasted text has no sender. */
+    institutionId: z.string().trim().max(100).nullable().optional(),
+    receivedAt: isoDateTime.nullable().optional(),
+  })
+  .strict();
+
+/** `PATCH /detected-transactions/rules/:id` (plan T6.4, rules manager). */
+export const updateMerchantRuleSchema = z.object({ categoryId: uuidField() }).strict();

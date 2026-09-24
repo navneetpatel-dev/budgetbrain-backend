@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { AuditLog, DetectedTransaction, FinancialAccount, MerchantCategoryRule, Transaction, sequelize } from '@database/models';
 import { env } from '@config/env';
 import { redis } from '@core/cache/redis.client';
-import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
+import { setupTestDb, createTestUser, createTestCategory, createTestTransaction } from '@testHelpers';
 import type { DetectedItemInput } from '../transactionDetection.types';
-import { updateTransaction } from '@modules/expenses/service/expenses.service';
+import { listTransactions, updateTransaction } from '@modules/expenses/service/expenses.service';
 import {
   confirmPending,
   deleteMyDetectedData,
@@ -396,8 +396,18 @@ describe('detected transaction sync', () => {
       await syncBatch(user.id, { items: [item(user.id), item(user.id, { evidence: weakEvidence })] });
       const auto = await listDetected(user.id, { status: 'auto_approved' });
       expect(auto.count).toBe(1);
+      // The web list filters to detected transactions by source (T6.4).
+      await createTestTransaction(user.id);
+      const detectedOnly = await listTransactions(user.id, { source: 'detected' });
+      const manualOnly = await listTransactions(user.id, { source: 'manual' });
+      expect([detectedOnly.total, manualOnly.total]).toEqual([1, 1]);
       const state = await getSyncState(user.id);
-      expect(state).toEqual({ latestSyncedTransactionDate: today, totalDetectedCount: 2, pendingReviewCount: 1 });
+      expect(state).toEqual({
+        latestSyncedTransactionDate: today,
+        totalDetectedCount: 2,
+        pendingReviewCount: 1,
+        sources: [{ source: 'android_sms', count: 2, lastReceivedAt: expect.any(String) }],
+      });
     });
   });
 });

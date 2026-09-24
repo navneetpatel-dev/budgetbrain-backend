@@ -5,8 +5,10 @@ import type {
   createMerchantRuleSchema,
   detectedItemSchema,
   detectionSettingsSchema,
+  ingestMessageSchema,
   listDetectedQuerySchema,
   syncDetectedBatchSchema,
+  updateMerchantRuleSchema,
 } from './transactionDetection.validator';
 
 export type DetectedItemInput = z.infer<typeof detectedItemSchema>;
@@ -15,6 +17,17 @@ export type ConfirmDetectedTransactionInput = z.infer<typeof confirmDetectedTran
 export type MerchantRuleInput = z.infer<typeof createMerchantRuleSchema>;
 export type DetectionSettingsInput = z.infer<typeof detectionSettingsSchema>;
 export type ListDetectedQuery = z.infer<typeof listDetectedQuerySchema>;
+export type IngestInput = z.infer<typeof ingestMessageSchema>;
+export type UpdateMerchantRuleInput = z.infer<typeof updateMerchantRuleSchema>;
+
+/** What happened to a pasted message or email (plan T6.2). Never echoes the text. */
+export interface IngestResponse {
+  status: 'created' | 'needs_review' | 'already_synced' | 'ignored' | 'validation_error';
+  /** Where and why parsing stopped, for `ignored` and `validation_error`. */
+  stage: string | null;
+  reason: string | null;
+  detected: DetectedTransactionDto | null;
+}
 
 export interface SyncDetectedBatchResponse {
   totalProcessed: number;
@@ -30,6 +43,8 @@ export interface SyncStateResponse {
   latestSyncedTransactionDate: string | null;
   totalDetectedCount: number;
   pendingReviewCount: number;
+  /** Where detections came from and when each source last sent one (web status page, T6.4). */
+  sources: { source: string; count: number; lastReceivedAt: string }[];
 }
 
 /** Runtime switches clients read before processing (plan task T1.16, interim until T4.6). */

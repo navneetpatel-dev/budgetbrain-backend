@@ -114,6 +114,8 @@ export const listTransactionsSchema = paginationSchema
     paymentMethod: enumField(PAYMENT_METHODS).optional(),
     search: optionalText('search'),
     tag: optionalText('tag'),
+    /** `detected` = added by detection or a statement import (plan T6.4). */
+    source: z.enum(['manual', 'detected', 'import', 'open_banking']).optional(),
   })
   .superRefine(refineDateRangeOrder);
 

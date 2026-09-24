@@ -65,6 +65,14 @@ export const envSchema = z.object({
   DETECTION_AUTO_CREATE_ENABLED: z.enum(['true', 'false']).default('true'),
   // Oldest mobile app version allowed to run detection, e.g. '1.4.0'.
   DETECTION_MIN_APP_VERSION: z.string().optional(),
+  // Knowledge-pack signing (plan T4.3): base64 Ed25519 secret key and its id. Clients ship the
+  // matching public key; packs are never built without a key.
+  PACK_SIGNING_KEY: z.string().optional(),
+  PACK_KEY_ID: z.string().optional(),
+  // Storage folder for built packs (S3 prefix, or the local uploads folder in development).
+  PACK_STORAGE_PREFIX: z.string().default('detection/packs'),
+  // Server-side merchant enrichment (plan T4.7, decision D-7): 'none' keeps it off.
+  MERCHANT_ENRICHMENT_PROVIDER: z.enum(['none']).default('none'),
 });
 
 export const env = envSchema.parse(process.env);

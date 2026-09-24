@@ -8,6 +8,7 @@ import {
   confirmDetectedTransactionSchema,
   createMerchantRuleSchema,
   detectionSettingsSchema,
+  knowledgePackQuerySchema,
   listDetectedQuerySchema,
   syncDetectedBatchSchema,
 } from '@shared/modules/transaction-detection/transactionDetection.validator';
@@ -17,6 +18,9 @@ const router = Router();
 // Kill switches and the user's auto-add preference (T1.16, T1.5)
 router.get('/config', asyncHandler(controller.getConfig));
 router.patch('/settings', validateBody(detectionSettingsSchema), asyncHandler(controller.updateSettings));
+
+// Signed knowledge pack download info, with ETag/304 (T4.3)
+router.get('/knowledge-pack', validateQuery(knowledgePackQuerySchema), asyncHandler(controller.getKnowledgePack));
 
 // Watermark for catch-up scans and fresh installs
 router.get('/sync-state', asyncHandler(controller.getSyncState));

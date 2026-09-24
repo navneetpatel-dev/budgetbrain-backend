@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
+import { getActiveKillSwitches } from '@modules/knowledge-base/killSwitches.service';
 import { minTier, scoreEvidence, isAllowedDirectionType, type ConfidenceTier, type SyncItemResult } from '@budgetbrain/detection-core';
 import {
   sequelize,
@@ -97,6 +98,8 @@ export async function getDetectionConfig(userId: string): Promise<DetectionConfi
     autoCreateEnabled: env.DETECTION_AUTO_CREATE_ENABLED === 'true',
     minAppVersion: env.DETECTION_MIN_APP_VERSION ?? null,
     autoAddHighConfidence: user?.detectionAutoAdd ?? true,
+    // Per institution, template, country, pack and app version (plan T4.6); applied by core.
+    killSwitches: await getActiveKillSwitches(),
   };
 }
 

@@ -4,6 +4,7 @@ import { startEmailWorker } from './workers/email.worker';
 import { startReceiptExtractionWorker } from './workers/receiptExtraction.worker';
 import { startReportWorker } from './workers/report.worker';
 import { startPushWorker } from './workers/push.worker';
+import { startKnowledgeBaseWorker } from './workers/knowledgeBase.worker';
 
 const log = createLogger('system');
 
@@ -17,8 +18,8 @@ let workers: Worker[] = [];
  */
 export function startWorkers(): void {
   if (workers.length > 0) return;
-  workers = [startEmailWorker(), startReceiptExtractionWorker(), startReportWorker(), startPushWorker()];
-  log.info('Queue workers started', { queues: ['email', 'receipt-extraction', 'report', 'push'] });
+  workers = [startEmailWorker(), startReceiptExtractionWorker(), startReportWorker(), startPushWorker(), startKnowledgeBaseWorker()];
+  log.info('Queue workers started', { queues: ['email', 'receipt-extraction', 'report', 'push', 'knowledge-base'] });
 }
 
 export async function stopWorkers(): Promise<void> {
@@ -26,11 +27,12 @@ export async function stopWorkers(): Promise<void> {
   workers = [];
 }
 
-export { emailQueue, receiptExtractionQueue, reportQueue, pushQueue } from './queues';
+export { emailQueue, receiptExtractionQueue, reportQueue, pushQueue, knowledgeBaseQueue } from './queues';
 export type {
   EmailJobData,
   ReceiptExtractionJobData,
   ReportJobData,
   ReportJobResult,
   PushJobData,
+  KnowledgeBaseJobData,
 } from './queues';

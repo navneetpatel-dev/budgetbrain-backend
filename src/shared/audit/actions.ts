@@ -59,6 +59,7 @@ export const AuditAction = {
   KB_PUBLISH: 'kb.publish',
   KB_PACK_BUILD: 'kb.pack_build',
   KILL_SWITCH_CHANGE: 'kb.kill_switch_change',
+  ROLLOUT_CHANGE: 'kb.rollout_change',
 
   LOAN_CREATE: 'loan.create',
   LOAN_UPDATE: 'loan.update',

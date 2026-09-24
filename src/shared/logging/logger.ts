@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import winston from 'winston';
+import { redactLogInfo } from './redact';
 
 export type LogService = 'mobile' | 'web' | 'admin' | 'system';
 
@@ -41,6 +42,8 @@ function getRootLogger(): winston.Logger {
   rootLogger = winston.createLogger({
     level,
     defaultMeta: {},
+    // Runs before every transport's own format (plan T9.4).
+    format: winston.format((info) => redactLogInfo(info))(),
     transports: [
       new winston.transports.File({
         filename: path.join(LOG_DIR, 'error.log'),
@@ -69,3 +72,8 @@ export function createLogger(service: LogService): winston.Logger {
 }
 
 export const logger = createLogger('system');
+
+/** Test helper: attach a transport to see exactly what every logger writes. */
+export function __rootLoggerForTests(): winston.Logger {
+  return getRootLogger();
+}

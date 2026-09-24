@@ -184,6 +184,45 @@ interface PreparedItem {
  * Query count is constant per batch (plan §3.2). Replaying the same batch, with or without an
  * Idempotency-Key, returns `already_synced` for every item instead of creating anything twice.
  */
+/**
+ * The user's auto-add setting and, in the same query, the batch items that match one of their
+ * manual transactions (plan T3.12): same amount and currency, same direction, within a day either
+ * side. Transfers are left out (the other leg looks the same by design), and so are statement
+ * imports, which check look-alikes themselves. Only well-formed values reach the SQL casts;
+ * validation rejects the rest a moment later anyway.
+ */
+async function loadSyncUser(
+  userId: string,
+  items: readonly DetectedItemInput[],
+  checkManual: boolean
+): Promise<{ autoAdd: boolean; manualLookalikes: Set<number> } | null> {
+  const rows = checkManual
+    ? items.flatMap((item, idx) =>
+        item.transactionType !== 'transfer' &&
+        /^\d{1,13}(\.\d{1,4})?$/.test(String(item.amount)) &&
+        /^[A-Z]{3}$/.test(String(item.currency)) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(String(item.transactionDate))
+          ? [{ idx, amount: String(item.amount), currency: item.currency, day: item.transactionDate, credit: item.direction === 'CREDIT' }]
+          : []
+      )
+    : [];
+  const [row] = await sequelize.query<{ autoAdd: boolean; manual: number[] | null }>(
+    `SELECT u.detection_auto_add AS "autoAdd",
+            (SELECT array_agg(DISTINCT r.idx)
+             FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS r(idx int, amount numeric, currency text, day date, credit boolean)
+             JOIN transactions t
+               ON t.user_id = u.id AND t.source = 'manual'
+              AND t.amount = r.amount AND t.currency = r.currency
+              AND t.date BETWEEN r.day - 1 AND r.day + 1
+              AND (CASE WHEN r.credit THEN t.type::text IN ('income', 'refund') ELSE t.type::text = 'expense' END)
+            ) AS "manual"
+     FROM users u WHERE u.id = :userId`,
+    { type: QueryTypes.SELECT, replacements: { rows: JSON.stringify(rows), userId } }
+  );
+  if (!row) return null;
+  return { autoAdd: row.autoAdd, manualLookalikes: new Set((row.manual ?? []).map(Number)) };
+}
+
 export async function syncBatch(
   userId: string,
   request: SyncDetectedBatchRequest,
@@ -213,10 +252,11 @@ export async function syncBatch(
     results[index] = { clientId: item.clientId, fingerprint: item.dedupFingerprint, status: 'validation_error', error };
   };
 
-  const user = await User.findByPk(userId, { attributes: ['id', 'detectionAutoAdd'] });
+  const user = await loadSyncUser(userId, items, !options.import);
   if (!user) throw new NotFoundError('User not found');
+  const { manualLookalikes } = user;
   const serverAutoCreate = env.DETECTION_AUTO_CREATE_ENABLED === 'true';
-  const autoCreateAllowed = serverAutoCreate && user.detectionAutoAdd;
+  const autoCreateAllowed = serverAutoCreate && user.autoAdd;
 
   // 1. Per-item validation, server fingerprint and server tier.
   let fingerprintMismatches = 0;
@@ -307,7 +347,11 @@ export async function syncBatch(
           : null;
       continue;
     }
-    if (p.tier === 'high' && autoCreateAllowed) {
+    if (manualLookalikes.has(p.index)) {
+      // The user may already have entered this by hand: they decide, never both (gap D4).
+      p.status = 'pending_review';
+      p.reviewReason = REVIEW_REASONS.POSSIBLE_MANUAL_DUPLICATE;
+    } else if (p.tier === 'high' && autoCreateAllowed) {
       p.status = 'auto_approved';
     } else {
       p.status = 'pending_review';

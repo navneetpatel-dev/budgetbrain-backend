@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { AuditLog, DetectedTransaction, FinancialAccount, MerchantCategoryRule, Transaction, sequelize } from '@database/models';
 import { env } from '@config/env';
+import { redis } from '@core/cache/redis.client';
 import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import type { DetectedItemInput } from '../transactionDetection.types';
 import {
@@ -201,6 +202,18 @@ describe('detected transaction sync', () => {
 
     env.DETECTION_ENABLED = 'false';
     await expect(syncBatch(user.id, { items: [item(user.id)] })).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('enforces the per-user daily item cap and gives the reservation back (T1.7)', async () => {
+    const user = await createTestUser();
+    const key = `detect:daily:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+    await redis.set(key, '1999', 'EX', 60);
+    await expect(syncBatch(user.id, { items: [item(user.id), item(user.id)] })).rejects.toMatchObject({ statusCode: 429 });
+    expect(await redis.get(key)).toBe('1999');
+    const res = await syncBatch(user.id, { items: [item(user.id)] });
+    expect(res.results[0].status).toBe('created');
+    expect(await redis.get(key)).toBe('2000');
+    await redis.del(key);
   });
 
   it('uses a constant number of queries per batch (plan §3.2)', async () => {

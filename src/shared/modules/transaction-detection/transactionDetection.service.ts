@@ -11,6 +11,7 @@ import {
 } from '@database/models';
 import { env } from '@config/env';
 import { deleteCache, getCache, setCache } from '@core/cache/cache.service';
+import { redis } from '@core/cache/redis.client';
 import { AppError, NotFoundError, ValidationError } from '@shared/errors';
 import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
 import { createLogger } from '@shared/logging';
@@ -47,6 +48,28 @@ import { toDetectedDto } from './engine/detectedDto';
 const log = createLogger('system');
 
 const syncStateKey = (userId: string) => `detect:sync-state:${userId}`;
+const dailyQuotaKey = (userId: string, day: string) => `detect:daily:${userId}:${day}`;
+
+/**
+ * Reserves `count` items of the user's daily allowance (plan T1.7). Over the limit, the
+ * reservation is returned and the request is refused with 429. Like the rest of the cache
+ * layer this fails open: a Redis outage never blocks syncing.
+ */
+async function reserveDailyQuota(userId: string, count: number): Promise<void> {
+  const key = dailyQuotaKey(userId, new Date().toISOString().slice(0, 10));
+  let used: number;
+  try {
+    used = await redis.incrby(key, count);
+    if (used === count) await redis.expire(key, 2 * 24 * 60 * 60);
+  } catch (err) {
+    log.warn('Detection daily quota check skipped', { message: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+  if (used > DETECTION_LIMITS.MAX_ITEMS_PER_DAY) {
+    await redis.decrby(key, count).catch(() => undefined);
+    throw new AppError(429, ERROR_MESSAGES.DAILY_LIMIT, 'DETECTION_DAILY_LIMIT');
+  }
+}
 const idempotencyKey = (userId: string, key: string) => `detect:idem:${userId}:${key}`;
 
 /** Legacy numeric column kept for old readers; the tier is the source of truth. */
@@ -148,6 +171,7 @@ export async function syncBatch(
   if (env.DETECTION_ENABLED !== 'true') {
     throw new AppError(503, ERROR_MESSAGES.DETECTION_DISABLED, 'DETECTION_DISABLED');
   }
+  await reserveDailyQuota(userId, request.items.length);
 
   const items = request.items;
   const results: SyncItemResult[] = new Array(items.length);

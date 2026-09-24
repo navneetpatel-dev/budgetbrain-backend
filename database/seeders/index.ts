@@ -18,7 +18,6 @@ import {
   FamilyMember,
   ExpenseSplitParticipant,
   MerchantCategoryRule,
-  ParsedTransaction,
   Notification,
   AiConversation,
   SupportTicket,
@@ -1185,56 +1184,6 @@ export async function runSeed() {
     }),
   ]);
 
-  // 14. Parsed Transactions (Staging Queue)
-  console.log('📬 Seeding parsed transactions staging…');
-  await ParsedTransaction.destroy({ where: { userId: adminId } });
-  await Promise.all([
-    ParsedTransaction.create({
-      userId: adminId,
-      source: 'sms',
-      rawContent:
-        'Rs 450.00 spent on your HDFC Bank Card ending 4892 at BLUE TOKAI COFFEE on 16-SEP-26. Avl Bal: Rs 1,45,250.00. -HDFC Bank',
-      parsedAmount: 450.0,
-      parsedMerchant: 'Blue Tokai Coffee',
-      parsedDate: daysAgo(1),
-      confidence: 0.96,
-      status: 'pending',
-    }),
-    ParsedTransaction.create({
-      userId: adminId,
-      source: 'sms',
-      rawContent:
-        'Paid Rs 1,890.00 to MYNTRA via UPI Ref 4261899120 from A/c XX8821 on 15-SEP-26. -ICICI Bank',
-      parsedAmount: 1890.0,
-      parsedMerchant: 'Myntra',
-      parsedDate: daysAgo(2),
-      confidence: 0.98,
-      status: 'confirmed',
-    }),
-    ParsedTransaction.create({
-      userId: adminId,
-      source: 'email',
-      rawContent:
-        'Your Uber receipt: Rs 340.00 for trip from Koramangala to HSR Layout. Thank you for riding with Uber.',
-      parsedAmount: 340.0,
-      parsedMerchant: 'Uber India',
-      parsedDate: daysAgo(3),
-      confidence: 0.92,
-      status: 'confirmed',
-    }),
-    ParsedTransaction.create({
-      userId: adminId,
-      source: 'sms',
-      rawContent:
-        'OTP 829104 is your verification code for login at HDFC NetBanking. Valid for 10 mins. Do NOT share.',
-      parsedAmount: null,
-      parsedMerchant: null,
-      parsedDate: null,
-      confidence: 0.1,
-      status: 'rejected',
-    }),
-  ]);
-
   // 15. Notifications
   console.log('🔔 Seeding notification center…');
   await Notification.destroy({ where: { userId: adminId } });
@@ -1510,7 +1459,6 @@ export async function runSeed() {
   console.log(`📈 Investments:      4 assets (Mutual Fund, Stocks, Gold, FD)`);
   console.log(`👨‍👩‍👧 Family Group:     "Sharma Family & Home" with 3-way split expense`);
   console.log(`🧠 Merchant Rules:   6 auto-categorization memory rules`);
-  console.log(`📬 Parsed Receipts:  4 staged SMS/email transactions`);
   console.log(`🔔 Notifications:    5 notifications (bills, alerts, digests)`);
   console.log(`🤖 AI Coach:         2 interactive conversation threads`);
   console.log(`🎫 Support Tickets:  3 tickets for Admin view`);

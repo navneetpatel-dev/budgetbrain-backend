@@ -18,7 +18,6 @@ import { initAiConversationModel, AiConversation, associateAiConversation } from
 import { initAuditLogModel, AuditLog, associateAuditLog } from './auditLog.model';
 import { initFinancialAccountModel, FinancialAccount, associateFinancialAccount } from './financialAccount.model';
 import { initInvestmentModel, Investment, associateInvestment } from './investment.model';
-import { initParsedTransactionModel, ParsedTransaction, associateParsedTransaction } from './parsedTransaction.model';
 import { initSupportTicketModel, SupportTicket, associateSupportTicket } from './supportTicket.model';
 import { initVerificationTokenModel, VerificationToken, TokenType, associateVerificationToken } from './verificationToken.model';
 import {
@@ -68,7 +67,6 @@ export function initModels(db: Sequelize = sequelize): void {
   initAuditLogModel(db);
   initFinancialAccountModel(db);
   initInvestmentModel(db);
-  initParsedTransactionModel(db);
   initSupportTicketModel(db);
   initVerificationTokenModel(db);
   initMerchantCategoryRuleModel(db);
@@ -110,7 +108,6 @@ export {
   DEFAULT_CATEGORIES,
   FinancialAccount,
   Investment,
-  ParsedTransaction,
   SupportTicket,
   VerificationToken,
   MerchantCategoryRule,

@@ -4,6 +4,8 @@ import { validateBody, validateParams, validateQuery } from '@core/middleware/va
 import { detectionIngestRateLimiter, detectionSyncRateLimiter } from '@core/middleware/rateLimit';
 import { z } from 'zod';
 import { paginationSchema, uuidField } from '@shared/validation/index';
+import { uploadStatement } from '@core/middleware/upload';
+import * as importController from '@modules/statement-import/statementImport.controller';
 import * as controller from './transactionDetection.controller';
 import {
   confirmDetectedTransactionSchema,
@@ -40,6 +42,10 @@ router.post('/sync', detectionSyncRateLimiter, validateBody(syncDetectedBatchSch
 // Pasted SMS and forwarded emails, parsed on the server and never stored (T6.2)
 router.get('/institutions', asyncHandler(controller.listInstitutions));
 router.post('/ingest', detectionIngestRateLimiter, validateBody(ingestMessageSchema), asyncHandler(controller.ingest));
+
+// Statement files: preview first, then import (T6.5). The file is deleted after each request.
+router.post('/import/preview', detectionIngestRateLimiter, uploadStatement.single('file'), asyncHandler(importController.preview));
+router.post('/import', detectionIngestRateLimiter, uploadStatement.single('file'), asyncHandler(importController.commit));
 
 // Detected list (auto-added, transfers, confirmed…) and the review inbox
 router.get('/', validateQuery(listDetectedQuerySchema), asyncHandler(controller.listDetected));

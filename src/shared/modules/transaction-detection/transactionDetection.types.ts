@@ -43,6 +43,8 @@ export interface SyncStateResponse {
   latestSyncedTransactionDate: string | null;
   totalDetectedCount: number;
   pendingReviewCount: number;
+  /** Where detections came from and when each source last sent one (web status page, T6.4). */
+  sources: { source: string; count: number; lastReceivedAt: string }[];
 }
 
 /** Runtime switches clients read before processing (plan task T1.16, interim until T4.6). */

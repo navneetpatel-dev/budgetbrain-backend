@@ -52,6 +52,7 @@ export const AuditAction = {
   DETECTION_REJECT: 'detection.reject',
   DETECTION_UNDO: 'detection.undo',
   DETECTION_DELETE_ALL: 'detection.delete_all',
+  DETECTION_IMPORT: 'detection.statement_import',
 
   LOAN_CREATE: 'loan.create',
   LOAN_UPDATE: 'loan.update',

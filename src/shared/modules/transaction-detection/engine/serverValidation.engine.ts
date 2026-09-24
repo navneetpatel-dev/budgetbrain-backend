@@ -21,7 +21,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function validateServerDetectedPayload(
   item: DetectedItemInput,
-  today: string = new Date().toISOString().slice(0, 10)
+  today: string = new Date().toISOString().slice(0, 10),
+  options: { maxAgeDays?: number } = {}
 ): ServerValidationResult {
   if (!isSupportedCurrency(item.currency)) {
     return { isValid: false, error: ERROR_MESSAGES.UNSUPPORTED_CURRENCY };
@@ -51,7 +52,7 @@ export function validateServerDetectedPayload(
     Number.isNaN(txDay) ||
     new Date(txDay).toISOString().slice(0, 10) !== item.transactionDate || // rejects 2026-02-30
     txDay > todayMs + DETECTION_LIMITS.MAX_FUTURE_DAYS * DAY_MS ||
-    txDay < todayMs - DETECTION_LIMITS.MAX_AGE_DAYS * DAY_MS
+    txDay < todayMs - (options.maxAgeDays ?? DETECTION_LIMITS.MAX_AGE_DAYS) * DAY_MS
   ) {
     return { isValid: false, error: ERROR_MESSAGES.INVALID_DATE };
   }

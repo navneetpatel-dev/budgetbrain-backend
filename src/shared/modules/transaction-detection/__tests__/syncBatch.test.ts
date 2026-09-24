@@ -397,7 +397,12 @@ describe('detected transaction sync', () => {
       const auto = await listDetected(user.id, { status: 'auto_approved' });
       expect(auto.count).toBe(1);
       const state = await getSyncState(user.id);
-      expect(state).toEqual({ latestSyncedTransactionDate: today, totalDetectedCount: 2, pendingReviewCount: 1 });
+      expect(state).toEqual({
+        latestSyncedTransactionDate: today,
+        totalDetectedCount: 2,
+        pendingReviewCount: 1,
+        sources: [{ source: 'android_sms', count: 2, lastReceivedAt: expect.any(String) }],
+      });
     });
   });
 });

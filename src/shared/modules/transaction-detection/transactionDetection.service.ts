@@ -120,18 +120,26 @@ export async function getSyncState(userId: string): Promise<SyncStateResponse> {
   const cached = await getCache<SyncStateResponse>(syncStateKey(userId));
   if (cached) return cached;
 
-  const [row] = await sequelize.query<{ latest: string | null; total: string; pending: string }>(
-    `SELECT MAX(transaction_date)::text AS latest,
+  // One pass over the user's rows, per source; the totals are the sum of the sources.
+  const rows = await sequelize.query<{ source: string; latest: string | null; total: string; pending: string; last_at: string }>(
+    `SELECT source,
+            MAX(transaction_date)::text AS latest,
             COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE status = 'pending_review') AS pending
+            COUNT(*) FILTER (WHERE status = 'pending_review') AS pending,
+            MAX(created_at) AS last_at
      FROM detected_transactions
-     WHERE user_id = :userId`,
+     WHERE user_id = :userId
+     GROUP BY source`,
     { replacements: { userId }, type: QueryTypes.SELECT }
   );
+  const latest = rows.reduce<string | null>((max, r) => (r.latest && (!max || r.latest > max) ? r.latest : max), null);
   const state: SyncStateResponse = {
-    latestSyncedTransactionDate: row?.latest ?? null,
-    totalDetectedCount: Number(row?.total ?? 0),
-    pendingReviewCount: Number(row?.pending ?? 0),
+    latestSyncedTransactionDate: latest,
+    totalDetectedCount: rows.reduce((sum, r) => sum + Number(r.total), 0),
+    pendingReviewCount: rows.reduce((sum, r) => sum + Number(r.pending), 0),
+    sources: rows
+      .map((r) => ({ source: r.source, count: Number(r.total), lastReceivedAt: new Date(r.last_at).toISOString() }))
+      .sort((a, b) => b.lastReceivedAt.localeCompare(a.lastReceivedAt)),
   };
   await setCache(syncStateKey(userId), state, DETECTION_LIMITS.SYNC_STATE_CACHE_SECONDS);
   return state;
@@ -166,7 +174,15 @@ interface PreparedItem {
 export async function syncBatch(
   userId: string,
   request: SyncDetectedBatchRequest,
-  options: { idempotencyKey?: string } = {}
+  options: {
+    idempotencyKey?: string;
+    /**
+     * A statement import the user previewed and committed (plan T6.5): rows are added unless
+     * they look like a transaction already in the ledger (`reviewIndexes`), older dates are
+     * accepted, and the daily device quota doesn't apply (imports have their own limits).
+     */
+    import?: { reviewIndexes: ReadonlySet<number> };
+  } = {}
 ): Promise<SyncDetectedBatchResponse> {
   if (options.idempotencyKey) {
     const cached = await getCache<SyncDetectedBatchResponse>(idempotencyKey(userId, options.idempotencyKey));
@@ -175,7 +191,7 @@ export async function syncBatch(
   if (env.DETECTION_ENABLED !== 'true') {
     throw new AppError(503, ERROR_MESSAGES.DETECTION_DISABLED, 'DETECTION_DISABLED');
   }
-  await reserveDailyQuota(userId, request.items.length);
+  if (!options.import) await reserveDailyQuota(userId, request.items.length);
 
   const items = request.items;
   const results: SyncItemResult[] = new Array(items.length);
@@ -193,7 +209,9 @@ export async function syncBatch(
   let fingerprintMismatches = 0;
   let prepared: PreparedItem[] = [];
   items.forEach((item, index) => {
-    const validation = validateServerDetectedPayload(item);
+    const validation = validateServerDetectedPayload(item, undefined, {
+      maxAgeDays: options.import ? DETECTION_LIMITS.MAX_IMPORT_AGE_DAYS : DETECTION_LIMITS.MAX_AGE_DAYS,
+    });
     if (!validation.isValid || validation.amountMinor === undefined) {
       fail(index, validation.error ?? ERROR_MESSAGES.INVALID_AMOUNT);
       return;
@@ -205,10 +223,12 @@ export async function syncBatch(
       item,
       fingerprint,
       // A bank can't be "verified" when the client didn't even say which bank it is.
-      tier: minTier(
-        item.confidenceTier,
-        scoreEvidence(item.institutionId ? item.evidence : { ...item.evidence, institutionVerified: false })
-      ),
+      tier: options.import
+        ? 'high'
+        : minTier(
+            item.confidenceTier,
+            scoreEvidence(item.institutionId ? item.evidence : { ...item.evidence, institutionVerified: false })
+          ),
       categoryId: item.categoryId,
       status: 'pending_review',
       reviewReason: null,
@@ -264,6 +284,16 @@ export async function syncBatch(
 
   // 4. Decide what may be added automatically.
   for (const p of prepared) {
+    if (options.import) {
+      const review = options.import.reviewIndexes.has(p.index);
+      p.status = review || !serverAutoCreate ? 'pending_review' : 'auto_approved';
+      p.reviewReason = review
+        ? REVIEW_REASONS.POSSIBLE_DUPLICATE
+        : !serverAutoCreate
+          ? REVIEW_REASONS.AUTO_CREATE_DISABLED
+          : null;
+      continue;
+    }
     if (p.tier === 'high' && autoCreateAllowed) {
       p.status = 'auto_approved';
     } else {

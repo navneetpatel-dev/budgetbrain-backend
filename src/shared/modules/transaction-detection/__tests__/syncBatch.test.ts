@@ -82,6 +82,15 @@ describe('detected transaction sync', () => {
     expect(res.results[0].status).toBe('needs_review');
   });
 
+  it('auto-adds a verified alert whose only corroboration is a date read from the message (core v0.4)', async () => {
+    const user = await createTestUser();
+    const dateOnly = { ...weakEvidence, dateExtracted: true };
+    const res = await syncBatch(user.id, {
+      items: [item(user.id, { evidence: dateOnly, referenceNumber: null, merchantId: null, merchantName: 'Acme Corp' })],
+    });
+    expect(res.results[0].status).toBe('created');
+  });
+
   it('does not accept a verified institution without an institution id', async () => {
     const user = await createTestUser();
     const res = await syncBatch(user.id, { items: [item(user.id, { institutionId: null })] });

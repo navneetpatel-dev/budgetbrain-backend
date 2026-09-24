@@ -13,7 +13,7 @@ import {
 import { AppError } from '@shared/errors';
 import { checkBudgetAlertsAfterExpense } from '@shared/modules/budgets/service/budgetAlert.service';
 import { upsertMerchantCategoryRule } from '@shared/modules/categories/service/merchantMemory.service';
-import { writeAuditLog, AuditAction, AuditResource } from '@shared/audit/index';
+import { writeAuditLog, writeAuditLogs, AuditAction, AuditResource } from '@shared/audit/index';
 import { resolvePagination, paginatedResult } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions/index';
 import { convertAndSum, getExchangeRate } from '@shared/currency/currency.engine';
@@ -353,6 +353,129 @@ export async function createTransaction(
   return sequelize.transaction(run);
 }
 
+export interface BulkCreateTransactionItem {
+  type: TransactionAttributes['type'];
+  amount: number;
+  currency: string;
+  date: string;
+  categoryId: string | null;
+  incomeSourceId?: string | null;
+  financialAccountId: string | null;
+  merchant: string | null;
+  notes: string | null;
+  paymentMethod: TransactionAttributes['paymentMethod'];
+  tags: string[];
+  subtype: TransactionAttributes['subtype'];
+  direction: TransactionAttributes['direction'];
+  detectedTransactionId: string | null;
+}
+
+/**
+ * Creates many transactions in one DB transaction with a fixed number of queries per batch
+ * (plan task T1.3, §3.2): one account lock query, one aggregated balance UPDATE, one INSERT,
+ * one audit INSERT, and one budget-alert check per affected expense category. It has the same
+ * side effects as createTransaction (balances, budget alerts, audit, search text) and is what
+ * automatic detection uses instead of writing rows directly (gap P0-5).
+ *
+ * Callers must have checked category/account ownership; accounts are re-checked here.
+ * Merchant memory is not updated: detection learns only from user corrections (gap L3).
+ */
+export async function createTransactionsBulk(
+  userId: string,
+  items: BulkCreateTransactionItem[],
+  options: { transaction: DbTransaction; source: TransactionSource }
+): Promise<Transaction[]> {
+  if (items.length === 0) return [];
+  const t = options.transaction;
+
+  const accountIds = [...new Set(items.map((i) => i.financialAccountId).filter((id): id is string => !!id))];
+  if (accountIds.length > 0) {
+    const accounts = await FinancialAccount.findAll({
+      where: { id: accountIds, userId },
+      attributes: ['id'],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (accounts.length !== accountIds.length) throw new AppError(404, 'Financial account not found');
+
+    // Aggregate per account in integer minor units, then apply every delta in one statement.
+    const deltaMinorByAccount = new Map<string, number>();
+    for (const item of items) {
+      if (!item.financialAccountId) continue;
+      const delta = Math.round(balanceDelta(item.type, item.amount, item.direction) * 100);
+      deltaMinorByAccount.set(item.financialAccountId, (deltaMinorByAccount.get(item.financialAccountId) ?? 0) + delta);
+    }
+    const entries = [...deltaMinorByAccount.entries()].filter(([, delta]) => delta !== 0);
+    if (entries.length > 0) {
+      const replacements: Record<string, unknown> = { userId };
+      const values = entries.map(([id, delta], index) => {
+        replacements[`id${index}`] = id;
+        replacements[`d${index}`] = (delta / 100).toFixed(2);
+        return `(CAST(:id${index} AS uuid), CAST(:d${index} AS numeric))`;
+      });
+      await sequelize.query(
+        `UPDATE financial_accounts AS a SET balance = a.balance + v.delta, updated_at = NOW()
+         FROM (VALUES ${values.join(', ')}) AS v(id, delta)
+         WHERE a.id = v.id AND a.user_id = :userId`,
+        { replacements, transaction: t }
+      );
+    }
+  }
+
+  const created = await Transaction.bulkCreate(
+    items.map((item) => ({
+      userId,
+      type: item.type,
+      amount: item.amount,
+      currency: item.currency,
+      categoryId: item.categoryId,
+      incomeSourceId: item.incomeSourceId ?? null,
+      financialAccountId: item.financialAccountId,
+      notes: item.notes,
+      merchant: item.merchant,
+      date: new Date(item.date),
+      paymentMethod: item.paymentMethod,
+      isRecurring: false,
+      recurringRule: null,
+      tags: item.tags,
+      searchVector: buildSearchVector(item),
+      taxWithheld: null,
+      netAmount: null,
+      subtype: item.subtype,
+      direction: item.type === 'transfer' ? item.direction : null,
+      refundOfTransactionId: null,
+      transferGroupId: null,
+      source: options.source,
+      detectedTransactionId: item.detectedTransactionId,
+    })),
+    { transaction: t, returning: true }
+  );
+
+  const expenseCategories = new Set(items.filter((i) => i.type === 'expense').map((i) => i.categoryId ?? null));
+  for (const categoryId of expenseCategories) {
+    await checkBudgetAlertsAfterExpense(userId, categoryId, t);
+  }
+
+  await writeAuditLogs(
+    created.map((row) => ({
+      action: AuditAction.TRANSACTION_CREATE,
+      resource: AuditResource.TRANSACTION,
+      resourceId: row.id,
+      actorUserId: userId,
+      afterState: {
+        type: row.type,
+        amount: row.amount,
+        categoryId: row.categoryId,
+        merchant: row.merchant,
+        source: options.source,
+      },
+    })),
+    t
+  );
+
+  return created;
+}
+
 export async function updateTransaction(
   userId: string,
   id: string,
@@ -463,8 +586,8 @@ export async function updateTransaction(
   return sequelize.transaction(run);
 }
 
-export async function deleteTransaction(userId: string, id: string) {
-  await sequelize.transaction(async (t) => {
+export async function deleteTransaction(userId: string, id: string, options?: { transaction?: DbTransaction }) {
+  const run = async (t: DbTransaction) => {
     const transaction = await Transaction.findOne({
       where: { id, userId },
       transaction: t,
@@ -515,7 +638,13 @@ export async function deleteTransaction(userId: string, id: string) {
       severity: 'warning',
       transaction: t,
     });
-  });
+  };
+
+  if (options?.transaction) {
+    await run(options.transaction);
+    return;
+  }
+  await sequelize.transaction(run);
 }
 
 export async function duplicateTransaction(userId: string, id: string) {

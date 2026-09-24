@@ -32,6 +32,8 @@ export interface UserAttributes {
   isSuspended: boolean;
   weeklyDigestOptIn: boolean;
   monthlyDigestOptIn: boolean;
+  /** Automatic detection may add high-confidence transactions without review (plan T1.5, T5.7). */
+  detectionAutoAdd: boolean;
   totpSecret: string | null;
   totpEnabled: boolean;
   createdAt?: Date;
@@ -59,6 +61,7 @@ export type UserCreationAttributes = Optional<
   | 'isSuspended'
   | 'weeklyDigestOptIn'
   | 'monthlyDigestOptIn'
+  | 'detectionAutoAdd'
   | 'totpSecret'
   | 'totpEnabled'
 >;
@@ -86,6 +89,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare isSuspended: boolean;
   declare weeklyDigestOptIn: boolean;
   declare monthlyDigestOptIn: boolean;
+  declare detectionAutoAdd: boolean;
   declare totpSecret: string | null;
   declare totpEnabled: boolean;
   declare readonly createdAt: Date;
@@ -196,6 +200,12 @@ export function initUserModel(sequelize: Sequelize): typeof User {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
         field: 'monthly_digest_opt_in',
+      },
+      detectionAutoAdd: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+        field: 'detection_auto_add',
       },
       totpSecret: {
         type: DataTypes.STRING(255),

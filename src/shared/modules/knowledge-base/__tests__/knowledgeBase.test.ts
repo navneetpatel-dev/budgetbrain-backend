@@ -18,6 +18,7 @@ import { redis } from '@core/cache/redis.client';
 import { setupTestDb, createTestUser, createTestCategory } from '@testHelpers';
 import { getDetectionConfig } from '@modules/transaction-detection/transactionDetection.service';
 import { parseCsv, runImport } from '../knowledgeBase.importers';
+import { convertFdicInstitutions, convertIfscBankNames, convertNsiBrands, institutionSlug } from '../knowledgeBase.sources';
 import { coverageByCountry } from '../knowledgeBase.repository';
 import { buildPack, getPackForClient, loadLatestPack } from '../packBuilder.service';
 import type { Server } from 'http';
@@ -122,6 +123,84 @@ describe('knowledge base (Phase 4)', () => {
     it('rolls back a failed run and marks it failed', async () => {
       await expect(runImport('csv-merchants', { file: '/does/not/exist.csv' })).rejects.toThrow();
       expect(await count(`SELECT COUNT(*) AS n FROM kb_import_runs WHERE importer = 'csv-merchants' AND status = 'failed'`)).toBe(1);
+    });
+
+    it('downloads the IFSC bank list outside the transaction, fills codes on curated banks and adds the rest for review', async () => {
+      const urls: string[] = [];
+      const fetchText = async (url: string) => {
+        urls.push(url);
+        return JSON.stringify({ HDFC: 'HDFC Bank', YESB: 'Yes Bank Ltd', ZZQB: 'Zed Quay Co-operative Bank', bad: 'x' });
+      };
+      const first = await runImport('ifsc', { fetchText });
+      expect(urls).toEqual(['https://raw.githubusercontent.com/razorpay/ifsc/master/src/banknames.json']);
+      // HDFC already has its prefix; YES Bank (curated by the CSV test) gains one; Zed is new.
+      expect(first.rowsWritten).toBe(2);
+      const [yes] = await sequelize.query<{ codes: Record<string, string>; status: string; name: string; verified: boolean }>(
+        `SELECT codes, status, name, verified FROM kb_institutions WHERE id = 'in.yes_bank'`,
+        { type: QueryTypes.SELECT }
+      );
+      expect(yes).toEqual({ codes: { ifscPrefix: 'YESB' }, status: 'published', name: 'YES Bank Limited', verified: true });
+      const [zed] = await sequelize.query<{ status: string; verified: boolean; source: string }>(
+        `SELECT status, verified, source FROM kb_institutions WHERE id = 'in.zed_quay_co_operative_bank'`,
+        { type: QueryTypes.SELECT }
+      );
+      expect(zed).toEqual({ status: 'review', verified: false, source: 'ifsc' });
+
+      expect((await runImport('ifsc', { fetchText })).rowsWritten).toBe(0);
+      expect(
+        await count(`SELECT COUNT(*) AS n FROM kb_import_runs WHERE importer = 'ifsc' AND status = 'succeeded' AND licence = 'MIT'`)
+      ).toBe(2);
+    });
+
+    it('adds Name Suggestion Index brands once, skipping brands the catalog has, for review', async () => {
+      const nsi = {
+        nsi: {
+          'brands/shop/supermarket': {
+            items: [
+              { displayName: 'Zedmart', locationSet: { include: ['in'] }, tags: { brand: 'Zedmart', 'brand:wikidata': 'Q999001', name: 'Zedmart Hypermarket' } },
+              { displayName: 'Amazon Fresh', locationSet: { include: ['001'] }, tags: { brand: 'Amazon', 'brand:wikidata': 'Q3884' } },
+              { displayName: 'Nowhere Mart', locationSet: { include: ['br'] }, tags: { brand: 'Nowhere Mart', 'brand:wikidata': 'Q999002' } },
+              { displayName: 'No Wikidata', locationSet: { include: ['in'] }, tags: { brand: 'No Wikidata' } },
+            ],
+          },
+          'brands/amenity/bench': { items: [{ displayName: 'Bench Co', locationSet: { include: ['in'] }, tags: { brand: 'Bench Co', 'brand:wikidata': 'Q999003' } }] },
+        },
+      };
+      const fetchText = async () => JSON.stringify(nsi);
+      const first = await runImport('nsi-wikidata', { fetchText, countries: ['IN'] });
+      expect(first.rowsWritten).toBe(3); // Zedmart + its aliases "zedmart" and "zedmart hypermarket"
+      const [zed] = await sequelize.query<{ id: string; country: string; taxonomy_code: string; status: string }>(
+        `SELECT id, country, taxonomy_code, status FROM kb_merchants WHERE wikidata_id = 'Q999001'`,
+        { type: QueryTypes.SELECT }
+      );
+      expect(zed).toEqual({ id: 'm.wd_q999001', country: 'IN', taxonomy_code: 'FOOD_AND_DRINK.GROCERIES', status: 'review' });
+      expect(await count(`SELECT COUNT(*) AS n FROM kb_merchants WHERE wikidata_id = 'Q3884'`)).toBe(1);
+      expect(await count(`SELECT COUNT(*) AS n FROM kb_merchants WHERE wikidata_id IN ('Q999002', 'Q999003')`)).toBe(0);
+      expect((await runImport('nsi-wikidata', { fetchText, countries: ['IN'] })).rowsWritten).toBe(0);
+    });
+
+    it('converts the FDIC format and rejects a source in the wrong format', () => {
+      const fdic = JSON.stringify({
+        data: [
+          { data: { NAME: 'First Example Bank, National Association', CERT: 12345, WEBADDR: 'www.firstexample.com' } },
+          { data: { NAME: '', CERT: 1 } },
+        ],
+      });
+      expect(convertFdicInstitutions(fdic)).toEqual([
+        {
+          id: 'us.first_example_bank_12345',
+          name: 'First Example Bank, National Association',
+          displayName: 'First Example Bank, National Association',
+          country: 'US',
+          type: 'bank',
+          codes: { fdicCert: '12345' },
+          domains: ['firstexample.com'],
+          verified: false,
+        },
+      ]);
+      expect(institutionSlug('The Saraswat Co-operative Bank Ltd.')).toBe('saraswat_co_operative_bank');
+      expect(() => convertIfscBankNames('<html>')).toThrow('IFSC');
+      expect(() => convertNsiBrands('[]')).toThrow('Name Suggestion Index');
     });
   });
 

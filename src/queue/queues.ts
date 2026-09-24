@@ -89,7 +89,7 @@ logConnectionErrors('push', pushQueue);
 
 /** Knowledge base (plan T4.2, T4.3): importer runs and pack builds, one at a time. */
 export type KnowledgeBaseJobData =
-  | { type: 'import'; importer: string; file?: string }
+  | { type: 'import'; importer: string; file?: string; countries?: string[] }
   | { type: 'build'; country?: string };
 
 export const knowledgeBaseQueue = new Queue<KnowledgeBaseJobData>('knowledge-base', {

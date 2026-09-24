@@ -318,3 +318,83 @@ export async function activeKillSwitches(): Promise<PackKillSwitch[]> {
   );
   return rows.map(clean) as unknown as PackKillSwitch[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Registry imports (plan T4.2): public registries add, they never overwrite curated rows
+// ---------------------------------------------------------------------------------------------
+
+async function bulkInserted(sql: string, rows: unknown[], options: WriteOptions): Promise<number> {
+  if (rows.length === 0) return 0;
+  const result = await sequelize.query<{ n: number }>(`WITH w AS (${sql} RETURNING 1) SELECT count(*)::int AS n FROM w`, {
+    type: QueryTypes.SELECT,
+    replacements: { rows: JSON.stringify(rows), source: options.source, status: options.status ?? 'review' },
+    transaction: options.transaction,
+  });
+  return Number(result[0]?.n ?? 0);
+}
+
+/**
+ * Institutions from a public registry. A new institution lands in `review` for an admin to
+ * publish. An existing one keeps its name, status and flags; the registry only fills a BIC it
+ * lacks and adds national codes it doesn't have yet (its own codes win). Returns rows changed.
+ */
+export function addRegistryInstitutions(rows: PackInstitution[], options: WriteOptions) {
+  const merged = `EXCLUDED.codes || kb_institutions.codes`;
+  return bulkInserted(
+    `INSERT INTO kb_institutions (id, name, display_name, country, type, bic, codes, domains, verified, status, source)
+     SELECT r.id, r.name, r."displayName", r.country, r.type, r.bic, COALESCE(r.codes, '{}'), COALESCE(r.domains, '[]'),
+            false, :status, :source
+     FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS r(id text, name text, "displayName" text, country text, type text,
+          bic text, codes jsonb, domains jsonb)
+     ON CONFLICT (id) DO UPDATE SET
+       codes = ${merged}, bic = COALESCE(kb_institutions.bic, EXCLUDED.bic),
+       version = kb_institutions.version + 1, updated_at = NOW()
+     WHERE (kb_institutions.codes, kb_institutions.bic) IS DISTINCT FROM (${merged}, COALESCE(kb_institutions.bic, EXCLUDED.bic))`,
+    rows,
+    options
+  );
+}
+
+/** Merchants and aliases from a public registry, in `review`. Existing ids and alias keys are left alone. */
+export async function addRegistryMerchants(merchants: PackMerchant[], aliases: PackMerchantAlias[], options: WriteOptions) {
+  const added = await bulkInserted(
+    `INSERT INTO kb_merchants (id, canonical_name, wikidata_id, domain, country, taxonomy_code, mcc, status, source)
+     SELECT r.id, r.name, r."wikidataId", r.domain, r.country, r."taxonomyCode", r.mcc, :status, :source
+     FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS r(id text, name text, "wikidataId" text, domain text, country text,
+          "taxonomyCode" text, mcc text)
+     ON CONFLICT (id) DO NOTHING`,
+    merchants,
+    options
+  );
+  return (
+    added +
+    (await bulkInserted(
+      `INSERT INTO kb_merchant_aliases (merchant_id, alias_key, country, status, source)
+       SELECT r."merchantId", r.alias, COALESCE(r.country, ''), :status, :source
+       FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS r("merchantId" text, alias text, country text)
+       WHERE EXISTS (SELECT 1 FROM kb_merchants m WHERE m.id = r."merchantId")
+       ON CONFLICT (alias_key, country) DO NOTHING`,
+      aliases,
+      options
+    ))
+  );
+}
+
+/** What a registry import matches against: the catalog's institutions in these countries, any status. */
+export async function institutionsIn(countries: string[], transaction?: Transaction) {
+  if (countries.length === 0) return [];
+  return sequelize.query<{ id: string; name: string; displayName: string | null; codes: Record<string, string> }>(
+    `SELECT id, name, display_name AS "displayName", codes FROM kb_institutions WHERE country IN (:countries)`,
+    { type: QueryTypes.SELECT, replacements: { countries }, transaction }
+  );
+}
+
+/** Wikidata ids the catalog already has a merchant for. */
+export async function merchantWikidataIds(ids: string[], transaction?: Transaction): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await sequelize.query<{ wikidata_id: string }>(
+    `SELECT wikidata_id FROM kb_merchants WHERE wikidata_id IN (:ids)`,
+    { type: QueryTypes.SELECT, replacements: { ids }, transaction }
+  );
+  return new Set(rows.map((r) => r.wikidata_id));
+}

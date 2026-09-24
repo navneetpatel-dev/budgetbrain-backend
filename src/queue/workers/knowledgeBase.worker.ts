@@ -13,7 +13,7 @@ export function startKnowledgeBaseWorker(): Worker<KnowledgeBaseJobData> {
     'knowledge-base',
     async (job) => {
       const data = job.data;
-      if (data.type === 'import') return runImport(data.importer, data.file ? { file: data.file } : {});
+      if (data.type === 'import') return runImport(data.importer, { ...(data.file ? { file: data.file } : {}), ...(data.countries ? { countries: data.countries } : {}) });
       return data.country ? buildPack(data.country) : buildAllPacks();
     },
     { connection: queueConnection, concurrency: 1 }

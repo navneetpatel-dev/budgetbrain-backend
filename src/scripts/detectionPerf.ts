@@ -162,7 +162,7 @@ async function main() {
     const to = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
     const dash = await countQueries(() => getDetectionDashboard({ from, to }));
-    out.push(`| admin dashboard queries / time | ${dash.queries} / ${dash.ms.toFixed(0)} ms | ≤ 5 indexed (+1 adoption read) |`);
+    out.push(`| admin dashboard queries / time | ${dash.queries} / ${dash.ms.toFixed(0)} ms | ≤ 5 |`);
 
     const pending = await countQueries(() => listPending(users[0]!.id, { limit: 20 }));
     out.push(`| review inbox (pending, 20) queries / time | ${pending.queries} / ${pending.ms.toFixed(0)} ms | — |`);

@@ -13,6 +13,14 @@ import {
 import { sequelize } from '@database/models';
 import { AppError } from '@shared/errors';
 import * as repo from './knowledgeBase.repository';
+import {
+  convertFdicInstitutions,
+  convertIfscBankNames,
+  convertNsiBrands,
+  defaultFetchText,
+  matchInstitutions,
+  type FetchText,
+} from './knowledgeBase.sources';
 
 /**
  * Knowledge-base importers (plan T4.2). Every importer is idempotent: rows are upserted by their
@@ -37,28 +45,76 @@ export interface ImportOptions {
   file?: string;
   /** A pack to seed from; defaults to core's India baseline pack. */
   pack?: KnowledgePack;
+  /** Registry importers: how to download the source when no `file` is given (tests pass a fake). */
+  fetchText?: FetchText;
+  /** A registry source's content, downloaded before the import's transaction opens. */
+  text?: string;
+  /** `nsi-wikidata`: keep brands available in these countries (ISO alpha-2); empty keeps all. */
+  countries?: string[];
 }
 
 /**
  * Public data sources the catalog is built from (gap-doc §6.3, §6.5, §6.7; decision D-8).
- * `via` names the importer that loads the source once it is exported to CSV; the fetch-and-convert
- * step for each source is still to be written, since every registry publishes its own format.
+ * `via` names the importer. Sources with a `download` URL are fetched and converted by their own
+ * importer (`knowledgeBase.sources.ts`) and add rows in `review`; the others publish no stable
+ * machine-readable file (an HTML page, a keyed API, a bulk archive, or no public list at all) and
+ * are loaded by exporting them to CSV for the matching CSV importer.
  */
 export const KB_SOURCES = [
   { id: 'iso4217', url: 'https://www.six-group.com/en/products-services/financial-information/data-standards.html', licence: 'ISO 4217 (public list)', via: 'iso4217' },
   { id: 'mcc', url: 'https://www.iso.org/standard/79450.html', licence: 'ISO 18245 codes; descriptions from card-network public lists', via: 'csv-mcc' },
   { id: 'rbi-banks', url: 'https://www.rbi.org.in/Scripts/BS_ViewBanks.aspx', licence: 'RBI public list', via: 'csv-institutions' },
-  { id: 'ifsc', url: 'https://github.com/razorpay/ifsc', licence: 'MIT', via: 'csv-institutions' },
+  {
+    id: 'ifsc',
+    url: 'https://github.com/razorpay/ifsc',
+    download: 'https://raw.githubusercontent.com/razorpay/ifsc/master/src/banknames.json',
+    licence: 'MIT',
+    via: 'ifsc',
+  },
   { id: 'npci-upi', url: 'https://www.npci.org.in/what-we-do/upi/3rd-party-apps', licence: 'NPCI public list', via: 'csv-institutions' },
   { id: 'india-dlt', url: 'https://www.trai.gov.in/', licence: 'Operator DLT header registries', via: 'csv-institutions' },
   { id: 'gleif', url: 'https://www.gleif.org/en/lei-data/gleif-golden-copy', licence: 'CC0', via: 'csv-institutions' },
-  { id: 'fdic', url: 'https://banks.data.fdic.gov/docs/', licence: 'US public domain', via: 'csv-institutions' },
+  {
+    id: 'fdic',
+    url: 'https://banks.data.fdic.gov/docs/',
+    download: 'https://banks.data.fdic.gov/api/institutions?filters=ACTIVE%3A1&fields=NAME%2CCERT%2CWEBADDR&limit=10000&format=json',
+    licence: 'US public domain',
+    via: 'fdic',
+  },
   { id: 'ncua', url: 'https://ncua.gov/analysis/credit-union-corporate-call-report-data', licence: 'US public domain', via: 'csv-institutions' },
   { id: 'fca', url: 'https://register.fca.org.uk/', licence: 'Open Government Licence', via: 'csv-institutions' },
   { id: 'ecb-mfi', url: 'https://www.ecb.europa.eu/stats/financial_corporations/list_of_financial_institutions/', licence: 'ECB reuse policy', via: 'csv-institutions' },
   { id: 'bcb-pix', url: 'https://www.bcb.gov.br/estabilidadefinanceira/participantespix', licence: 'BCB open data', via: 'csv-institutions' },
-  { id: 'nsi-wikidata', url: 'https://github.com/osmlab/name-suggestion-index', licence: 'BSD-3-Clause (NSI), CC0 (Wikidata)', via: 'csv-merchants' },
+  {
+    id: 'nsi-wikidata',
+    url: 'https://github.com/osmlab/name-suggestion-index',
+    download: 'https://cdn.jsdelivr.net/npm/name-suggestion-index@6/dist/nsi.min.json',
+    licence: 'BSD-3-Clause (NSI), CC0 (Wikidata)',
+    via: 'nsi-wikidata',
+  },
 ] as const;
+
+/** The importers that download their own source. */
+export const REGISTRY_IMPORTERS = KB_SOURCES.flatMap((s) => ('download' in s ? [s.id] : []));
+
+/** The source's own file: a local copy when given, else its download. */
+async function readSource(id: string, options: ImportOptions): Promise<string> {
+  if (options.text !== undefined) return options.text;
+  if (options.file) return readFile(options.file, 'utf8');
+  const source = KB_SOURCES.find((s) => s.id === id);
+  if (!source || !('download' in source)) throw new AppError(400, 'This importer needs a file', 'KB_IMPORT_FILE_REQUIRED');
+  return (options.fetchText ?? defaultFetchText)(source.download);
+}
+
+async function importRegistryInstitutions(
+  rows: PackInstitution[],
+  codeKey: string,
+  { source, transaction }: ImportContext
+): Promise<number> {
+  const countries = [...new Set(rows.map((r) => r.country))];
+  const matched = matchInstitutions(rows, await repo.institutionsIn(countries, transaction), codeKey);
+  return repo.addRegistryInstitutions(matched, { source, transaction });
+}
 
 /** A small RFC 4180 CSV parser (quoted fields, escaped quotes, CRLF). Header row required. */
 export function parseCsv(text: string): Record<string, string>[] {
@@ -203,6 +259,28 @@ const IMPORTERS: Record<string, Importer> = {
     return (await repo.upsertMerchants(merchants, { source, transaction })) + (await repo.upsertMerchantAliases(unique, { source, transaction }));
   },
 
+  /** razorpay/ifsc bank names: every Indian bank's IFSC prefix (feeds core's content signal, T3.2). */
+  async ifsc(ctx, options) {
+    return importRegistryInstitutions(convertIfscBankNames(await readSource('ifsc', options)), 'ifscPrefix', ctx);
+  },
+
+  /** FDIC BankFind: active US banks with their FDIC certificate number and web domain. */
+  async fdic(ctx, options) {
+    return importRegistryInstitutions(convertFdicInstitutions(await readSource('fdic', options)), 'fdicCert', ctx);
+  },
+
+  /** Name Suggestion Index brands with Wikidata ids; a brand the catalog already has (same Wikidata id) is skipped. */
+  async 'nsi-wikidata'({ source, transaction }, options) {
+    const { merchants, aliases } = convertNsiBrands(await readSource('nsi-wikidata', options), options.countries);
+    const known = await repo.merchantWikidataIds(
+      merchants.flatMap((m) => (m.wikidataId ? [m.wikidataId] : [])),
+      transaction
+    );
+    const fresh = merchants.filter((m) => !m.wikidataId || !known.has(m.wikidataId));
+    const freshIds = new Set(fresh.map((m) => m.id));
+    return repo.addRegistryMerchants(fresh, aliases.filter((a) => freshIds.has(a.merchantId)), { source, transaction });
+  },
+
   /** ISO 18245 merchant category codes. Columns: mcc, taxonomy_code, description. */
   async 'csv-mcc'({ source, transaction }, options) {
     const rows = await readCsv(options);
@@ -222,16 +300,18 @@ export async function runImport(
 ): Promise<ImportResult> {
   const run = IMPORTERS[importer];
   if (!run) throw new AppError(400, `Unknown importer: ${importer}`, 'KB_IMPORTER_UNKNOWN');
-  const known = KB_SOURCES.find((s) => s.via === importer || s.id === importer);
+  const known = KB_SOURCES.find((s) => s.id === importer) ?? KB_SOURCES.find((s) => s.via === importer);
   const [record] = await sequelize.query<{ id: string }>(
     `INSERT INTO kb_import_runs (importer, source_url, licence) VALUES (:importer, :url, :licence) RETURNING id`,
     {
       type: QueryTypes.SELECT,
-      replacements: { importer, url: options.sourceUrl ?? options.file ?? known?.url ?? null, licence: options.licence ?? known?.licence ?? null },
+      replacements: { importer, url: options.sourceUrl ?? options.file ?? (known && 'download' in known ? known.download : known?.url) ?? null, licence: options.licence ?? known?.licence ?? null },
     }
   );
   try {
-    const rowsWritten = await sequelize.transaction((transaction) => run({ source: importer, transaction }, options));
+    // A download can take a while; never hold a database transaction open across it.
+    const input = (REGISTRY_IMPORTERS as string[]).includes(importer) ? { ...options, text: await readSource(importer, options) } : options;
+    const rowsWritten = await sequelize.transaction((transaction) => run({ source: importer, transaction }, input));
     await sequelize.query(
       `UPDATE kb_import_runs SET status = 'succeeded', rows_written = :rows, finished_at = NOW() WHERE id = :id`,
       { replacements: { rows: rowsWritten, id: record!.id } }

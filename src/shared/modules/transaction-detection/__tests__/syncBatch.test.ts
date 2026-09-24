@@ -201,6 +201,30 @@ describe('detected transaction sync', () => {
     expect(transfer).toMatchObject({ type: 'transfer', direction: 'DEBIT', subtype: 'card_bill', categoryId: null });
   });
 
+  it('sends an item that looks like a manual entry to review instead of adding it twice (T3.12)', async () => {
+    const user = await createTestUser();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await createTestTransaction(user.id, { amount: 1250, currency: 'INR', date: yesterday, source: 'manual' } as never);
+    await createTestTransaction(user.id, { amount: 3000, currency: 'INR', date: new Date(), source: 'manual' } as never);
+
+    const res = await syncBatch(user.id, {
+      items: [
+        item(user.id),
+        item(user.id, { amount: '1250.00', direction: 'CREDIT', transactionType: 'income' }),
+        item(user.id, { transactionType: 'transfer', subtype: 'card_bill', amount: '3000.00' }),
+        item(user.id, { amount: '999.00' }),
+      ],
+    });
+
+    expect(res.results.map((r) => r.status)).toEqual(['needs_review', 'created', 'created', 'created']);
+    const held = await DetectedTransaction.findByPk(res.results[0].detectedId!);
+    expect(held).toMatchObject({ status: 'pending_review', reviewReason: 'possible_manual_duplicate' });
+
+    // A committed import was already previewed by the user; it is not second-guessed here.
+    const imported = await syncBatch(user.id, { items: [item(user.id)] }, { import: { reviewIndexes: new Set() } });
+    expect(imported.results[0].status).toBe('created');
+  });
+
   it('respects the kill switch and the user preference', async () => {
     const user = await createTestUser();
     env.DETECTION_AUTO_CREATE_ENABLED = 'false';

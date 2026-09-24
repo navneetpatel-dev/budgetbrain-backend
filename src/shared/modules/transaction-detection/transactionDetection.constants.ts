@@ -35,6 +35,8 @@ export const REVIEW_REASONS = {
   USER_REVIEWS_ALL: 'auto_add_disabled',
   /** An imported statement line that looks like a transaction already in the ledger. */
   POSSIBLE_DUPLICATE: 'possible_duplicate',
+  /** A manual transaction of the same amount and direction within a day (plan T3.12). */
+  POSSIBLE_MANUAL_DUPLICATE: 'possible_manual_duplicate',
   /** Set on a rejected row when the user undid an added transaction (rollups count it apart). */
   UNDONE: 'undone',
 } as const;

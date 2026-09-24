@@ -1,18 +1,27 @@
 import { Router } from 'express';
 import { asyncHandler } from '@core/http/errors';
 import { validateBody, validateParams, validateQuery } from '@core/middleware/validate';
-import { detectionSyncRateLimiter } from '@core/middleware/rateLimit';
-import { paginationSchema, uuidParamSchema } from '../../shared/validation/index';
+import { detectionIngestRateLimiter, detectionSyncRateLimiter } from '@core/middleware/rateLimit';
+import { z } from 'zod';
+import { paginationSchema, uuidField } from '@shared/validation/index';
 import * as controller from './transactionDetection.controller';
 import {
   confirmDetectedTransactionSchema,
   createMerchantRuleSchema,
   detectionSettingsSchema,
+  ingestMessageSchema,
   knowledgePackQuerySchema,
   listDetectedQuerySchema,
   syncDetectedBatchSchema,
-} from '@shared/modules/transaction-detection/transactionDetection.validator';
+  updateMerchantRuleSchema,
+} from './transactionDetection.validator';
 
+const uuidParamSchema = z.object({ id: uuidField() });
+
+/**
+ * Detection routes, mounted by both the mobile and the web API (plan T6.1) with the same
+ * controllers, validators and rate limits.
+ */
 const router = Router();
 
 // Kill switches and the user's auto-add preference (T1.16, T1.5)
@@ -28,12 +37,23 @@ router.get('/sync-state', asyncHandler(controller.getSyncState));
 // Batch sync of normalized detected transactions (never raw messages)
 router.post('/sync', detectionSyncRateLimiter, validateBody(syncDetectedBatchSchema), asyncHandler(controller.syncBatch));
 
+// Pasted SMS and forwarded emails, parsed on the server and never stored (T6.2)
+router.get('/institutions', asyncHandler(controller.listInstitutions));
+router.post('/ingest', detectionIngestRateLimiter, validateBody(ingestMessageSchema), asyncHandler(controller.ingest));
+
 // Detected list (auto-added, transfers, confirmed…) and the review inbox
 router.get('/', validateQuery(listDetectedQuerySchema), asyncHandler(controller.listDetected));
 router.get('/pending', validateQuery(paginationSchema), asyncHandler(controller.listPending));
 
 // "Delete my detected data" (T5.7). Registered before '/:id' so "me" is never read as an id.
 router.delete('/me', asyncHandler(controller.deleteMyDetectedData));
+
+// Learned merchant rules. Registered before '/:id' so "rules" is never read as an id.
+router.get('/rules', asyncHandler(controller.getMerchantRules));
+router.post('/rules', validateBody(createMerchantRuleSchema), asyncHandler(controller.saveMerchantRule));
+router.delete('/rules', asyncHandler(controller.deleteMerchantRules));
+router.patch('/rules/:id', validateParams(uuidParamSchema), validateBody(updateMerchantRuleSchema), asyncHandler(controller.updateMerchantRule));
+router.delete('/rules/:id', validateParams(uuidParamSchema), asyncHandler(controller.deleteMerchantRule));
 
 // Review actions
 router.post(
@@ -47,10 +67,5 @@ router.post('/pending/:id/reject', validateParams(uuidParamSchema), asyncHandler
 router.delete('/:id', validateParams(uuidParamSchema), asyncHandler(controller.rejectPending));
 // Undo an auto-added or confirmed item (deletes its transaction, restores the balance)
 router.post('/:id/undo', validateParams(uuidParamSchema), asyncHandler(controller.undoDetected));
-
-// Learned merchant rules
-router.get('/rules', asyncHandler(controller.getMerchantRules));
-router.post('/rules', validateBody(createMerchantRuleSchema), asyncHandler(controller.saveMerchantRule));
-router.delete('/rules', asyncHandler(controller.deleteMerchantRules));
 
 export default router;

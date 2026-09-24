@@ -12,7 +12,7 @@ import aiRoutes from './features/ai/ai.routes';
 import accountsRoutes from './features/accounts/accounts.routes';
 import investmentsRoutes from './features/investments/investments.routes';
 import netWorthRoutes from './features/net-worth/net-worth.routes';
-import integrationsRoutes from './features/integrations/integrations.routes';
+import retiredIntegrationsRoutes from '@shared/modules/transaction-detection/retiredIntegrations.routes';
 import supportRoutes from './features/support/support.routes';
 import expenseAttachmentRoutes from './features/expenses/route/attachments.routes';
 import loansRoutes from './features/loans/loans.routes';
@@ -20,6 +20,7 @@ import recurringRoutes from './features/recurring/recurring.routes';
 import subscriptionsRoutes from './features/subscriptions/subscriptions.routes';
 import searchRoutes from './features/search/search.routes';
 import currencyRoutes from '@shared/modules/currency/currency.routes';
+import detectedTransactionRoutes from '@shared/modules/transaction-detection/transactionDetection.routes';
 import { authenticate } from '@core/auth/authenticate';
 import { requireOnboarding } from '@core/auth/requireOnboarding';
 import { requireEntitlement } from '@shared/middleware/requireEntitlement';
@@ -45,13 +46,15 @@ export function registerWebRoutes(app: Express, apiPrefix: string): void {
   app.use(`${apiPrefix}/accounts`, protectedFeature, accountsRoutes);
   app.use(`${apiPrefix}/investments`, protectedFeature, investmentsRoutes);
   app.use(`${apiPrefix}/net-worth`, protectedFeature, netWorthRoutes);
-  app.use(`${apiPrefix}/integrations`, protectedFeature, integrationsRoutes);
+  app.use(`${apiPrefix}/integrations`, protectedFeature, retiredIntegrationsRoutes);
   app.use(`${apiPrefix}/support`, protectedFeature, supportRoutes);
   app.use(`${apiPrefix}/expenses`, protectedFeature, expenseAttachmentRoutes);
   app.use(`${apiPrefix}/loans`, protectedFeature, loansRoutes);
   app.use(`${apiPrefix}/recurring-series`, protectedFeature, recurringRoutes);
   app.use(`${apiPrefix}/search`, protectedFeature, searchRoutes);
   app.use(`${apiPrefix}/currencies`, protectedFeature, currencyRoutes);
+  // Same router as the mobile API (plan T6.1): review, history, rules, ingest and import.
+  app.use(`${apiPrefix}/detected-transactions`, protectedFeature, detectedTransactionRoutes);
 }
 
 

@@ -492,6 +492,13 @@ async function lockOwned(userId: string, id: string, t: import('sequelize').Tran
   return detected;
 }
 
+/** One of the user's detected transactions. */
+export async function getDetected(userId: string, id: string): Promise<DetectedTransactionDto> {
+  const row = await DetectedTransaction.findOne({ where: { id, userId }, include: detectionIncludes() });
+  if (!row) throw new NotFoundError(ERROR_MESSAGES.DETECTION_NOT_FOUND);
+  return toDetectedDto(row);
+}
+
 async function reloadDto(id: string, t?: import('sequelize').Transaction): Promise<DetectedTransactionDto> {
   const row = await DetectedTransaction.findByPk(id, { include: detectionIncludes(), transaction: t });
   if (!row) throw new NotFoundError(ERROR_MESSAGES.DETECTION_NOT_FOUND);
@@ -702,6 +709,31 @@ export async function deleteMyDetectedData(userId: string): Promise<{ deleted: n
  */
 export async function deleteMerchantRules(userId: string): Promise<{ deleted: number }> {
   const deleted = await MerchantCategoryRule.destroy({ where: { userId } });
+  return { deleted };
+}
+
+/** Rules manager (plan T6.4): point one learned rule at another category. */
+export async function updateMerchantRule(userId: string, id: string, categoryId: string): Promise<MerchantRuleDto> {
+  const [rule, category] = await Promise.all([
+    MerchantCategoryRule.findOne({ where: { id, userId } }),
+    Category.findOne({ where: { id: categoryId, userId }, attributes: ['id', 'name'] }),
+  ]);
+  if (!rule) throw new NotFoundError('Rule not found');
+  if (!category) throw new NotFoundError(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
+  await rule.update({ categoryId });
+  return {
+    id: rule.id,
+    merchant: rule.merchant,
+    categoryId,
+    categoryName: category.name,
+    updatedAt: new Date(rule.updatedAt).toISOString(),
+  };
+}
+
+/** Rules manager (plan T6.4): forget one learned rule. */
+export async function deleteMerchantRule(userId: string, id: string): Promise<{ deleted: number }> {
+  const deleted = await MerchantCategoryRule.destroy({ where: { id, userId } });
+  if (deleted === 0) throw new NotFoundError('Rule not found');
   return { deleted };
 }
 

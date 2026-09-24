@@ -16,6 +16,8 @@ export const DETECTION_LIMITS = {
   MAX_ITEMS_PER_DAY: 2000,
   SYNC_STATE_CACHE_SECONDS: 30,
   IDEMPOTENCY_CACHE_SECONDS: 24 * 60 * 60,
+  /** A pasted message or forwarded email; bank alerts are far shorter (core reads 1000 chars). */
+  MAX_INGEST_TEXT_CHARS: 20_000,
 } as const;
 
 /** Why an item is waiting for the user instead of being created (stored in review_reason). */

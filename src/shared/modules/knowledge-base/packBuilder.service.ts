@@ -154,6 +154,22 @@ async function refreshManifest(country: string): Promise<PackManifest | null> {
   return manifest;
 }
 
+/** The newest stored full pack for a country, for parsing on the server (plan T6.2). */
+export async function loadLatestPack(country: string): Promise<SignedKnowledgePack | null> {
+  const code = country.toUpperCase();
+  const manifest = (await getCache<PackManifest>(manifestKey(code))) ?? (await refreshManifest(code));
+  if (!manifest) return null;
+  return JSON.parse(await getPackFile(manifest.storageKey)) as SignedKnowledgePack;
+}
+
+/** Countries that have a built pack. */
+export async function builtCountries(): Promise<string[]> {
+  const rows = await sequelize.query<{ country: string }>(`SELECT DISTINCT country FROM kb_pack_versions ORDER BY country`, {
+    type: QueryTypes.SELECT,
+  });
+  return rows.map((r) => r.country);
+}
+
 /**
  * The newest pack for a country (`GET …/knowledge-pack`). Served from the Redis manifest, so a
  * request normally makes no database query; `since` picks a delta when one exists.

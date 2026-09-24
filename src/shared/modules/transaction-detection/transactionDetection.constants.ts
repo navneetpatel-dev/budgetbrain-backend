@@ -12,6 +12,8 @@ export const DETECTION_LIMITS = {
   MAX_AGE_DAYS: 400,
   /** Newest transaction date accepted, in days after today (time-zone slack). */
   MAX_FUTURE_DAYS: 1,
+  /** Detected items one user may sync per UTC day (plan T1.7); far above any real inbox. */
+  MAX_ITEMS_PER_DAY: 2000,
   SYNC_STATE_CACHE_SECONDS: 30,
   IDEMPOTENCY_CACHE_SECONDS: 24 * 60 * 60,
 } as const;
@@ -36,6 +38,7 @@ export const ERROR_MESSAGES = {
   CATEGORY_NOT_FOUND: 'Category not found or does not belong to user',
   ACCOUNT_NOT_FOUND: 'Financial account not found or does not belong to user',
   DETECTION_DISABLED: 'Automatic detection is currently disabled',
+  DAILY_LIMIT: 'Daily limit for detected transactions reached; try again tomorrow',
 } as const;
 
 /** Subtypes that fit each type; mirrors the manual transaction validator. */

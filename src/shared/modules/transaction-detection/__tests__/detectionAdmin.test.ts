@@ -129,21 +129,28 @@ describe('detection admin and learning (Phase 7)', () => {
 
   it('takes skeletons only with consent, counts users by HMAC, and shows a shape from k users on (T7.4)', async () => {
     const { user, token } = await signedIn();
-    const upload = (t: string, skeleton = SKELETON) =>
+    const upload = (t: string, skeleton = SKELETON, correctedField: string | null = null) =>
       call(mobile, t, 'POST', '/detected-transactions/skeletons', {
-        items: [{ skeletonHash: 'f'.repeat(64), skeleton, institutionId: 'in.hdfc_bank', senderKey: 'HDFCBK', country: 'IN', language: 'en', correctedField: null }],
+        items: [{ skeletonHash: 'f'.repeat(64), skeleton, institutionId: 'in.hdfc_bank', senderKey: 'HDFCBK', country: 'IN', language: 'en', correctedField }],
       });
     expect((await upload(token)).body.error.code).toBe('TEMPLATE_LEARNING_OFF');
     await call(mobile, token, 'PATCH', '/detected-transactions/settings', { templateLearning: true });
     expect((await call(mobile, token, 'GET', '/detected-transactions/config')).body.data.templateLearning).toBe(true);
     expect((await upload(token)).body.data).toEqual({ accepted: 1 });
     expect((await upload(token)).body.data).toEqual({ accepted: 0 });
+    // The same shape again, now naming what the user corrected, records the field (once).
+    expect((await upload(token, SKELETON, 'merchant')).body.data).toEqual({ accepted: 1 });
+    expect((await upload(token, SKELETON, 'merchant')).body.data).toEqual({ accepted: 0 });
+    expect((await upload(token)).body.data).toEqual({ accepted: 0 });
     expect((await upload(token, SKELETON.replace('<AMT>', '500'))).status).toBe(400);
 
-    const [row] = await sequelize.query<{ user_hash: string; skeleton_hash: string }>(
-      `SELECT user_hash, skeleton_hash FROM detection_skeleton_submissions WHERE user_hash = :h`,
+    const rows = await sequelize.query<{ user_hash: string; skeleton_hash: string; corrected_field: string | null }>(
+      `SELECT user_hash, skeleton_hash, corrected_field FROM detection_skeleton_submissions WHERE user_hash = :h`,
       { type: QueryTypes.SELECT, replacements: { h: userHash(user.id) } }
     );
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row!.corrected_field).toBe('merchant');
     expect(row!.user_hash).not.toContain(user.id);
     expect(row!.skeleton_hash).not.toBe('f'.repeat(64));
 
@@ -159,7 +166,12 @@ describe('detection admin and learning (Phase 7)', () => {
     const tenth = await signedIn({ detectionTemplateLearning: true });
     await upload(tenth.token);
     const queue = await call(admin, adminToken, 'GET', '/admin/detection/skeletons');
-    expect(queue.body.data.find((g: any) => g.skeletonHash === hash)).toMatchObject({ skeleton: SKELETON, users: 10, institutionId: 'in.hdfc_bank' });
+    expect(queue.body.data.find((g: any) => g.skeletonHash === hash)).toMatchObject({
+      skeleton: SKELETON,
+      users: 10,
+      institutionId: 'in.hdfc_bank',
+      correctedFields: ['merchant'],
+    });
 
     // Opting out removes what the user sent: the shape drops below k again.
     await call(mobile, tenth.token, 'PATCH', '/detected-transactions/settings', { templateLearning: false });

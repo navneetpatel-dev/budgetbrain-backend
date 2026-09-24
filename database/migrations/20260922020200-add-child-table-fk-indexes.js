@@ -21,6 +21,9 @@ module.exports = {
   async up(queryInterface) {
     const sequelize = queryInterface.sequelize;
     for (const [table, idx, column] of INDEXES) {
+      // A table dropped by a later migration (parsed_transactions) is absent on a fresh database.
+      const [[{ exists }]] = await sequelize.query(`SELECT to_regclass('public."${table}"') IS NOT NULL AS "exists"`);
+      if (!exists) continue;
       await sequelize.query(`CREATE INDEX IF NOT EXISTS ${idx} ON "${table}" (${column})`);
     }
   },

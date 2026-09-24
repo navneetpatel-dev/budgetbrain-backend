@@ -16,7 +16,6 @@ import { AiConversation } from './aiConversation.model';
 import { AuditLog } from './auditLog.model';
 import { FinancialAccount } from './financialAccount.model';
 import { Investment } from './investment.model';
-import { ParsedTransaction } from './parsedTransaction.model';
 import { SupportTicket } from './supportTicket.model';
 import { VerificationToken } from './verificationToken.model';
 import { MerchantCategoryRule } from './merchantCategoryRule.model';
@@ -46,7 +45,6 @@ export function initAssociations(): void {
   User.hasMany(AuditLog, { foreignKey: 'userId', as: 'auditLogs' });
   User.hasMany(FinancialAccount, { foreignKey: 'userId', as: 'financialAccounts' });
   User.hasMany(Investment, { foreignKey: 'userId', as: 'investments' });
-  User.hasMany(ParsedTransaction, { foreignKey: 'userId', as: 'parsedTransactions' });
   User.hasMany(SupportTicket, { foreignKey: 'userId', as: 'supportTickets' });
   User.hasMany(VerificationToken, { foreignKey: 'userId', as: 'verificationTokens' });
   User.hasMany(MerchantCategoryRule, { foreignKey: 'userId', as: 'merchantCategoryRules' });
@@ -110,10 +108,6 @@ export function initAssociations(): void {
   RecurringSeries.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   RecurringSeries.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
   RecurringSeries.hasMany(Transaction, { foreignKey: 'recurringSeriesId', as: 'transactions' });
-
-  // ParsedTransaction
-  ParsedTransaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-  ParsedTransaction.belongsTo(Transaction, { foreignKey: 'transactionId', as: 'transaction' });
 
   // Transaction & Attachments & Splits
   Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });

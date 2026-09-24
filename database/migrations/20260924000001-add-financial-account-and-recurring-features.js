@@ -28,9 +28,9 @@ module.exports = {
       ADD COLUMN IF NOT EXISTS "auto_record" BOOLEAN NOT NULL DEFAULT false;
     `);
 
-    // 3. Add type to parsed_transactions
+    // 3. Add type to parsed_transactions (absent on a fresh database: a later migration drops it)
     await sequelize.query(`
-      ALTER TABLE "parsed_transactions"
+      ALTER TABLE IF EXISTS "parsed_transactions"
       ADD COLUMN IF NOT EXISTS "type" VARCHAR(32) NOT NULL DEFAULT 'expense';
     `);
   },

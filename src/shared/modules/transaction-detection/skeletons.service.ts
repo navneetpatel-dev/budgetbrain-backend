@@ -22,6 +22,10 @@ export function userHash(userId: string): string {
 
 const skeletonHash = (skeleton: string) => createHash('sha256').update(skeleton.toLowerCase()).digest('hex');
 
+/**
+ * Stores a user's shapes once each. A later upload of the same shape that names a corrected
+ * field (the user fixed what the parser read from it, plan T7.4) records that field.
+ */
 export async function submitSkeletons(userId: string, input: SkeletonUploadInput): Promise<{ accepted: number }> {
   const user = await User.findByPk(userId, { attributes: ['id', 'detectionTemplateLearning'] });
   if (!user?.detectionTemplateLearning) {
@@ -29,7 +33,7 @@ export async function submitSkeletons(userId: string, input: SkeletonUploadInput
   }
   const hashOfUser = userHash(userId);
   // The server hashes the skeleton itself, like fingerprints: a client can't choose its group.
-  const rows = input.items.map((item) => ({
+  const all = input.items.map((item) => ({
     skeleton_hash: skeletonHash(item.skeleton),
     user_hash: hashOfUser,
     institution_id: item.institutionId,
@@ -39,13 +43,22 @@ export async function submitSkeletons(userId: string, input: SkeletonUploadInput
     skeleton: item.skeleton,
     corrected_field: item.correctedField,
   }));
+  // One row per shape (an upsert can't touch the same row twice); a row naming a correction wins.
+  const byHash = new Map<string, (typeof all)[number]>();
+  for (const row of all) {
+    const seen = byHash.get(row.skeleton_hash);
+    if (!seen || (!seen.corrected_field && row.corrected_field)) byHash.set(row.skeleton_hash, row);
+  }
+  const rows = [...byHash.values()];
   const inserted = await sequelize.query<{ id: string }>(
     `INSERT INTO detection_skeleton_submissions
        (skeleton_hash, user_hash, institution_id, sender_key, country, language, skeleton, corrected_field)
      SELECT r.skeleton_hash, r.user_hash, r.institution_id, r.sender_key, r.country, r.language, r.skeleton, r.corrected_field
      FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS r(skeleton_hash text, user_hash text, institution_id text,
        sender_key text, country text, language text, skeleton text, corrected_field text)
-     ON CONFLICT (skeleton_hash, user_hash) DO NOTHING
+     ON CONFLICT (skeleton_hash, user_hash) DO UPDATE SET corrected_field = EXCLUDED.corrected_field
+       WHERE EXCLUDED.corrected_field IS NOT NULL
+         AND detection_skeleton_submissions.corrected_field IS DISTINCT FROM EXCLUDED.corrected_field
      RETURNING id`,
     { type: QueryTypes.SELECT, replacements: { rows: JSON.stringify(rows) } }
   );

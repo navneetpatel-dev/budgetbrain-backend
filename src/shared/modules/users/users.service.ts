@@ -20,7 +20,6 @@ import {
   AuditLog,
   FinancialAccount,
   Investment,
-  ParsedTransaction,
   DetectedTransaction,
   SupportTicket,
   VerificationToken,
@@ -165,7 +164,6 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     await AiConversation.destroy({ where: { userId }, ...txOpts });
     await FinancialAccount.destroy({ where: { userId }, ...txOpts });
     await Investment.destroy({ where: { userId }, ...txOpts });
-    await ParsedTransaction.destroy({ where: { userId }, ...txOpts });
     // Detection data (plan T7.6). Skeletons are keyed by an HMAC of the id, so no FK covers them.
     await DetectedTransaction.destroy({ where: { userId }, ...txOpts });
     await sequelize.query(`DELETE FROM detection_diagnostics_daily WHERE user_id = :userId`, { replacements: { userId }, ...txOpts });

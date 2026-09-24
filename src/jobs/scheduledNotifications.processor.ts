@@ -11,6 +11,7 @@ import {
   runTokenAndReportCleanup,
   runWeeklyDigest,
 } from './scheduledNotifications';
+import { enqueueNightlyPackBuild } from '@modules/knowledge-base/knowledgeBase.jobs';
 
 const tasks: ScheduledTask[] = [];
 
@@ -25,6 +26,8 @@ export function start(): void {
   tasks.push(cron.schedule('0 6 1 * *', () => void runMonthlyReportDigests()));
   tasks.push(cron.schedule('0 3 * * *', () => void runExchangeRateSync()));
   tasks.push(cron.schedule('0 4 * * *', () => void runTokenAndReportCleanup()));
+  // Knowledge packs (plan T4.3): rebuilt nightly; unchanged content produces no new version.
+  tasks.push(cron.schedule('30 3 * * *', () => void enqueueNightlyPackBuild()));
   console.log('Scheduled jobs started');
 }
 

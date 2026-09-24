@@ -91,3 +91,9 @@ export const listDetectedQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
+
+/** `GET /detected-transactions/knowledge-pack` (plan T4.3). */
+export const knowledgePackQuerySchema = z.object({
+  country: z.string().regex(/^(?:[A-Za-z]{2}|GLOBAL)$/),
+  since: z.coerce.number().int().positive().optional(),
+});

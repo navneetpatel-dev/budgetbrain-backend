@@ -271,6 +271,25 @@ After DNS + certbot, switch clients to:
 
 ---
 
+## 6a. Transaction-detection knowledge packs
+
+The mobile app downloads a signed knowledge pack per country: banks, SMS senders, merchants, templates and lexicons. The pack builder signs each pack with an Ed25519 key. The app only accepts packs signed by a public key it ships with.
+
+1. **Create a key pair once.** Keep the secret in the server's environment only.
+   ```bash
+   node -e "const c=require('@budgetbrain/detection-core');const k=c.generateSigningKeyPair();console.log('PACK_SIGNING_KEY='+c.toBase64(k.privateKey));console.log('public key: '+c.toBase64(k.publicKey))"
+   ```
+   Set `PACK_SIGNING_KEY` and `PACK_KEY_ID` (for example `prod-2026-09`) on the server. Give the public key and its id to the mobile build as `EXPO_PUBLIC_PACK_PUBLIC_KEYS={"prod-2026-09":"<public key>"}`.
+2. **Seed the catalog**, after migrations:
+   ```bash
+   npm run kb -- import seed-pack    # India baseline from core
+   npm run kb -- import iso4217
+   npm run kb -- coverage
+   ```
+3. **Build the packs:** `npm run kb -- build`, or wait for the nightly job at 03:30, which runs on the instance with `ENABLE_QUEUE_WORKERS=true`. A build with unchanged content creates no new version.
+
+Packs are stored gzip-encoded under `PACK_STORAGE_PREFIX` in `S3_BUCKET`. Without S3 they go to `uploads/`.
+
 ## 7. Useful commands on EC2
 
 ```bash

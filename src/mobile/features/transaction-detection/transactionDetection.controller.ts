@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { successResponse } from '@core/http/errors';
 import { AuthRequest } from '@shared/types';
 import * as service from '@shared/modules/transaction-detection/transactionDetection.service';
+import { getPackForClient } from '@modules/knowledge-base/packBuilder.service';
+import { AppError } from '@shared/errors';
 import type {
   ConfirmDetectedTransactionInput,
   DetectionSettingsInput,
@@ -81,4 +83,21 @@ export async function getMerchantRules(req: Request, res: Response) {
 export async function saveMerchantRule(req: Request, res: Response) {
   const userId = (req as AuthRequest).userId!;
   successResponse(res, await service.saveMerchantRule(userId, req.body as MerchantRuleInput), 201);
+}
+
+/**
+ * The newest signed knowledge pack for a country (plan T4.3): a download URL, plus a delta URL
+ * when the client's `since` version has one. 304 when the client already has this version.
+ */
+export async function getKnowledgePack(req: Request, res: Response) {
+  const { country, since } = req.query as unknown as { country: string; since?: number };
+  const pack = await getPackForClient(country, since ?? null);
+  if (!pack) throw new AppError(404, 'No knowledge pack for this country yet', 'PACK_NOT_FOUND');
+  res.setHeader('ETag', pack.etag);
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  if (req.header('If-None-Match') === pack.etag) {
+    res.status(304).end();
+    return;
+  }
+  successResponse(res, pack);
 }

@@ -86,3 +86,14 @@ export const pushQueue = new Queue<PushJobData>('push', {
   defaultJobOptions,
 });
 logConnectionErrors('push', pushQueue);
+
+/** Knowledge base (plan T4.2, T4.3): importer runs and pack builds, one at a time. */
+export type KnowledgeBaseJobData =
+  | { type: 'import'; importer: string; file?: string }
+  | { type: 'build'; country?: string };
+
+export const knowledgeBaseQueue = new Queue<KnowledgeBaseJobData>('knowledge-base', {
+  connection: queueConnection,
+  defaultJobOptions: { ...defaultJobOptions, attempts: 2 },
+});
+logConnectionErrors('knowledge-base', knowledgeBaseQueue);

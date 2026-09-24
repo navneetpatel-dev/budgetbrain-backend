@@ -25,12 +25,13 @@
     "db:seed:prod": "NODE_ENV=production tsx src/scripts/seed.ts",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "kb": "tsx src/scripts/kb.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
     "@aws-sdk/s3-request-presigner": "^3.1134.0",
-    "@budgetbrain/detection-core": "github:navneetpatel-dev/budgetbrain-detection-core#0a61f4f5a2df0730787c18eef6965e2178b5f2b5",
+    "@budgetbrain/detection-core": "github:navneetpatel-dev/budgetbrain-detection-core#2026b7906527a04e36ac3cdf76f8a530b9a3f29b",
     "@sentry/node": "^9.5.0",
     "@simplewebauthn/server": "^14.0.2",
     "bcryptjs": "^2.4.3",

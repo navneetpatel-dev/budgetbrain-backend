@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { SyncItemResult } from '@budgetbrain/detection-core';
+import type { PackKillSwitch, SyncItemResult } from '@budgetbrain/detection-core';
 import type {
   confirmDetectedTransactionSchema,
   createMerchantRuleSchema,
@@ -39,6 +39,8 @@ export interface DetectionConfigResponse {
   minAppVersion: string | null;
   /** The user's own preference; the server applies it too. */
   autoAddHighConfidence: boolean;
+  /** Active kill switches; core applies them on top of the pack's (plan T4.6). */
+  killSwitches: PackKillSwitch[];
 }
 
 /**

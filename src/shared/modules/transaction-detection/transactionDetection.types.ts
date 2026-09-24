@@ -1,48 +1,29 @@
+import type { z } from 'zod';
+import type { SyncItemResult } from '@budgetbrain/detection-core';
 import type {
-  DetectedTransactionDirection,
-  DetectedTransactionSource,
-  DetectedTransactionStatus,
-  DetectedTransactionType,
-} from '@database/models';
+  confirmDetectedTransactionSchema,
+  createMerchantRuleSchema,
+  detectedItemSchema,
+  detectionSettingsSchema,
+  listDetectedQuerySchema,
+  syncDetectedBatchSchema,
+} from './transactionDetection.validator';
 
-export interface NormalizedDetectedPayload {
-  amount: number;
-  currency?: string;
-  direction: DetectedTransactionDirection;
-  transactionType: DetectedTransactionType;
-  merchant?: string | null;
-  normalizedMerchant?: string | null;
-  categoryId?: string | null;
-  financialAccountId?: string | null;
-  accountTail?: string | null;
-  referenceNumber?: string | null;
-  institutionName?: string | null;
-  transactionDate: string; // YYYY-MM-DD
-  confidence: number;
-  dedupFingerprint: string;
-  source: DetectedTransactionSource;
-  status?: DetectedTransactionStatus;
-  metadata?: Record<string, unknown> | null;
-}
-
-export interface SyncDetectedBatchRequest {
-  items: NormalizedDetectedPayload[];
-}
-
-export interface SyncDetectedItemResult {
-  fingerprint: string;
-  status: 'created' | 'already_synced' | 'validation_error';
-  detectedId?: string;
-  transactionId?: string | null;
-  error?: string;
-}
+export type DetectedItemInput = z.infer<typeof detectedItemSchema>;
+export type SyncDetectedBatchRequest = z.infer<typeof syncDetectedBatchSchema>;
+export type ConfirmDetectedTransactionInput = z.infer<typeof confirmDetectedTransactionSchema>;
+export type MerchantRuleInput = z.infer<typeof createMerchantRuleSchema>;
+export type DetectionSettingsInput = z.infer<typeof detectionSettingsSchema>;
+export type ListDetectedQuery = z.infer<typeof listDetectedQuerySchema>;
 
 export interface SyncDetectedBatchResponse {
   totalProcessed: number;
   createdCount: number;
+  needsReviewCount: number;
   alreadySyncedCount: number;
   failedCount: number;
-  results: SyncDetectedItemResult[];
+  /** One result per submitted item, in the same order, keyed by the client's id. */
+  results: SyncItemResult[];
 }
 
 export interface SyncStateResponse {
@@ -51,16 +32,40 @@ export interface SyncStateResponse {
   pendingReviewCount: number;
 }
 
-export interface ConfirmDetectedTransactionInput {
-  categoryId?: string | null;
-  financialAccountId?: string | null;
-  merchant?: string | null;
-  notes?: string | null;
-  tags?: string[] | null;
-  learnMerchantCategory?: boolean;
+/** Runtime switches clients read before processing (plan task T1.16, interim until T4.6). */
+export interface DetectionConfigResponse {
+  enabled: boolean;
+  autoCreateEnabled: boolean;
+  minAppVersion: string | null;
+  /** The user's own preference; the server applies it too. */
+  autoAddHighConfidence: boolean;
 }
 
-export interface MerchantRuleInput {
-  merchant: string;
-  categoryId: string;
+/**
+ * Detected transaction as returned to clients (plan task T1.10). Amounts are decimal strings;
+ * clients parse them with core `parseMoney` (gap P0-7).
+ */
+export interface DetectedTransactionDto {
+  id: string;
+  amount: string;
+  currency: string;
+  direction: 'DEBIT' | 'CREDIT';
+  transactionType: 'expense' | 'income' | 'refund' | 'transfer';
+  subtype: string | null;
+  paymentMethod: string | null;
+  merchant: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  financialAccountId: string | null;
+  financialAccountName: string | null;
+  accountTail: string | null;
+  referenceNumber: string | null;
+  institutionId: string | null;
+  transactionDate: string;
+  confidenceTier: 'high' | 'medium' | 'low' | null;
+  reviewReason: string | null;
+  status: string;
+  source: string;
+  createdTransactionId: string | null;
+  createdAt: string;
 }

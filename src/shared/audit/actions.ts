@@ -47,6 +47,11 @@ export const AuditAction = {
   INTEGRATION_REJECT: 'integration.reject_parsed',
   INTEGRATION_CSV_IMPORT: 'integration.csv_import',
 
+  DETECTION_AUTO_CREATE: 'detection.auto_create',
+  DETECTION_CONFIRM: 'detection.confirm',
+  DETECTION_REJECT: 'detection.reject',
+  DETECTION_UNDO: 'detection.undo',
+
   LOAN_CREATE: 'loan.create',
   LOAN_UPDATE: 'loan.update',
   LOAN_DELETE: 'loan.delete',
@@ -77,6 +82,7 @@ export const AuditResource = {
   AUTH: 'auth',
   DEVICE: 'device',
   CATEGORY: 'category',
+  DETECTED_TRANSACTION: 'detected_transaction',
 } as const;
 
 export type AuditResourceValue = (typeof AuditResource)[keyof typeof AuditResource];

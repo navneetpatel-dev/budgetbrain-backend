@@ -3,11 +3,13 @@ import { Budget, BudgetAlert, Transaction, User } from '@database/models';
 import { getBudgetDateRange } from '@shared/budgets/budgetPeriod';
 import { createNotification } from '@shared/modules/notifications/service/notification.service';
 import { convertAndSum } from '@shared/currency/currency.engine';
+import { NET_SPENDING_TYPES, toNetSpendingRows } from '@shared/modules/expenses/service/transactionKinds';
 
 /** Fixed progressive alert tiers, per requirements.md's budget-alert granularity gap. */
 const ALERT_TIERS = [50, 80, 90, 100] as const;
 
 interface ExpenseRow {
+  type: string;
   amount: unknown;
   currency: string | null;
   categoryId: string | null;
@@ -49,8 +51,9 @@ export async function checkBudgetAlertsAfterExpense(
     if (cached) return cached;
 
     const rows = (await Transaction.findAll({
-      where: { userId, type: 'expense', date: { [Op.gte]: startDate, [Op.lte]: endDate } },
-      attributes: ['amount', 'currency', 'categoryId'],
+      // Net of refunds, matching budget.service's spent figure.
+      where: { userId, type: NET_SPENDING_TYPES, date: { [Op.gte]: startDate, [Op.lte]: endDate } },
+      attributes: ['type', 'amount', 'currency', 'categoryId'],
       raw: true,
       ...txOpts,
     })) as unknown as ExpenseRow[];
@@ -68,7 +71,7 @@ export async function checkBudgetAlertsAfterExpense(
       ? windowRows.filter((row) => row.categoryId === budget.categoryId)
       : windowRows;
 
-    const spent = await convertAndSum(matchingRows, userCurrency);
+    const spent = await convertAndSum(toNetSpendingRows(matchingRows), userCurrency);
     const budgetAmount = Number(budget.amount);
     if (budgetAmount <= 0) continue;
 

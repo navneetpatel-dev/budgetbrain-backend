@@ -59,6 +59,12 @@ export const envSchema = z.object({
   // Set 'true' on exactly one deployed instance — BullMQ workers should have a single
   // consumer per queue set, not one per app process. See src/queue/index.ts.
   ENABLE_QUEUE_WORKERS: z.string().optional(),
+  // Automatic transaction detection kill switches (implementation plan T1.16). 'false' turns
+  // detection off entirely, or only its automatic adding (everything then waits for review).
+  DETECTION_ENABLED: z.enum(['true', 'false']).default('true'),
+  DETECTION_AUTO_CREATE_ENABLED: z.enum(['true', 'false']).default('true'),
+  // Oldest mobile app version allowed to run detection, e.g. '1.4.0'.
+  DETECTION_MIN_APP_VERSION: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

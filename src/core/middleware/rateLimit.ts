@@ -80,3 +80,22 @@ export const receiptUploadRateLimiter = createLimiter('receipt', 20, 60 * 1000, 
 export const syncBatchRateLimiter = createLimiter('sync', 10, 60 * 1000, 'Too many sync requests');
 export const integrationsRateLimiter = createLimiter('integrations', 15, 60 * 1000, 'Too many import requests');
 export const checkoutRateLimiter = createLimiter('checkout', 10, 60 * 1000, 'Too many checkout requests');
+
+/**
+ * Per-user limit for detected-transaction sync (implementation plan T1.7). Keyed by the
+ * authenticated user rather than IP, so users behind one carrier NAT don't share a budget.
+ * Clients send at most 100 items per request and batch live messages, so 60 requests a minute
+ * leaves ample headroom for a burst of SMS or a historical scan.
+ */
+export const detectionSyncRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, error: { message: 'Too many detection sync requests', code: 'RATE_LIMIT' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const userId = (req as unknown as { userId?: string }).userId;
+    return userId ? `user:${userId}` : `ip:${req.ip ?? 'unknown'}`;
+  },
+  store: isRedisEnabled() ? new RedisRateLimitStore({ prefix: 'rl:detect-sync:' }) : undefined,
+});

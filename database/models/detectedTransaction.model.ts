@@ -2,7 +2,18 @@ import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
 
 export type DetectedTransactionDirection = 'DEBIT' | 'CREDIT';
 export type DetectedTransactionType = 'expense' | 'income' | 'refund' | 'transfer';
-export type DetectedTransactionSource = 'android_sms' | 'notification' | 'email' | 'csv' | 'bank_api';
+export type DetectedTransactionSource =
+  | 'android_sms'
+  | 'notification'
+  | 'email'
+  | 'pasted_sms'
+  | 'csv'
+  | 'ofx'
+  | 'qif'
+  | 'mt940'
+  | 'camt053'
+  | 'open_banking'
+  | 'bank_api';
 export type DetectedTransactionStatus =
   | 'auto_approved'
   | 'pending_review'
@@ -31,6 +42,15 @@ export interface DetectedTransactionAttributes {
   status: DetectedTransactionStatus;
   createdTransactionId: string | null;
   metadata: Record<string, unknown> | null;
+  /** Knowledge-pack institution id, e.g. `in.hdfc_bank` (replaces the raw sender, gap X6). */
+  institutionId: string | null;
+  subtype: string | null;
+  paymentMethod: string | null;
+  /** Why the item needs review (reason code), when status is `pending_review`. */
+  reviewReason: string | null;
+  /** Evidence flags the server scored (gap F3). */
+  evidence: Record<string, boolean | string> | null;
+  confidenceTier: 'high' | 'medium' | 'low' | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -51,6 +71,12 @@ export type DetectedTransactionCreationAttributes = Optional<
   | 'status'
   | 'createdTransactionId'
   | 'metadata'
+  | 'institutionId'
+  | 'subtype'
+  | 'paymentMethod'
+  | 'reviewReason'
+  | 'evidence'
+  | 'confidenceTier'
 >;
 
 export class DetectedTransaction
@@ -77,6 +103,12 @@ export class DetectedTransaction
   declare status: DetectedTransactionStatus;
   declare createdTransactionId: string | null;
   declare metadata: Record<string, unknown> | null;
+  declare institutionId: string | null;
+  declare subtype: string | null;
+  declare paymentMethod: string | null;
+  declare reviewReason: string | null;
+  declare evidence: Record<string, boolean | string> | null;
+  declare confidenceTier: 'high' | 'medium' | 'low' | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -104,11 +136,18 @@ export function initDetectedTransactionModel(sequelize: Sequelize): typeof Detec
       institutionName: { type: DataTypes.STRING(100), allowNull: true, field: 'institution_name' },
       transactionDate: { type: DataTypes.DATEONLY, allowNull: false, field: 'transaction_date' },
       confidence: { type: DataTypes.FLOAT, defaultValue: 0.0, allowNull: false },
-      dedupFingerprint: { type: DataTypes.STRING(64), allowNull: false, field: 'dedup_fingerprint' },
+      // Core fingerprints are `v2_` + 64 hex characters.
+      dedupFingerprint: { type: DataTypes.STRING(80), allowNull: false, field: 'dedup_fingerprint' },
       source: { type: DataTypes.STRING(20), defaultValue: 'android_sms', allowNull: false },
       status: { type: DataTypes.STRING(20), defaultValue: 'auto_approved', allowNull: false },
       createdTransactionId: { type: DataTypes.UUID, allowNull: true, field: 'created_transaction_id' },
       metadata: { type: DataTypes.JSONB, allowNull: true },
+      institutionId: { type: DataTypes.STRING(100), allowNull: true, field: 'institution_id' },
+      subtype: { type: DataTypes.STRING(20), allowNull: true },
+      paymentMethod: { type: DataTypes.STRING(20), allowNull: true, field: 'payment_method' },
+      reviewReason: { type: DataTypes.STRING(40), allowNull: true, field: 'review_reason' },
+      evidence: { type: DataTypes.JSONB, allowNull: true },
+      confidenceTier: { type: DataTypes.STRING(10), allowNull: true, field: 'confidence_tier' },
     },
     {
       sequelize,

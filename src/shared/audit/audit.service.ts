@@ -43,6 +43,44 @@ function redactSensitive(value: Record<string, unknown> | null | undefined): Rec
   return clone;
 }
 
+function toRow(input: AuditEventInput, ctx: ReturnType<typeof getAuditContext>) {
+  return {
+    userId: input.actorUserId ?? ctx?.actorUserId ?? null,
+    actorType: input.actorType ?? ctx?.actorType ?? 'system',
+    action: input.action,
+    resource: input.resource,
+    resourceId: input.resourceId ?? null,
+    outcome: input.outcome ?? 'success',
+    severity: input.severity ?? (input.outcome === 'failure' ? 'warning' : 'info'),
+    source: input.source ?? ctx?.source ?? 'system',
+    requestId: input.requestId ?? ctx?.requestId ?? null,
+    ipAddress: input.ipAddress ?? ctx?.ipAddress ?? null,
+    userAgent: input.userAgent ?? ctx?.userAgent ?? null,
+    beforeState: redactSensitive(input.beforeState),
+    afterState: redactSensitive(input.afterState),
+    metadata: redactSensitive(input.metadata),
+  };
+}
+
+/**
+ * Writes many audit rows in one INSERT (e.g. a detection batch creating dozens of
+ * transactions). Same fail-open behaviour as writeAuditLog. Pass `transaction` to commit the
+ * rows with the business write.
+ */
+export async function writeAuditLogs(inputs: AuditEventInput[], transaction?: Transaction): Promise<void> {
+  if (inputs.length === 0) return;
+  const ctx = getAuditContext();
+  try {
+    await AuditLog.bulkCreate(inputs.map((input) => toRow(input, ctx)) as never[], transaction ? { transaction } : undefined);
+  } catch (err) {
+    log.error('Failed to persist audit logs', {
+      count: inputs.length,
+      action: inputs[0]?.action,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /**
  * Append-only audit trail. Fail-open: never breaks the primary request.
  * Prefer calling inside the same DB transaction as the mutating operation when possible.

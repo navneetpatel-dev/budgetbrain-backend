@@ -7,7 +7,8 @@ export interface ParsedTransactionAttributes {
   userId: string;
   source: ParseSource;
   type?: 'expense' | 'income';
-  rawContent: string;
+  /** Always NULL since the legacy parser was retired (plan T6.3); the table is dropped later. */
+  rawContent: string | null;
   parsedAmount: number | null;
   parsedMerchant: string | null;
   parsedDate: Date | null;
@@ -20,7 +21,7 @@ export interface ParsedTransactionAttributes {
 
 export type ParsedTransactionCreationAttributes = Optional<
   ParsedTransactionAttributes,
-  'id' | 'type' | 'parsedAmount' | 'parsedMerchant' | 'parsedDate' | 'transactionId' | 'status'
+  'id' | 'type' | 'rawContent' | 'parsedAmount' | 'parsedMerchant' | 'parsedDate' | 'transactionId' | 'status'
 >;
 
 export class ParsedTransaction
@@ -31,7 +32,7 @@ export class ParsedTransaction
   declare userId: string;
   declare source: ParseSource;
   declare type: 'expense' | 'income';
-  declare rawContent: string;
+  declare rawContent: string | null;
   declare parsedAmount: number | null;
   declare parsedMerchant: string | null;
   declare parsedDate: Date | null;
@@ -49,7 +50,7 @@ export function initParsedTransactionModel(sequelize: Sequelize): typeof ParsedT
       userId: { type: DataTypes.UUID, allowNull: false, field: 'user_id' },
       source: { type: DataTypes.ENUM('sms', 'email', 'csv'), allowNull: false },
       type: { type: DataTypes.STRING(32), defaultValue: 'expense', allowNull: false },
-      rawContent: { type: DataTypes.TEXT, allowNull: false, field: 'raw_content' },
+      rawContent: { type: DataTypes.TEXT, allowNull: true, field: 'raw_content' },
       parsedAmount: { type: DataTypes.DECIMAL(15, 2), allowNull: true, field: 'parsed_amount' },
       parsedMerchant: { type: DataTypes.STRING(255), allowNull: true, field: 'parsed_merchant' },
       parsedDate: { type: DataTypes.DATEONLY, allowNull: true, field: 'parsed_date' },

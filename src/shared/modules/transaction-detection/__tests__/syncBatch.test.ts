@@ -81,6 +81,12 @@ describe('detected transaction sync', () => {
     expect(res.results[0].status).toBe('needs_review');
   });
 
+  it('does not accept a verified institution without an institution id', async () => {
+    const user = await createTestUser();
+    const res = await syncBatch(user.id, { items: [item(user.id, { institutionId: null })] });
+    expect(res.results[0].status).toBe('needs_review');
+  });
+
   it('is idempotent: replaying a batch creates nothing new', async () => {
     const user = await createTestUser();
     const batch = { items: [item(user.id), item(user.id)] };

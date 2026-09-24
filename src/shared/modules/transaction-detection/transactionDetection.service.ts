@@ -176,7 +176,11 @@ export async function syncBatch(
       index,
       item,
       fingerprint,
-      tier: minTier(item.confidenceTier, scoreEvidence(item.evidence)),
+      // A bank can't be "verified" when the client didn't even say which bank it is.
+      tier: minTier(
+        item.confidenceTier,
+        scoreEvidence(item.institutionId ? item.evidence : { ...item.evidence, institutionVerified: false })
+      ),
       categoryId: item.categoryId,
       status: 'pending_review',
       reviewReason: null,

@@ -16,6 +16,8 @@ import {
   killSwitchUpdateSchema,
   packBuildSchema,
   promoteAliasSchema,
+  rolloutParamSchema,
+  rolloutSchema,
   skeletonParamSchema,
   templateFromSkeletonSchema,
 } from './detection.validation';
@@ -39,6 +41,10 @@ router.post('/packs/build', validateBody(packBuildSchema), asyncHandler(controll
 router.get('/kill-switches', asyncHandler(controller.getKillSwitches));
 router.post('/kill-switches', validateBody(killSwitchCreateSchema), asyncHandler(controller.addKillSwitch));
 router.patch('/kill-switches/:id', validateParams(uuidParamSchema), validateBody(killSwitchUpdateSchema), asyncHandler(controller.changeKillSwitch));
+
+router.get('/rollout', asyncHandler(controller.getRollout));
+router.put('/rollout/:country', validateParams(rolloutParamSchema), validateBody(rolloutSchema), asyncHandler(controller.putRollout));
+router.delete('/rollout/:country', validateParams(rolloutParamSchema), asyncHandler(controller.removeRollout));
 
 router.get('/skeletons', asyncHandler(controller.getSkeletonQueue));
 router.post('/skeletons/:hash/template', validateParams(skeletonParamSchema), validateBody(templateFromSkeletonSchema), asyncHandler(controller.templateFromSkeleton));

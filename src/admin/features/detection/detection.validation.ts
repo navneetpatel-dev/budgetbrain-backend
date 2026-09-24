@@ -32,6 +32,16 @@ export const killSwitchCreateSchema = z
   .strict();
 export const killSwitchUpdateSchema = z.object({ active: z.boolean(), reason: z.string().trim().min(3).max(500).optional() }).strict();
 
+/** `default` in the URL is the row for users whose country has none of its own. */
+export const rolloutParamSchema = z.object({ country: z.union([z.literal('default'), z.string().regex(/^[A-Z]{2}$/)]) });
+export const rolloutSchema = z
+  .object({
+    percent: z.number().int().min(0).max(100),
+    includeInternal: z.boolean().optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+  })
+  .strict();
+
 export const skeletonParamSchema = z.object({ hash: z.string().regex(/^[0-9a-f]{64}$/) });
 export const templateFromSkeletonSchema = z
   .object({

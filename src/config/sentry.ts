@@ -1,4 +1,5 @@
 import { env } from './env';
+import { scrubSentryEvent } from '../shared/logging/redact';
 
 export function initSentry(): void {
   if (!env.SENTRY_DSN) return;
@@ -8,13 +9,13 @@ export function initSentry(): void {
       dsn: env.SENTRY_DSN,
       environment: env.NODE_ENV,
       tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
-      // Pasted messages, emails and statement files must never leave the server (plan T6.2).
+      // Pasted messages, statement files and tokens never leave the server (plan T6.2, T9.4):
+      // no request bodies, cookies or query strings, and scrubbed extra data and breadcrumbs.
       beforeSend(event) {
-        if (event.request?.url?.includes('/detected-transactions')) {
-          delete event.request.data;
-          delete event.request.query_string;
-        }
-        return event;
+        return scrubSentryEvent(event);
+      },
+      beforeBreadcrumb(breadcrumb) {
+        return scrubSentryEvent({ breadcrumbs: [breadcrumb] }).breadcrumbs?.[0] ?? null;
       },
     });
   });

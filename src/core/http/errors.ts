@@ -29,6 +29,26 @@ export function createErrorHandler(appName: LogService) {
       return;
     }
 
+    // express.json() parse errors: the message quotes the start of the raw body (a pasted
+    // message, say), so it is neither logged nor echoed (plan T9.4).
+    const bodyError = err as Error & { type?: string; status?: number };
+    if (bodyError.type === 'entity.parse.failed') {
+      res.status(400).json({
+        success: false,
+        error: { message: 'The request body is not valid JSON', code: 'INVALID_JSON' },
+        ...(requestId ? { requestId } : {}),
+      });
+      return;
+    }
+    if (bodyError.type === 'entity.too.large') {
+      res.status(413).json({
+        success: false,
+        error: { message: 'The request body is too large', code: 'PAYLOAD_TOO_LARGE' },
+        ...(requestId ? { requestId } : {}),
+      });
+      return;
+    }
+
     if (err instanceof ZodError) {
       const first = err.errors[0];
       res.status(400).json({

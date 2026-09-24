@@ -46,6 +46,7 @@ import type {
 import { validateServerDetectedPayload } from './engine/serverValidation.engine';
 import { computeServerFingerprint } from './engine/serverDeduplication.engine';
 import { toDetectedDto } from './engine/detectedDto';
+import { isInRollout } from './rollout.service';
 import { deleteUserSkeletons } from './skeletons.service';
 
 const log = createLogger('system');
@@ -94,9 +95,14 @@ function detectionIncludes() {
 // ---------------------------------------------------------------------------------------------
 
 export async function getDetectionConfig(userId: string): Promise<DetectionConfigResponse> {
-  const user = await User.findByPk(userId, { attributes: ['id', 'detectionAutoAdd', 'detectionTemplateLearning'] });
+  const user = await User.findByPk(userId, {
+    attributes: ['id', 'role', 'country', 'detectionAutoAdd', 'detectionTemplateLearning'],
+  });
+  // Staged rollout (plan T9.3): outside it, the app captures nothing on its own.
+  const rolledOut = user ? await isInRollout(user) : false;
   return {
-    enabled: env.DETECTION_ENABLED === 'true',
+    enabled: env.DETECTION_ENABLED === 'true' && rolledOut,
+    rolledOut,
     autoCreateEnabled: env.DETECTION_AUTO_CREATE_ENABLED === 'true',
     minAppVersion: env.DETECTION_MIN_APP_VERSION ?? null,
     autoAddHighConfidence: user?.detectionAutoAdd ?? true,

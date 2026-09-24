@@ -23,6 +23,7 @@ import {
   listDeletionRequests,
   runDetectionRollup,
 } from '@modules/transaction-detection/detectionAdmin.service';
+import { deleteRollout, listRollout, setRollout } from '@modules/transaction-detection/rollout.service';
 import {
   createTemplateFromSkeleton,
   dismissSkeleton,
@@ -101,6 +102,23 @@ export async function changeKillSwitch(req: Request, res: Response) {
   const { id } = req.params as { id: string };
   const { active, reason } = req.body as { active: boolean; reason?: string };
   successResponse(res, await setKillSwitchActive(id, active, reason, adminId(req)));
+}
+
+const rolloutCountry = (req: Request) => {
+  const { country } = req.params as { country: string };
+  return country === 'default' ? '' : country;
+};
+
+export async function getRollout(_req: Request, res: Response) {
+  successResponse(res, await listRollout());
+}
+
+export async function putRollout(req: Request, res: Response) {
+  successResponse(res, await setRollout(rolloutCountry(req), req.body as { percent: number; includeInternal?: boolean; note?: string | null }, adminId(req)));
+}
+
+export async function removeRollout(req: Request, res: Response) {
+  successResponse(res, await deleteRollout(rolloutCountry(req), adminId(req)));
 }
 
 export async function getSkeletonQueue(_req: Request, res: Response) {

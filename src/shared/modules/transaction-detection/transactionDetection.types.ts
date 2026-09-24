@@ -54,6 +54,8 @@ export interface SyncStateResponse {
 /** Runtime switches clients read before processing (plan task T1.16, interim until T4.6). */
 export interface DetectionConfigResponse {
   enabled: boolean;
+  /** Whether the staged rollout (plan T9.3) includes this user; `enabled` is false when not. */
+  rolledOut: boolean;
   autoCreateEnabled: boolean;
   minAppVersion: string | null;
   /** The user's own preference; the server applies it too. */

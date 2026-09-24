@@ -19,6 +19,8 @@ import { getEntitlementForUser } from '@shared/modules/subscriptions/index';
 import { convertAndSum, getExchangeRate } from '@shared/currency/currency.engine';
 import { deleteFile } from '@core/storage/s3.service';
 import type { PaginationInput } from '@shared/types';
+import type { TransactionSource } from '@database/models';
+import { NET_SPENDING_TYPES, balanceDelta, toNetSpendingRows } from './transactionKinds';
 import type {
   CreateTransactionInput,
   UpdateTransactionInput,
@@ -41,9 +43,9 @@ async function resolveUserCurrency(userId: string, user?: User | null): Promise<
 /** One SUM(amount) row per currency the user has ever transacted in (at most a handful),
  * instead of fetching every transaction row ever recorded — convertAndSum then only has
  * to convert/sum those few subtotals, not the user's entire lifetime history. */
-async function sumAllTimeByType(userId: string, type: 'income' | 'expense', targetCurrency: string): Promise<number> {
+async function sumAllTimeIncome(userId: string, targetCurrency: string): Promise<number> {
   const rows = (await Transaction.findAll({
-    where: { userId, type },
+    where: { userId, type: 'income' },
     attributes: ['currency', [fn('SUM', col('amount')), 'total']],
     group: ['currency'],
     raw: true,
@@ -51,12 +53,23 @@ async function sumAllTimeByType(userId: string, type: 'income' | 'expense', targ
   return convertAndSum(rows.map((r) => ({ amount: r.total, currency: r.currency })), targetCurrency);
 }
 
+/** All-time spending net of refunds; transfers never count (spec §11–12). */
+async function sumAllTimeNetSpending(userId: string, targetCurrency: string): Promise<number> {
+  const rows = (await Transaction.findAll({
+    where: { userId, type: NET_SPENDING_TYPES as TransactionAttributes['type'][] },
+    attributes: ['type', 'currency', [fn('SUM', col('amount')), 'amount']],
+    group: ['type', 'currency'],
+    raw: true,
+  })) as unknown as Array<{ type: string; currency: string; amount: string }>;
+  return convertAndSum(toNetSpendingRows(rows), targetCurrency);
+}
+
 export async function getTotalIncome(userId: string, user: User): Promise<number> {
-  return sumAllTimeByType(userId, 'income', user.currency);
+  return sumAllTimeIncome(userId, user.currency);
 }
 
 export async function getTotalExpenses(userId: string, user: User): Promise<number> {
-  return sumAllTimeByType(userId, 'expense', user.currency);
+  return sumAllTimeNetSpending(userId, user.currency);
 }
 
 export async function getRecentTransactions(userId: string, _user: User, limit: number) {
@@ -71,17 +84,18 @@ export async function getRecentTransactions(userId: string, _user: User, limit: 
 export async function getCategoryBreakdown(userId: string, user: User, limit = 2) {
   // One SUM(amount) row per (category, currency) pair, not one row per transaction —
   // then batch-load the (few) distinct categories instead of an include on every row.
+  // Refunds carry the category of the purchase they refund, so each category is net of refunds.
   const rows = (await Transaction.findAll({
-    where: { userId, type: 'expense' },
-    attributes: ['categoryId', 'currency', [fn('SUM', col('amount')), 'total']],
-    group: ['categoryId', 'currency'],
+    where: { userId, type: NET_SPENDING_TYPES as TransactionAttributes['type'][] },
+    attributes: ['type', 'categoryId', 'currency', [fn('SUM', col('amount')), 'total']],
+    group: ['type', 'categoryId', 'currency'],
     raw: true,
-  })) as unknown as Array<{ categoryId: string | null; currency: string; total: string }>;
+  })) as unknown as Array<{ type: string; categoryId: string | null; currency: string; total: string }>;
 
   const rowsByCategory = new Map<string | null, Array<{ amount: unknown; currency: string }>>();
   for (const row of rows) {
     const list = rowsByCategory.get(row.categoryId) ?? [];
-    list.push({ amount: row.total, currency: row.currency });
+    list.push({ amount: row.type === 'refund' ? -Number(row.total) : row.total, currency: row.currency });
     rowsByCategory.set(row.categoryId, list);
   }
 
@@ -103,7 +117,7 @@ export async function getCategoryBreakdown(userId: string, user: User, limit = 2
 }
 
 export interface TransactionFilters {
-  type?: 'expense' | 'income';
+  type?: TransactionAttributes['type'];
   categoryId?: string;
   incomeSourceId?: string;
   paymentMethod?: string;
@@ -211,7 +225,8 @@ export async function getTransactionsSummary(
   })) as unknown as Array<{ type: string; currency: string; total: string }>;
 
   const currency = await resolveUserCurrency(userId);
-  const expenseRows = rows.filter((r) => r.type === 'expense').map((r) => ({ amount: r.total, currency: r.currency }));
+  // Spending is net of refunds; transfers are in neither total.
+  const expenseRows = toNetSpendingRows(rows.map((r) => ({ type: r.type, amount: r.total, currency: r.currency })));
   const incomeRows = rows.filter((r) => r.type === 'income').map((r) => ({ amount: r.total, currency: r.currency }));
 
   const [totalExpense, totalIncome] = await Promise.all([
@@ -225,15 +240,33 @@ export async function getTransactionsSummary(
   };
 }
 
+export interface CreateTransactionOptions {
+  transaction?: DbTransaction;
+  /** Set by server code only (detection, imports); never taken from a request body. */
+  source?: TransactionSource;
+  detectedTransactionId?: string | null;
+  /** Skip remembering merchant → category, e.g. when detection has already applied the user's rule. */
+  skipMerchantMemory?: boolean;
+}
+
 export async function createTransaction(
   userId: string,
   data: CreateTransactionInput,
-  options?: { transaction?: DbTransaction }
+  options?: CreateTransactionOptions
 ) {
   const user = await User.findByPk(userId, options?.transaction ? { transaction: options.transaction } : undefined);
   if (!user) throw new AppError(404, 'User not found');
 
   const run = async (t: DbTransaction) => {
+    if (data.refundOfTransactionId) {
+      const original = await Transaction.findOne({
+        where: { id: data.refundOfTransactionId, userId, type: 'expense' },
+        attributes: ['id'],
+        transaction: t,
+      });
+      if (!original) throw new AppError(404, 'Refunded expense not found');
+    }
+
     if (data.financialAccountId) {
       const account = await FinancialAccount.findOne({
         where: { id: data.financialAccountId, userId },
@@ -241,7 +274,7 @@ export async function createTransaction(
         lock: t.LOCK.UPDATE,
       });
       if (!account) throw new AppError(404, 'Financial account not found');
-      const delta = data.type === 'income' ? Number(data.amount) : -Number(data.amount);
+      const delta = balanceDelta(data.type, data.amount, data.direction ?? null);
       await account.update(
         { balance: Number(account.balance) + delta },
         { transaction: t }
@@ -269,15 +302,22 @@ export async function createTransaction(
         searchVector: buildSearchVector(data),
         taxWithheld: data.taxWithheld ?? null,
         netAmount: data.taxWithheld !== undefined ? Number(data.amount) - Number(data.taxWithheld) : null,
+        subtype: data.subtype ?? null,
+        direction: data.type === 'transfer' ? (data.direction ?? null) : null,
+        refundOfTransactionId: data.refundOfTransactionId ?? null,
+        transferGroupId: data.transferGroupId ?? null,
+        source: options?.source ?? 'manual',
+        detectedTransactionId: options?.detectedTransactionId ?? null,
       },
       { transaction: t }
     );
 
+    // Refunds and transfers never raise spending, so only expenses can trip a budget alert.
     if (data.type === 'expense') {
       await checkBudgetAlertsAfterExpense(userId, data.categoryId, t);
     }
 
-    if (data.type === 'expense' && data.categoryId && data.merchant) {
+    if (data.type === 'expense' && data.categoryId && data.merchant && !options?.skipMerchantMemory) {
       await upsertMerchantCategoryRule(userId, data.merchant, data.categoryId, t);
     }
 
@@ -299,6 +339,7 @@ export async function createTransaction(
         amount: data.amount,
         categoryId: data.categoryId ?? null,
         merchant: data.merchant ?? null,
+        source: options?.source ?? 'manual',
       },
       transaction: t,
     });
@@ -365,7 +406,6 @@ export async function updateTransaction(
     const newAccountId = data.financialAccountId !== undefined ? data.financialAccountId : oldAccountId;
     const oldAmount = Number(transaction.amount);
     const newAmount = data.amount !== undefined ? Number(data.amount) : oldAmount;
-    const isIncome = transaction.type === 'income';
 
     if (oldAccountId && (oldAccountId !== newAccountId || oldAmount !== newAmount)) {
       const oldAccount = await FinancialAccount.findOne({
@@ -374,7 +414,7 @@ export async function updateTransaction(
         lock: t.LOCK.UPDATE,
       });
       if (oldAccount) {
-        const revertDelta = isIncome ? -oldAmount : oldAmount;
+        const revertDelta = -balanceDelta(transaction.type, oldAmount, transaction.direction);
         await oldAccount.update({ balance: Number(oldAccount.balance) + revertDelta }, { transaction: t });
       }
     }
@@ -386,7 +426,7 @@ export async function updateTransaction(
         lock: t.LOCK.UPDATE,
       });
       if (!newAccount) throw new AppError(404, 'Financial account not found');
-      const applyDelta = isIncome ? newAmount : -newAmount;
+      const applyDelta = balanceDelta(transaction.type, newAmount, transaction.direction);
       await newAccount.update({ balance: Number(newAccount.balance) + applyDelta }, { transaction: t });
     }
 
@@ -446,7 +486,7 @@ export async function deleteTransaction(userId: string, id: string) {
         lock: t.LOCK.UPDATE,
       });
       if (account) {
-        const revertDelta = transaction.type === 'income' ? -Number(transaction.amount) : Number(transaction.amount);
+        const revertDelta = -balanceDelta(transaction.type, transaction.amount, transaction.direction);
         await account.update(
           { balance: Number(account.balance) + revertDelta },
           { transaction: t }
@@ -487,6 +527,9 @@ export async function duplicateTransaction(userId: string, id: string) {
   delete data.id;
   delete data.createdAt;
   delete data.updatedAt;
+  // A copy is the user's own entry, not a second record of the detected bank transaction.
+  data.source = 'manual';
+  data.detectedTransactionId = null;
   return Transaction.create({ ...data, date: new Date() } as any);
 
 }

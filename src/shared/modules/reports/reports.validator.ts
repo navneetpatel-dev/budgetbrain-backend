@@ -6,7 +6,7 @@ export const reportQuerySchema = dateRangeObjectSchema
     categoryId: uuidField().optional(),
     budgetId: uuidField().optional(),
     incomeSourceId: uuidField().optional(),
-    type: z.enum(['expense', 'income']).optional(),
+    type: z.enum(['expense', 'income', 'refund', 'transfer']).optional(),
   })
   .superRefine(refineDateRangeOrder);
 

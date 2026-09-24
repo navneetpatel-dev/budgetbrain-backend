@@ -1,7 +1,25 @@
-import { DataTypes, Model, Optional, Sequelize } from 'sequelize';
+import { DataTypes, Model, Op, Optional, Sequelize } from 'sequelize';
 
-export type TransactionType = 'expense' | 'income';
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other';
+/**
+ * `refund` and `transfer` are kept apart from income and expense so they never inflate
+ * income or spending totals (spec §8–12, implementation plan decision D-1).
+ */
+export type TransactionType = 'expense' | 'income' | 'refund' | 'transfer';
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'other';
+export type TransactionSubtype = 'cashback' | 'reversal' | 'card_bill' | 'p2p' | 'self_transfer' | 'wallet_topup';
+/** Which side of the account a transfer leg is on. Required for transfers, null otherwise. */
+export type TransactionDirection = 'DEBIT' | 'CREDIT';
+export type TransactionSource = 'manual' | 'detected' | 'import' | 'open_banking';
+
+export const TRANSACTION_TYPES: readonly TransactionType[] = ['expense', 'income', 'refund', 'transfer'];
+export const TRANSACTION_SUBTYPES: readonly TransactionSubtype[] = [
+  'cashback',
+  'reversal',
+  'card_bill',
+  'p2p',
+  'self_transfer',
+  'wallet_topup',
+];
 
 export interface TransactionAttributes {
   id: string;
@@ -23,6 +41,12 @@ export interface TransactionAttributes {
   searchVector: string | null;
   taxWithheld: number | null;
   netAmount: number | null;
+  subtype: TransactionSubtype | null;
+  direction: TransactionDirection | null;
+  refundOfTransactionId: string | null;
+  transferGroupId: string | null;
+  source: TransactionSource;
+  detectedTransactionId: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -43,6 +67,12 @@ export type TransactionCreationAttributes = Optional<
   | 'searchVector'
   | 'taxWithheld'
   | 'netAmount'
+  | 'subtype'
+  | 'direction'
+  | 'refundOfTransactionId'
+  | 'transferGroupId'
+  | 'source'
+  | 'detectedTransactionId'
 >;
 
 export class Transaction
@@ -68,6 +98,12 @@ export class Transaction
   declare searchVector: string | null;
   declare taxWithheld: number | null;
   declare netAmount: number | null;
+  declare subtype: TransactionSubtype | null;
+  declare direction: TransactionDirection | null;
+  declare refundOfTransactionId: string | null;
+  declare transferGroupId: string | null;
+  declare source: TransactionSource;
+  declare detectedTransactionId: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -86,7 +122,7 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         field: 'user_id',
       },
       type: {
-        type: DataTypes.ENUM('expense', 'income'),
+        type: DataTypes.ENUM('expense', 'income', 'refund', 'transfer'),
         allowNull: false,
       },
       amount: {
@@ -119,7 +155,7 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         allowNull: false,
       },
       paymentMethod: {
-        type: DataTypes.ENUM('cash', 'card', 'upi', 'bank_transfer', 'other'),
+        type: DataTypes.ENUM('cash', 'card', 'upi', 'bank_transfer', 'wallet', 'other'),
         allowNull: true,
         field: 'payment_method',
       },
@@ -158,6 +194,34 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         allowNull: true,
         field: 'net_amount',
       },
+      subtype: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
+      direction: {
+        type: DataTypes.STRING(6),
+        allowNull: true,
+      },
+      refundOfTransactionId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'refund_of_transaction_id',
+      },
+      transferGroupId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'transfer_group_id',
+      },
+      source: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: 'manual',
+      },
+      detectedTransactionId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'detected_transaction_id',
+      },
     },
     {
       sequelize,
@@ -167,6 +231,11 @@ export function initTransactionModel(sequelize: Sequelize): typeof Transaction {
         { fields: ['user_id', 'type'] },
         { fields: ['category_id'] },
         { fields: ['financial_account_id'] },
+        {
+          name: 'idx_transactions_user_transfer_group',
+          fields: ['user_id', 'transfer_group_id'],
+          where: { transfer_group_id: { [Op.ne]: null } },
+        },
       ],
     }
   );
@@ -189,4 +258,5 @@ export function associateTransaction(): void {
   Transaction.hasMany(TransactionAttachment, { foreignKey: 'transactionId', as: 'attachments' });
   Transaction.belongsTo(RecurringSeries, { foreignKey: 'recurringSeriesId', as: 'recurringSeries' });
   Transaction.hasMany(ExpenseSplitParticipant, { foreignKey: 'transactionId', as: 'splitParticipants' });
+  Transaction.belongsTo(Transaction, { foreignKey: 'refundOfTransactionId', as: 'refundOf' });
 }

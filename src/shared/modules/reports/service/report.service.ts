@@ -8,6 +8,7 @@ import { AppError } from '@shared/errors';
 import { reportQueue, type ReportJobData } from '@queue/queues';
 import { getSignedDownloadUrl } from '@core/storage/s3.service';
 import type { ReportFilters } from '../reports.types';
+import { toNetSpendingRows } from '@shared/modules/expenses/service/transactionKinds';
 
 export type ReportExportFormat = ReportJobData['format'];
 
@@ -26,10 +27,8 @@ export async function sumConvertedIncomeAndExpense(
     transactions.filter((t) => t.type === 'income'),
     currency
   );
-  const totalExpenses = await convertAndSum(
-    transactions.filter((t) => t.type === 'expense'),
-    currency
-  );
+  // Net of refunds; transfers appear in the report rows but in neither total.
+  const totalExpenses = await convertAndSum(toNetSpendingRows(transactions), currency);
   return { currency, totalIncome, totalExpenses };
 }
 
@@ -198,11 +197,13 @@ export async function generateExcelReport(
       notes: t.notes ?? '',
     });
 
-    // Color-code amounts: red for expenses, green for income
+    // Color-code amounts: red for expenses, green for income and refunds, grey for transfers
     const amountCell = row.getCell('amount');
     amountCell.numFmt = '#,##0.00';
     if (t.type === 'expense') {
       amountCell.font = { color: { argb: 'FFDC2626' } };
+    } else if (t.type === 'transfer') {
+      amountCell.font = { color: { argb: 'FF6B7280' } };
     } else {
       amountCell.font = { color: { argb: 'FF16A34A' } };
     }

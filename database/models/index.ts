@@ -130,6 +130,13 @@ export {
 
 export type { TokenType, NotificationType };
 export type { LoanType } from './loan.model';
+export type {
+  TransactionType,
+  TransactionSubtype,
+  TransactionDirection,
+  TransactionSource,
+  PaymentMethod,
+} from './transaction.model';
 export type { BudgetRolloverMode } from './budget.model';
 export type { RecurringCadence, RecurringSeriesSource } from './recurringSeries.model';
 export type { AiMessage } from './aiConversation.model';

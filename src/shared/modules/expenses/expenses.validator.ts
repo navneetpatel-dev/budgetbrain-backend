@@ -17,8 +17,20 @@ import {
   ValidationMessages as M,
 } from '@shared/validation/index';
 
+const TRANSACTION_TYPES = ['expense', 'income', 'refund', 'transfer'] as const;
+const PAYMENT_METHODS = ['cash', 'card', 'upi', 'bank_transfer', 'wallet', 'other'] as const;
+const TRANSACTION_SUBTYPES = ['cashback', 'reversal', 'card_bill', 'p2p', 'self_transfer', 'wallet_topup'] as const;
+
+/** Which subtypes make sense for which type; anything else is a client bug. */
+const SUBTYPES_BY_TYPE: Record<(typeof TRANSACTION_TYPES)[number], readonly string[]> = {
+  expense: ['p2p'],
+  income: ['p2p'],
+  refund: ['cashback', 'reversal'],
+  transfer: ['card_bill', 'self_transfer', 'wallet_topup'],
+};
+
 const transactionObjectSchema = z.object({
-  type: enumField(['expense', 'income'] as const),
+  type: enumField(TRANSACTION_TYPES),
   amount: amountField(),
   currency: currencyField(true),
   categoryId: uuidField().optional(),
@@ -27,12 +39,19 @@ const transactionObjectSchema = z.object({
   notes: optionalText('notes'),
   merchant: optionalText('merchant'),
   date: transactionDate,
-  paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
+  paymentMethod: enumField(PAYMENT_METHODS).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: optionalText('recurringRule'),
   tags: tagsField(),
   /** Income-only. `netAmount` is never accepted from the client — always server-computed. */
   taxWithheld: optionalMoneyValueField(),
+  subtype: enumField(TRANSACTION_SUBTYPES).optional(),
+  /** Transfers only: whether this leg took money out of (DEBIT) or into (CREDIT) the account. */
+  direction: enumField(['DEBIT', 'CREDIT'] as const).optional(),
+  /** Refunds only: the expense this refunds, when known. */
+  refundOfTransactionId: uuidField().optional(),
+  /** Transfers only: shared by both legs of one transfer between the user's own accounts. */
+  transferGroupId: uuidField().optional(),
 });
 
 export const transactionSchema = transactionObjectSchema.superRefine((data, ctx) => {
@@ -50,11 +69,38 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
       message: M.categoryRequired,
     });
   }
-  if (data.type === 'expense' && data.taxWithheld !== undefined) {
+  if (data.type !== 'income' && data.taxWithheld !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['taxWithheld'],
       message: 'taxWithheld only applies to income transactions',
+    });
+  }
+  if (data.type === 'transfer' && !data.direction) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['direction'],
+      message: 'A transfer must say whether money left (DEBIT) or entered (CREDIT) the account',
+    });
+  }
+  if (data.type !== 'transfer' && data.direction !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['direction'], message: 'direction only applies to transfers' });
+  }
+  if (data.type !== 'transfer' && data.transferGroupId !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transferGroupId'], message: 'transferGroupId only applies to transfers' });
+  }
+  if (data.type !== 'refund' && data.refundOfTransactionId !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['refundOfTransactionId'],
+      message: 'refundOfTransactionId only applies to refunds',
+    });
+  }
+  if (data.subtype !== undefined && !SUBTYPES_BY_TYPE[data.type].includes(data.subtype)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['subtype'],
+      message: `subtype ${data.subtype} does not apply to ${data.type}`,
     });
   }
 });
@@ -62,10 +108,10 @@ export const transactionSchema = transactionObjectSchema.superRefine((data, ctx)
 export const listTransactionsSchema = paginationSchema
   .merge(dateRangeObjectSchema)
   .extend({
-    type: enumField(['expense', 'income'] as const).optional(),
+    type: enumField(TRANSACTION_TYPES).optional(),
     categoryId: uuidField().optional(),
     incomeSourceId: uuidField().optional(),
-    paymentMethod: enumField(['cash', 'card', 'upi', 'bank_transfer', 'other'] as const).optional(),
+    paymentMethod: enumField(PAYMENT_METHODS).optional(),
     search: optionalText('search'),
     tag: optionalText('tag'),
   })
@@ -75,7 +121,13 @@ export const searchQuerySchema = paginationSchema.extend({
   q: requiredText('search'),
 });
 
-export const updateTransactionSchema = transactionObjectSchema.partial();
+/**
+ * A transaction's type-specific fields are fixed at creation; changing them would need
+ * balance and pairing rewrites, so edits go through delete + create instead.
+ */
+export const updateTransactionSchema = transactionObjectSchema
+  .omit({ type: true, direction: true, transferGroupId: true, refundOfTransactionId: true, subtype: true })
+  .partial();
 
 export const syncTransactionCreateSchema = transactionSchema;
 

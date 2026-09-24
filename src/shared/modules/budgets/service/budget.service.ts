@@ -12,6 +12,7 @@ import { paginatedResult, resolvePagination } from '@shared/pagination';
 import { getEntitlementForUser } from '@shared/modules/subscriptions';
 import { convertAndSum } from '@shared/currency/currency.engine';
 import type { PaginationInput } from '@shared/types';
+import { NET_SPENDING_TYPES, toNetSpendingRows } from '@shared/modules/expenses/service/transactionKinds';
 import type { BudgetWithSpent, CreateBudgetInput, UpdateBudgetInput } from '../budgets.types';
 
 async function resolveUserCurrency(userId: string): Promise<string> {
@@ -26,9 +27,10 @@ async function sumExpensesInRange(
   endDate: string,
   userCurrency: string
 ): Promise<number> {
+  // Budget spend is net of refunds; transfers never count against a budget.
   const where: Record<string, unknown> = {
     userId,
-    type: 'expense',
+    type: NET_SPENDING_TYPES,
     date: { [Op.gte]: startDate, [Op.lte]: endDate },
   };
   if (categoryId) {
@@ -37,10 +39,10 @@ async function sumExpensesInRange(
 
   const rows = await Transaction.findAll({
     where,
-    attributes: ['amount', 'currency'],
+    attributes: ['type', 'amount', 'currency'],
     raw: true,
   });
-  return convertAndSum(rows, userCurrency);
+  return convertAndSum(toNetSpendingRows(rows), userCurrency);
 }
 
 async function computeBudgetSpent(userId: string, budget: Budget, userCurrency: string): Promise<number> {
@@ -83,7 +85,7 @@ async function computeCompoundingRollover(userId: string, budget: Budget, userCu
 
   const where: Record<string, unknown> = {
     userId,
-    type: 'expense',
+    type: NET_SPENDING_TYPES,
     date: { [Op.gte]: overallStart, [Op.lte]: overallEnd },
   };
   if (budget.categoryId) {
@@ -92,7 +94,7 @@ async function computeCompoundingRollover(userId: string, budget: Budget, userCu
 
   const rows = await Transaction.findAll({
     where,
-    attributes: ['amount', 'currency', 'date'],
+    attributes: ['type', 'amount', 'currency', 'date'],
     raw: true,
   });
 
@@ -102,7 +104,7 @@ async function computeCompoundingRollover(userId: string, budget: Budget, userCu
         const d = String(row.date).slice(0, 10);
         return d >= startDate && d <= endDate;
       });
-      const spent = await convertAndSum(periodRows, userCurrency);
+      const spent = await convertAndSum(toNetSpendingRows(periodRows), userCurrency);
       return Number(budget.amount) - spent;
     })
   );

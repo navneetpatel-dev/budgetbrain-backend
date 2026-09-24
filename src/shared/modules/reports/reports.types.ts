@@ -6,5 +6,5 @@ export interface ReportFilters {
   categoryId?: string;
   budgetId?: string;
   incomeSourceId?: string;
-  type?: 'expense' | 'income';
+  type?: 'expense' | 'income' | 'refund' | 'transfer';
 }

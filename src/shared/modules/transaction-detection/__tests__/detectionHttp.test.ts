@@ -133,6 +133,18 @@ describe('detection over HTTP (Phase 6)', () => {
     expect(['created', 'needs_review']).toContain(picked.body.data.status);
   });
 
+  it('tells the bank from the text of a pasted SMS without a sender, and holds it for review (T3.2)', async () => {
+    const { token } = await signedInUser();
+    const text = 'Rs.499.00 debited from your HDFC Bank a/c **1234 to VPA zomato@hdfcbank Ref 425699900011';
+    const res = await call(mobile, token, 'POST', '/detected-transactions/ingest', { kind: 'sms', text });
+    expect(res.body.data).toMatchObject({ status: 'needs_review' });
+    expect(res.body.data.detected).toMatchObject({ institutionId: 'in.hdfc_bank', confidenceTier: 'medium', source: 'pasted_sms' });
+
+    // A pasted email still needs its sender address.
+    const email = await call(mobile, token, 'POST', '/detected-transactions/ingest', { kind: 'email', text });
+    expect(email.body.data).toMatchObject({ status: 'ignored', reason: 'unknown_sender' });
+  });
+
   it('parses a forwarded bank email by its sender domain (T6.2)', async () => {
     const { token } = await signedInUser();
     const res = await call(web, token, 'POST', '/detected-transactions/ingest', {

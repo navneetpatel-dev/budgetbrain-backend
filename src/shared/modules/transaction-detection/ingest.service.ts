@@ -85,7 +85,9 @@ export async function ingestMessage(userId: string, input: IngestInput, now: Dat
     const known = sender && pack.institutions.has(input.institutionId) ? sender : null;
     sender = known ?? senderFor(pack, input.institutionId, source);
   }
-  if (!sender) return { status: 'ignored', stage: 'INELIGIBLE', reason: 'unknown_sender', detected: null };
+  // A pasted SMS without its sender still reaches core, which can tell the bank from the text
+  // (T3.2: a unique bank name or an IFSC code; never above medium, so it waits for review).
+  if (!sender && source !== 'pasted_sms') return { status: 'ignored', stage: 'INELIGIBLE', reason: 'unknown_sender', detected: null };
 
   const [accounts, categories, killSwitches] = await Promise.all([
     FinancialAccount.findAll({ where: { userId }, attributes: ['accountNumberLast4'] }),
@@ -101,7 +103,7 @@ export async function ingestMessage(userId: string, input: IngestInput, now: Dat
   };
   const body = input.kind === 'email' && input.subject ? `${input.subject}\n${input.text}` : input.text;
   const result = processMessage(
-    { sender, body, receivedAt: input.receivedAt ?? now.toISOString(), source },
+    { sender: sender ?? '', body, receivedAt: input.receivedAt ?? now.toISOString(), source },
     pack,
     context
   );
